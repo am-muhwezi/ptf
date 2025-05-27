@@ -12,24 +12,7 @@ Supports:
 
 ---
 
-## 🗂️ Project Structure
 
-efitness-platform/
-├── auth_service/ # Django DRF for authentication
-│ ├── users/ # Custom User model & views
-│ └── ...
-├── api_service/ # FastAPI for core functionality
-│ ├── routers/ # API endpoints
-│ ├── models/ # SQLAlchemy models
-│ ├── schemas/ # Pydantic schemas
-│ └── main.py # FastAPI app
-├── mobile_app/ # React Native mobile app
-├── web_app/ # React.js trainer/admin dashboard
-├── docker-compose.yml
-└── README.md
-
-
----
 
 ## ⚙️ Features
 
