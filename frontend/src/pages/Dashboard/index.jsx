@@ -3,7 +3,11 @@ import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
+import Modal from '../../components/ui/Modal';
+import Toast from '../../components/ui/Toast';
 import Notifications from '../../components/ui/Notifications';
+import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
+import CheckInForm from '../../components/forms/CheckInForm';
 
 const Dashboard = () => {
   const [membershipData] = useState({
@@ -35,6 +39,11 @@ const Dashboard = () => {
     lowStockAlerts: 2
   });
 
+  // Modal and Toast states
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
   const notifications = [
     {
       icon: '/images/img_vector_0_1.svg',
@@ -53,16 +62,52 @@ const Dashboard = () => {
     }
   ];
 
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+  };
+
+  const hideToast = () => {
+    setToast({ show: false, message: '', type: 'success' });
+  };
+
   const handleRegisterMember = () => {
-    alert('Register New Member functionality would be implemented here');
+    setShowRegisterModal(true);
   };
 
   const handleCheckInMember = () => {
-    alert('Check-in Member functionality would be implemented here');
+    setShowCheckInModal(true);
+  };
+
+  const handleRegisterSubmit = async (memberData) => {
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      console.log('Registering member:', memberData);
+      
+      setShowRegisterModal(false);
+      showToast(`Member ${memberData.firstName} ${memberData.lastName} registered successfully!`, 'success');
+    } catch (error) {
+      showToast('Failed to register member. Please try again.', 'error');
+    }
+  };
+
+  const handleCheckInSubmit = async (checkInData) => {
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      console.log('Checking in member:', checkInData);
+      
+      setShowCheckInModal(false);
+      showToast(`${checkInData.memberName} checked in successfully!`, 'success');
+    } catch (error) {
+      showToast('Failed to check in member. Please try again.', 'error');
+    }
   };
 
   const handleCardClick = (cardType, value) => {
-    alert(`${cardType}: ${value} - Detailed view would be implemented here`);
+    showToast(`${cardType}: ${value} - Detailed view would be implemented here`, 'info');
   };
 
   return (
@@ -208,6 +253,38 @@ const Dashboard = () => {
           </div>
         </main>
       </div>
+
+      {/* Register Member Modal */}
+      <Modal
+        isOpen={showRegisterModal}
+        onClose={() => setShowRegisterModal(false)}
+        size="large"
+      >
+        <RegisterMemberForm
+          onSubmit={handleRegisterSubmit}
+          onCancel={() => setShowRegisterModal(false)}
+        />
+      </Modal>
+
+      {/* Check-in Member Modal */}
+      <Modal
+        isOpen={showCheckInModal}
+        onClose={() => setShowCheckInModal(false)}
+        size="medium"
+      >
+        <CheckInForm
+          onSubmit={handleCheckInSubmit}
+          onCancel={() => setShowCheckInModal(false)}
+        />
+      </Modal>
+
+      {/* Toast Notifications */}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.show}
+        onClose={hideToast}
+      />
     </div>
   );
 };
