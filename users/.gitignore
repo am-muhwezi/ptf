@@ -1,0 +1,7 @@
+// filepath: /home/yahwehsdelight/Desktop/development/Documents/ptf/frontend/.gitignore
+node_modules/
+build/
+.dist/
+.DS_Store
+*.log
+.env

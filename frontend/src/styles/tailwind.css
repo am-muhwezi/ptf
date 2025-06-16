@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Primary Colors */
+    --primary-blue: #338ef2;
+    --primary-blue-hover: #2563eb;
+    --primary-blue-light: #60a5fa;
+    --primary-blue-dark: #1d4ed8;
+
+    /* Gray Scale */
+    --gray-50: #f7f9fc;
+    --gray-100: #e8edf4;
+    --gray-200: #cedbe8;
+    --gray-600: #49709b;
+    --gray-900: #0c141c;
+
+    /* Background Colors */
+    --background-primary: #ffffff;
+    --background-secondary: #f7f9fc;
+    --background-tertiary: #e8edf4;
+
+    /* Text Colors */
+    --text-primary: #0c141c;
+    --text-secondary: #49709b;
+    --text-white: #f7f9fc;
+
+    /* Border Colors */
+    --border-primary: #cedbe8;
+    --border-secondary: #e8edf4;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+@layer utilities {
+  /* Background Color Utilities */
+  .bg-primary-blue {
+    background-color: var(--primary-blue);
+  }
+
+  .bg-primary-blue-hover:hover {
+    background-color: var(--primary-blue-hover);
+  }
+
+  .bg-gray-custom-50 {
+    background-color: var(--gray-50);
+  }
+
+  .bg-gray-custom-100 {
+    background-color: var(--gray-100);
+  }
+
+  .bg-gray-custom-200 {
+    background-color: var(--gray-200);
+  }
+
+  /* Text Color Utilities */
+  .text-primary-custom {
+    color: var(--text-primary);
+  }
+
+  .text-secondary-custom {
+    color: var(--text-secondary);
+  }
+
+  .text-white-custom {
+    color: var(--text-white);
+  }
+
+  /* Border Color Utilities */
+  .border-primary-custom {
+    border-color: var(--border-primary);
+  }
+
+  .border-secondary-custom {
+    border-color: var(--border-secondary);
+  }
+}
