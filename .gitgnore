@@ -1,0 +1,44 @@
+# Python/Django specific
+*.pyc
+__pycache__/
+*.sqlite3
+*.env
+.venv/
+/media
+/static
+
+# Django settings
+local_settings.py
+
+# React specific
+node_modules/
+build/
+package-lock.json
+npm-debug.log*
+yarn-error.log*
+
+# OS or Editor specific
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+*.log
+
+# Other
+.DS_Store
+*.egg-info
+*.egg
+*.bak
+*.orig
+*.py[cod]
+*.sqlite3
+*.log
+*.pth
+*.py[cod]
+*.mo
+*.pot
+*.ini
+*.lock
+*.DS_Store
