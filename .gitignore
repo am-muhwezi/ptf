@@ -3,7 +3,7 @@
 __pycache__/
 *.sqlite3
 *.env
-.evnv/
+*.venv/*
 /media
 /static
 
