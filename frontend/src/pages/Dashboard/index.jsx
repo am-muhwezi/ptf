@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
 import Button from '../../components/ui/Button';
@@ -10,6 +11,8 @@ import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import CheckInForm from '../../components/forms/CheckInForm';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
+  
   const [membershipData] = useState({
     indoor: 150,
     outdoor: 100,
@@ -106,8 +109,12 @@ const Dashboard = () => {
     }
   };
 
-  const handleCardClick = (cardType, value) => {
-    showToast(`${cardType}: ${value} - Detailed view would be implemented here`, 'info');
+  const handleCardClick = (cardType, value, route) => {
+    if (route) {
+      navigate(route);
+    } else {
+      showToast(`${cardType}: ${value} - Detailed view would be implemented here`, 'info');
+    }
   };
 
   return (
@@ -147,22 +154,22 @@ const Dashboard = () => {
                 <Card
                   title="Indoor Memberships"
                   value={membershipData.indoor}
-                  onClick={() => handleCardClick('Indoor Memberships', membershipData.indoor)}
+                  onClick={() => handleCardClick('Indoor Memberships', membershipData.indoor, '/memberships/indoor')}
                 />
                 <Card
                   title="Outdoor Memberships"
                   value={membershipData.outdoor}
-                  onClick={() => handleCardClick('Outdoor Memberships', membershipData.outdoor)}
+                  onClick={() => handleCardClick('Outdoor Memberships', membershipData.outdoor, '/memberships/outdoor')}
                 />
                 <Card
                   title="Renewals Due"
                   value={membershipData.renewalsDue}
-                  onClick={() => handleCardClick('Renewals Due', membershipData.renewalsDue)}
+                  onClick={() => handleCardClick('Renewals Due', membershipData.renewalsDue, '/memberships/renewals')}
                 />
                 <Card
                   title="Payment Overdue"
                   value={membershipData.paymentOverdue}
-                  onClick={() => handleCardClick('Payment Overdue', membershipData.paymentOverdue)}
+                  onClick={() => handleCardClick('Payment Overdue', membershipData.paymentOverdue, '/memberships/payments')}
                 />
               </div>
             </section>
