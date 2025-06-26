@@ -13,6 +13,7 @@
   "dependencies": {
     "@dhiwise/component-tagger": "^1.0.9",
     "@tailwindcss/typography": "^0.5.16",
+    "axios": "^1.10.0",
     "package.json": "^2.0.1",
     "prop-types": "^15.8.1",
     "react": "^19.0.0",
