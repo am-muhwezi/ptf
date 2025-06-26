@@ -5,9 +5,11 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
+import { useApi, useApiMutation } from '../../hooks/useApi';
+import { membershipService } from '../../services/membershipService';
+import { formatCurrency, formatDate, isExpiringSoon } from '../../utils/formatters';
 
 const IndoorMemberships = () => {
-  const [members, setMembers] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -15,99 +17,21 @@ const IndoorMemberships = () => {
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  // Mock data - replace with API call
-  const mockIndoorMembers = [
-    {
-      id: 'PTF001234',
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john.doe@email.com',
-      phone: '+256 700 123 456',
-      membershipType: 'indoor',
-      status: 'active',
-      joinDate: '2024-01-15',
-      expiryDate: '2024-07-15',
-      lastVisit: '2024-01-20',
-      totalVisits: 45,
-      planType: 'Monthly Premium',
-      amount: 150000,
-      paymentStatus: 'paid'
-    },
-    {
-      id: 'PTF001235',
-      firstName: 'Jane',
-      lastName: 'Smith',
-      email: 'jane.smith@email.com',
-      phone: '+256 700 123 457',
-      membershipType: 'indoor',
-      status: 'active',
-      joinDate: '2024-01-10',
-      expiryDate: '2024-04-10',
-      lastVisit: '2024-01-19',
-      totalVisits: 32,
-      planType: 'Quarterly Basic',
-      amount: 400000,
-      paymentStatus: 'paid'
-    },
-    {
-      id: 'PTF001236',
-      firstName: 'Mike',
-      lastName: 'Johnson',
-      email: 'mike.johnson@email.com',
-      phone: '+256 700 123 458',
-      membershipType: 'indoor',
-      status: 'expired',
-      joinDate: '2023-12-01',
-      expiryDate: '2024-01-01',
-      lastVisit: '2023-12-30',
-      totalVisits: 28,
-      planType: 'Monthly Basic',
-      amount: 120000,
-      paymentStatus: 'overdue'
-    },
-    {
-      id: 'PTF001237',
-      firstName: 'Sarah',
-      lastName: 'Wilson',
-      email: 'sarah.wilson@email.com',
-      phone: '+256 700 123 459',
-      membershipType: 'indoor',
-      status: 'active',
-      joinDate: '2024-01-05',
-      expiryDate: '2025-01-05',
-      lastVisit: '2024-01-21',
-      totalVisits: 52,
-      planType: 'Annual Premium',
-      amount: 1500000,
-      paymentStatus: 'paid'
-    }
-  ];
+  // API hooks
+  const { data: members = [], loading, error, refetch } = useApi(
+    () => membershipService.getIndoorMemberships({ 
+      search: searchTerm, 
+      status: filterStatus === 'all' ? undefined : filterStatus 
+    }),
+    [searchTerm, filterStatus]
+  );
+
+  const { mutate: renewMembership, loading: renewLoading } = useApiMutation(membershipService.renewMembership);
+  const { mutate: suspendMember, loading: suspendLoading } = useApiMutation(membershipService.suspendMember);
 
   useEffect(() => {
-    setMembers(mockIndoorMembers);
-    setFilteredMembers(mockIndoorMembers);
-  }, []);
-
-  useEffect(() => {
-    let filtered = members;
-
-    // Filter by search term
-    if (searchTerm) {
-      filtered = filtered.filter(member =>
-        member.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.id.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Filter by status
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(member => member.status === filterStatus);
-    }
-
-    setFilteredMembers(filtered);
-  }, [searchTerm, filterStatus, members]);
+    setFilteredMembers(members);
+  }, [members]);
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -122,12 +46,24 @@ const IndoorMemberships = () => {
     setShowMemberModal(true);
   };
 
-  const handleRenewMembership = (memberId) => {
-    showToast(`Membership renewal initiated for member ${memberId}`, 'success');
+  const handleRenewMembership = async (memberId) => {
+    try {
+      await renewMembership(memberId, {});
+      showToast(`Membership renewal initiated for member ${memberId}`, 'success');
+      refetch();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
   };
 
-  const handleSuspendMember = (memberId) => {
-    showToast(`Member ${memberId} has been suspended`, 'warning');
+  const handleSuspendMember = async (memberId) => {
+    try {
+      await suspendMember(memberId, 'Administrative action');
+      showToast(`Member ${memberId} has been suspended`, 'warning');
+      refetch();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -158,24 +94,57 @@ const IndoorMemberships = () => {
     );
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-UG', {
-      style: 'currency',
-      currency: 'UGX',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header />
+          <main className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="animate-pulse space-y-6">
+                <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                  ))}
+                </div>
+                <div className="h-96 bg-gray-200 rounded"></div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-GB');
-  };
-
-  const isExpiringSoon = (expiryDate) => {
-    const expiry = new Date(expiryDate);
-    const today = new Date();
-    const daysUntilExpiry = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
-    return daysUntilExpiry <= 30 && daysUntilExpiry > 0;
-  };
+  // Error state
+  if (error) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header />
+          <main className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+                <h3 className="text-lg font-medium text-red-800 mb-2">Error Loading Data</h3>
+                <p className="text-red-600">{error}</p>
+                <Button 
+                  variant="primary" 
+                  onClick={refetch}
+                  className="mt-4"
+                >
+                  Retry
+                </Button>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -319,13 +288,15 @@ const IndoorMemberships = () => {
                           </button>
                           <button
                             onClick={() => handleRenewMembership(member.id)}
-                            className="text-green-600 hover:text-green-900"
+                            disabled={renewLoading}
+                            className="text-green-600 hover:text-green-900 disabled:opacity-50"
                           >
                             Renew
                           </button>
                           <button
                             onClick={() => handleSuspendMember(member.id)}
-                            className="text-red-600 hover:text-red-900"
+                            disabled={suspendLoading}
+                            className="text-red-600 hover:text-red-900 disabled:opacity-50"
                           >
                             Suspend
                           </button>

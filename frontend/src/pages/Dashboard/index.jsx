@@ -9,61 +9,51 @@ import Toast from '../../components/ui/Toast';
 import Notifications from '../../components/ui/Notifications';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import CheckInForm from '../../components/forms/CheckInForm';
+import { useApi } from '../../hooks/useApi';
+import { dashboardService } from '../../services/dashboardService';
+import { memberService } from '../../services/memberService';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   
-  const [membershipData] = useState({
-    indoor: 150,
-    outdoor: 100,
-    renewalsDue: 15,
-    paymentOverdue: 5
-  });
-
-  const [bookingData] = useState({
-    groupSessions: 5,
-    oneOnOneSessions: 5,
-    trainersAvailable: 5,
-    waitlistRequests: 2
-  });
-
-  const [attendanceData] = useState({
-    indoorVisits: 45,
-    outdoorVisits: 30
-  });
-
-  const [feedbackData] = useState({
-    openTickets: 3,
-    avgResolutionTime: '2 days'
-  });
-
-  const [inventoryData] = useState({
-    availableStock: 1200,
-    lowStockAlerts: 2
-  });
+  // API hooks
+  const { data: dashboardStats, loading: statsLoading, error: statsError } = useApi(dashboardService.getDashboardStats);
+  const { data: notifications = [], loading: notificationsLoading } = useApi(dashboardService.getNotifications);
 
   // Modal and Toast states
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  const notifications = [
-    {
-      icon: '/images/img_vector_0_1.svg',
-      title: 'Announcement',
-      description: 'New Year Promotion'
+  // Default data structure for when API is loading or fails
+  const defaultStats = {
+    membershipData: {
+      indoor: 0,
+      outdoor: 0,
+      renewalsDue: 0,
+      paymentOverdue: 0
     },
-    {
-      icon: '/images/img_vector_0_4.svg',
-      title: 'Membership Renewal Reminder',
-      description: 'Expires in 7 days'
+    bookingData: {
+      groupSessions: 0,
+      oneOnOneSessions: 0,
+      trainersAvailable: 0,
+      waitlistRequests: 0
     },
-    {
-      icon: '/images/img_vector_0_gray_900_24x24.svg',
-      title: 'Class Booking Reminder',
-      description: 'Yoga Class at 6 PM'
+    attendanceData: {
+      indoorVisits: 0,
+      outdoorVisits: 0
+    },
+    feedbackData: {
+      openTickets: 0,
+      avgResolutionTime: '0 days'
+    },
+    inventoryData: {
+      availableStock: 0,
+      lowStockAlerts: 0
     }
-  ];
+  };
+
+  const stats = dashboardStats || defaultStats;
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -83,29 +73,21 @@ const Dashboard = () => {
 
   const handleRegisterSubmit = async (memberData) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('Registering member:', memberData);
-      
+      await memberService.createMember(memberData);
       setShowRegisterModal(false);
       showToast(`Member ${memberData.firstName} ${memberData.lastName} registered successfully!`, 'success');
     } catch (error) {
-      showToast('Failed to register member. Please try again.', 'error');
+      showToast(error.message, 'error');
     }
   };
 
   const handleCheckInSubmit = async (checkInData) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('Checking in member:', checkInData);
-      
+      await memberService.checkinMember(checkInData);
       setShowCheckInModal(false);
       showToast(`${checkInData.memberName} checked in successfully!`, 'success');
     } catch (error) {
-      showToast('Failed to check in member. Please try again.', 'error');
+      showToast(error.message, 'error');
     }
   };
 
@@ -116,6 +98,62 @@ const Dashboard = () => {
       showToast(`${cardType}: ${value} - Detailed view would be implemented here`, 'info');
     }
   };
+
+  // Loading state
+  if (statsLoading) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header />
+          <main className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="animate-pulse space-y-8">
+                <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (statsError) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header />
+          <main className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+                <h3 className="text-lg font-medium text-red-800 mb-2">Error Loading Dashboard</h3>
+                <p className="text-red-600">{statsError}</p>
+                <Button 
+                  variant="primary" 
+                  onClick={() => window.location.reload()}
+                  className="mt-4"
+                >
+                  Retry
+                </Button>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -153,23 +191,23 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card
                   title="Indoor Memberships"
-                  value={membershipData.indoor}
-                  onClick={() => handleCardClick('Indoor Memberships', membershipData.indoor, '/memberships/indoor')}
+                  value={stats.membershipData.indoor}
+                  onClick={() => handleCardClick('Indoor Memberships', stats.membershipData.indoor, '/memberships/indoor')}
                 />
                 <Card
                   title="Outdoor Memberships"
-                  value={membershipData.outdoor}
-                  onClick={() => handleCardClick('Outdoor Memberships', membershipData.outdoor, '/memberships/outdoor')}
+                  value={stats.membershipData.outdoor}
+                  onClick={() => handleCardClick('Outdoor Memberships', stats.membershipData.outdoor, '/memberships/outdoor')}
                 />
                 <Card
                   title="Renewals Due"
-                  value={membershipData.renewalsDue}
-                  onClick={() => handleCardClick('Renewals Due', membershipData.renewalsDue, '/memberships/renewals')}
+                  value={stats.membershipData.renewalsDue}
+                  onClick={() => handleCardClick('Renewals Due', stats.membershipData.renewalsDue, '/memberships/renewals')}
                 />
                 <Card
                   title="Payment Overdue"
-                  value={membershipData.paymentOverdue}
-                  onClick={() => handleCardClick('Payment Overdue', membershipData.paymentOverdue, '/memberships/payments')}
+                  value={stats.membershipData.paymentOverdue}
+                  onClick={() => handleCardClick('Payment Overdue', stats.membershipData.paymentOverdue, '/memberships/payments')}
                 />
               </div>
             </section>
@@ -180,23 +218,23 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card
                   title="Group Sessions Today"
-                  value={bookingData.groupSessions}
-                  onClick={() => handleCardClick('Group Sessions Today', bookingData.groupSessions)}
+                  value={stats.bookingData.groupSessions}
+                  onClick={() => handleCardClick('Group Sessions Today', stats.bookingData.groupSessions)}
                 />
                 <Card
                   title="One-on-One Sessions Today"
-                  value={bookingData.oneOnOneSessions}
-                  onClick={() => handleCardClick('One-on-One Sessions Today', bookingData.oneOnOneSessions)}
+                  value={stats.bookingData.oneOnOneSessions}
+                  onClick={() => handleCardClick('One-on-One Sessions Today', stats.bookingData.oneOnOneSessions)}
                 />
                 <Card
                   title="Trainers Available"
-                  value={bookingData.trainersAvailable}
-                  onClick={() => handleCardClick('Trainers Available', bookingData.trainersAvailable)}
+                  value={stats.bookingData.trainersAvailable}
+                  onClick={() => handleCardClick('Trainers Available', stats.bookingData.trainersAvailable)}
                 />
                 <Card
                   title="Waitlist Requests"
-                  value={bookingData.waitlistRequests}
-                  onClick={() => handleCardClick('Waitlist Requests', bookingData.waitlistRequests)}
+                  value={stats.bookingData.waitlistRequests}
+                  onClick={() => handleCardClick('Waitlist Requests', stats.bookingData.waitlistRequests)}
                 />
               </div>
             </section>
@@ -207,13 +245,13 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card
                   title="Indoor Visits Today"
-                  value={attendanceData.indoorVisits}
-                  onClick={() => handleCardClick('Indoor Visits Today', attendanceData.indoorVisits)}
+                  value={stats.attendanceData.indoorVisits}
+                  onClick={() => handleCardClick('Indoor Visits Today', stats.attendanceData.indoorVisits)}
                 />
                 <Card
                   title="Outdoor Visits Today"
-                  value={attendanceData.outdoorVisits}
-                  onClick={() => handleCardClick('Outdoor Visits Today', attendanceData.outdoorVisits)}
+                  value={stats.attendanceData.outdoorVisits}
+                  onClick={() => handleCardClick('Outdoor Visits Today', stats.attendanceData.outdoorVisits)}
                 />
               </div>
             </section>
@@ -224,13 +262,13 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card
                   title="Open Tickets"
-                  value={feedbackData.openTickets}
-                  onClick={() => handleCardClick('Open Tickets', feedbackData.openTickets)}
+                  value={stats.feedbackData.openTickets}
+                  onClick={() => handleCardClick('Open Tickets', stats.feedbackData.openTickets)}
                 />
                 <Card
                   title="Average Resolution Time"
-                  value={feedbackData.avgResolutionTime}
-                  onClick={() => handleCardClick('Average Resolution Time', feedbackData.avgResolutionTime)}
+                  value={stats.feedbackData.avgResolutionTime}
+                  onClick={() => handleCardClick('Average Resolution Time', stats.feedbackData.avgResolutionTime)}
                 />
               </div>
             </section>
@@ -238,7 +276,15 @@ const Dashboard = () => {
             {/* Communication & Alerts */}
             <section>
               <h2 className="text-xl font-bold text-gray-900 mb-6">Communication & Alerts</h2>
-              <Notifications notifications={notifications} />
+              {notificationsLoading ? (
+                <div className="animate-pulse space-y-4">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="h-16 bg-gray-200 rounded"></div>
+                  ))}
+                </div>
+              ) : (
+                <Notifications notifications={notifications} />
+              )}
             </section>
 
             {/* Inventory & Merchandise */}
@@ -247,13 +293,13 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card
                   title="Available Stock Levels"
-                  value={inventoryData.availableStock}
-                  onClick={() => handleCardClick('Available Stock Levels', inventoryData.availableStock)}
+                  value={stats.inventoryData.availableStock}
+                  onClick={() => handleCardClick('Available Stock Levels', stats.inventoryData.availableStock)}
                 />
                 <Card
                   title="Low Stock Alerts"
-                  value={inventoryData.lowStockAlerts}
-                  onClick={() => handleCardClick('Low Stock Alerts', inventoryData.lowStockAlerts)}
+                  value={stats.inventoryData.lowStockAlerts}
+                  onClick={() => handleCardClick('Low Stock Alerts', stats.inventoryData.lowStockAlerts)}
                 />
               </div>
             </section>

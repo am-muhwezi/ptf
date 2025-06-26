@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Button from '../ui/Button';
+import { generateMemberId } from '../../utils/formatters';
 
 const RegisterMemberForm = ({ onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
@@ -7,6 +8,8 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
     lastName: '',
     email: '',
     phone: '',
+    idPassport: '',
+    bloodGroup: '',
     membershipType: 'indoor',
     emergencyContact: '',
     emergencyPhone: '',
@@ -55,6 +58,10 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
       newErrors.phone = 'Phone number is required';
     }
 
+    if (!formData.idPassport.trim()) {
+      newErrors.idPassport = 'ID/Passport number is required';
+    }
+
     if (!formData.emergencyContact.trim()) {
       newErrors.emergencyContact = 'Emergency contact is required';
     }
@@ -81,12 +88,9 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
     setIsSubmitting(true);
     
     try {
-      // Generate a member ID (in real app, this would come from backend)
-      const memberId = `PTF${Date.now().toString().slice(-6)}`;
-      
       const memberData = {
         ...formData,
-        memberId,
+        memberId: generateMemberId(),
         registrationDate: new Date().toISOString(),
         status: 'active'
       };
@@ -182,27 +186,28 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
             />
             {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
           </div>
+        </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="ID/Passport No" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="idPassport" className="block text-sm font-medium text-gray-700 mb-1">
               ID/Passport No *
             </label>
             <input
-              type="tel"
-              id="ID/Passport"
-              name="phone"
-              value={formData.phone}
+              type="text"
+              id="idPassport"
+              name="idPassport"
+              value={formData.idPassport}
               onChange={handleChange}
               className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.phone ? 'border-red-500' : 'border-gray-300'
+                errors.idPassport ? 'border-red-500' : 'border-gray-300'
               }`}
               placeholder="Enter valid ID/Passport No"
             />
-            {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
+            {errors.idPassport && <p className="text-red-500 text-xs mt-1">{errors.idPassport}</p>}
           </div>
 
-
-                    <div>
+          <div>
             <label htmlFor="bloodGroup" className="block text-sm font-medium text-gray-700 mb-1">
               Blood Group
             </label>
@@ -213,7 +218,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value=""></option>
+              <option value="">Select blood group</option>
               <option value="A-">A(-)</option>
               <option value="A+">A(+)</option>
               <option value="B+">B(+)</option>
@@ -224,7 +229,6 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
               <option value="O-">O(-)</option>
             </select>
           </div>
-
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
