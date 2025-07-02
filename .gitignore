@@ -45,3 +45,7 @@ Thumbs.db
 *.lock
 *.DS_Store
 .env
+
+# Migrations
+*migrations/
+migrations/
