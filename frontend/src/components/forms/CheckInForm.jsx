@@ -1,43 +1,15 @@
 import React, { useState } from 'react';
 import Button from '../ui/Button';
+import { useApiMutation } from '../../hooks/useApi';
+import { memberService } from '../../services/memberService';
 
 const CheckInForm = ({ onSubmit, onCancel }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMember, setSelectedMember] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Mock member data - in real app, this would come from API
-  const mockMembers = [
-    {
-      id: 'PTF001234',
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john.doe@email.com',
-      membershipType: 'indoor',
-      status: 'active',
-      lastVisit: '2024-01-15'
-    },
-    {
-      id: 'PTF001235',
-      firstName: 'Jane',
-      lastName: 'Smith',
-      email: 'jane.smith@email.com',
-      membershipType: 'outdoor',
-      status: 'active',
-      lastVisit: '2024-01-14'
-    },
-    {
-      id: 'PTF001236',
-      firstName: 'Mike',
-      lastName: 'Johnson',
-      email: 'mike.johnson@email.com',
-      membershipType: 'both',
-      status: 'active',
-      lastVisit: '2024-01-13'
-    }
-  ];
+  const { mutate: searchMembers, loading: isSearching } = useApiMutation(memberService.searchMembers);
 
   const handleSearch = async (query) => {
     if (!query.trim()) {
@@ -45,26 +17,25 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
       return;
     }
 
-    setIsSearching(true);
-    
-    // Simulate API call delay
-    setTimeout(() => {
-      const results = mockMembers.filter(member => 
-        member.firstName.toLowerCase().includes(query.toLowerCase()) ||
-        member.lastName.toLowerCase().includes(query.toLowerCase()) ||
-        member.email.toLowerCase().includes(query.toLowerCase()) ||
-        member.id.toLowerCase().includes(query.toLowerCase())
-      );
-      
+    try {
+      const results = await searchMembers(query);
       setSearchResults(results);
-      setIsSearching(false);
-    }, 500);
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    }
   };
 
   const handleSearchChange = (e) => {
     const query = e.target.value;
     setSearchQuery(query);
-    handleSearch(query);
+    
+    // Debounce search
+    const timeoutId = setTimeout(() => {
+      handleSearch(query);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
   };
 
   const handleMemberSelect = (member) => {
@@ -202,10 +173,6 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
                 }`}>
                   {selectedMember.membershipType}
                 </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Last Visit:</span>
-                <span className="text-sm font-medium text-gray-900">{selectedMember.lastVisit}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Status:</span>
