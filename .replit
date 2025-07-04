@@ -10,3 +10,15 @@ run = ["sh", "-c", "npm run script"]
 [[ports]]
 localPort = 4028
 externalPort = 80
+
+[workflows]
+runButton = "Run Django Server"
+
+[[workflows.workflow]]
+name = "Run Django Server"
+author = 43059492
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python manage.py migrate && python manage.py runserver 0.0.0.0:5000"
