@@ -7,6 +7,9 @@ import IndoorMemberships from './pages/Memberships/IndoorMemberships';
 import OutdoorMemberships from './pages/Memberships/OutdoorMemberships';
 import RenewalsDue from './pages/Memberships/RenewalsDue';
 import PaymentsDue from './pages/Memberships/PaymentsDue';
+import Attendance from './pages/Attendance';
+import Bookings from './pages/Bookings';
+import ComingSoon from './pages/ComingSoon';
 
 const AppRoutes = () => {
   return (
@@ -17,6 +20,12 @@ const AppRoutes = () => {
         <Route path="/memberships/outdoor" element={<OutdoorMemberships />} />
         <Route path="/memberships/renewals" element={<RenewalsDue />} />
         <Route path="/memberships/payments" element={<PaymentsDue />} />
+        <Route path="/attendance" element={<Attendance />} />
+        <Route path="/bookings" element={<Bookings />} />
+        <Route path="/feedback" element={<ComingSoon />} />
+        <Route path="/communication" element={<ComingSoon />} />
+        <Route path="/inventory" element={<ComingSoon />} />
+        <Route path="*" element={<ComingSoon />} />
       </Routes>
     </Router>
   );
