@@ -1,7 +1,7 @@
 
 from rest_framework import serializers
 from .models import (
-    Member, Booking, Trainer, Waitlist, Attendance, 
+    Member, Booking, Trainer, Waitlist, Attendance,
     Feedback, InventoryItem, Notification
 )
 

@@ -2,17 +2,20 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from django.utils import timezone
+from django.db import models
 from django.db.models import Count, Q, Avg
 from datetime import timedelta
 from .models import (
-    Member, Booking, Trainer, Waitlist, Attendance, 
+    Member, Booking, Trainer, Waitlist, Attendance,
     Feedback, InventoryItem, Notification
 )
 from .serializers import (
-    MemberSerializer, BookingSerializer, TrainerSerializer, 
-    WaitlistSerializer, AttendanceSerializer, FeedbackSerializer, 
+    MemberSerializer, BookingSerializer, TrainerSerializer,
+    WaitlistSerializer, AttendanceSerializer, FeedbackSerializer,
     InventoryItemSerializer, NotificationSerializer
 )
+
+
 
 class MemberViewSet(viewsets.ModelViewSet):
     queryset = Member.objects.all()
@@ -118,16 +121,32 @@ def dashboard_stats(request):
     today = timezone.now().date()
 
     stats = {
-        'total_members': Member.objects.filter(is_active=True).count(),
-        'today_attendance': Attendance.objects.filter(check_in_time__date=today).count(),
-        'pending_bookings': Booking.objects.filter(is_confirmed=False).count(),
-        'open_feedback': Feedback.objects.filter(status='open').count(),
-        'low_stock_items': InventoryItem.objects.filter(quantity__lte=models.F('min_stock_level')).count(),
-        'renewals_due': Member.objects.filter(
-            membership_end_date__lte=today + timedelta(days=30)
-        ).count(),
-        'payments_overdue': Member.objects.filter(payment_due_date__lt=today).count(),
-    }
+        "membershipData": {
+            "renewalsDue": Member.objects.filter(
+                membership_end_date__lte=today + timedelta(days=30)
+                ).count(),
+                "paymentOverdue": Member.objects.filter(payment_due_date__lt=today).count(),
+                "indoor": Attendance.objects.filter(visit_type='indoor', check_in_time__date=today).count(),
+                "outdoor": Attendance.objects.filter(visit_type='outdoor', check_in_time__date=today).count(),
+                },
+                "bookingData": {
+                    "groupSessions": Booking.objects.filter(session_type='group', session_date__date=today).count(),
+                            "oneOnOneSessions": Booking.objects.filter(session_type='one-on-one', session_date__date=today).count(),
+                            "trainersAvailable": Trainer.objects.filter(is_available=True).count(),
+                                },
+                                    "feedbackData": {
+                                        "opentickets": Feedback.objects.filter(status='open').count(),
+                                        "avgResolutionTime": "2 days",  # Placeholder, should be calculated based on actual data
+                                    },
+                                    "attendanceData": {
+                                        "indoorVisits": Attendance.objects.filter(visit_type='indoor', check_in_time__date=today).count(),
+                                        "outdoorVisits": Attendance.objects.filter(visit_type='outdoor', check_in_time__date=today).count(),
+                                    },
+                                    "inventoryData": {
+                                                "availableStock": InventoryItem.objects.filter(quantity__gt=0).count(),
+                                                "lowStockItems": InventoryItem.objects.filter(quantity__lte=models.F('min_stock_level')).count(),
+                                    },
+                                    }
 
     return Response(stats)
 
