@@ -1,5 +1,5 @@
 modules = ["nodejs-20", "python-3.12", "web"]
-run = "npm run script"
+run = "cd frontend && npm run script"
 
 [nix]
 channel = "stable-24_05"
