@@ -27,7 +27,7 @@ const AppRoutes = () => {
         <Route path="/feedback" element={<ComingSoon />} />
         <Route path="/communication" element={<ComingSoon />} />
         <Route path="/inventory" element={<ComingSoon />} />
-        <Route path="*" element={<ComingSoon />} />
+        <Route path="/designs" element={<DesignShowcase />} />
       </Routes>
     </Router>
   );
