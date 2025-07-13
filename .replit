@@ -1,5 +1,5 @@
 modules = ["nodejs-20", "python-3.12", "web"]
-run = "cd frontend && npm install && npm run dev & cd ../backend && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && python manage.py migrate && python manage.py runserver 0.0.0.0:5000"
+run = "cd frontend && npm install && npm run dev & cd backend && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && python manage.py migrate && python manage.py runserver 0.0.0.0:5000 & wait"
 
 [nix]
 channel = "stable-24_05"
@@ -21,8 +21,12 @@ runButton = "Run Both Servers"
 [[workflows.workflow]]
 name = "Run Both Servers"
 author = 43059492
-mode = "sequential"
+mode = "parallel"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd frontend && npm install && npm run dev & cd ../backend && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && python manage.py migrate && python manage.py runserver 0.0.0.0:5000"
+args = "cd frontend && npm install && npm run dev"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && python manage.py migrate && python manage.py runserver 0.0.0.0:5000"
