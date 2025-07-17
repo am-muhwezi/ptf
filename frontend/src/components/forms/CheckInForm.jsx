@@ -40,7 +40,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
 
   const handleMemberSelect = (member) => {
     setSelectedMember(member);
-    setSearchQuery(`${member.firstName} ${member.lastName} (${member.id})`);
+    setSearchQuery(`${member.first_name} ${member.last_name} (${member.id})`);
     setSearchResults([]);
   };
 
@@ -48,23 +48,18 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
     if (!selectedMember) return;
 
     setIsSubmitting(true);
+  
     
     try {
-      const checkInData = {
-        memberId: selectedMember.id,
-        memberName: `${selectedMember.firstName} ${selectedMember.lastName}`,
-        checkInTime: new Date().toISOString(),
-        membershipType: selectedMember.membershipType,
-        date: new Date().toISOString().split('T')[0]
-      };
+      await onSubmit(selectedMember);
 
-      await onSubmit(checkInData);
-    } catch (error) {
-      console.error('Error checking in member:', error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    }catch (err) {
+    console.error('Error checking in member:', err);
+
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const clearSelection = () => {
     setSelectedMember(null);
@@ -106,7 +101,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="font-medium text-gray-900">
-                        {member.firstName} {member.lastName}
+                        {member.first_name} {member.last_name}
                       </p>
                       <p className="text-sm text-gray-600">{member.email}</p>
                       <p className="text-xs text-gray-500">ID: {member.id}</p>
@@ -153,7 +148,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Name:</span>
                 <span className="text-sm font-medium text-gray-900">
-                  {selectedMember.firstName} {selectedMember.lastName}
+                  {selectedMember.first_name} {selectedMember.last_name}
                 </span>
               </div>
               <div className="flex justify-between">

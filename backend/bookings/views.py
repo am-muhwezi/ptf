@@ -1,0 +1,99 @@
+from .models import Booking
+from rest_framework import status, viewsets
+from rest_framework.decorators import api_view, action
+from rest_framework.response import Response
+from rest_framework import serializers
+from django.shortcuts import get_object_or_404
+from rest_framework.request import Request
+from .serializers import BookingSerializer
+
+
+@api_view(http_method_names=["GET", "POST"])
+def homepage(request: Request):
+    """
+    Home view for the bookings app.
+    """
+    if request.method == "POST":
+        data = request.data
+        response = {"message": "Data received successfully", "data": data}
+        return Response(data=response, status=status.HTTP_201_CREATED)
+    response = {"message": "Welcome to the Bookings App!"}
+    return Response(data=response, status=status.HTTP_200_OK)
+
+
+class BookingViewSet(viewsets.ModelViewSet):
+    """
+    View to list and create bookings.
+    """
+
+    queryset = Booking.objects.all()
+    serializer_class = BookingSerializer
+
+    @action(detail=True, methods=["post"])
+    def confirm(self, request, pk=None):
+        """
+        Custom action to confirm a booking.
+        """
+        booking = self.get_object()
+        if booking.status == "pending":
+            return Response(
+                {"detail": "Only pending can be confirmed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        booking.status = "confirmed"
+        booking.save()
+
+        serializer = self.get_serializer(booking)
+        return Response(
+            {
+                "detail": "Booking confirmed successfully.",
+                "booking": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        """
+        Custom action to cancel a booking.
+        """
+        booking = self.get_object()
+
+        if booking.status in ["cancelled", "completed"]:
+            return Response(
+                {"error": f"cannot cancel {booking.status} booking"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        booking.status = "cancelled"
+        booking.save()
+        serializer = self.get_serializer(booking)
+        return Response(
+            {
+                "detail": "Booking cancelled successfully.",
+                "booking": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"])
+    def complete(self, request, pk=None):
+        """
+        Custom action to complete a booking.
+        """
+        booking = self.get_object()
+
+        if booking.status != "confirmed":
+            return Response(
+                {"error": "Only confirmed bookings can be completed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        booking.status = "completed"
+        booking.save()
+        serializer = self.get_serializer(booking)
+        return Response(
+            {
+                "detail": "Booking completed successfully.",
+                "booking": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )

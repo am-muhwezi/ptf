@@ -17,8 +17,9 @@ export const API_ENDPOINTS = {
     detail: (id) => `/members/${id}/`,
     update: (id) => `/members/${id}/`,
     delete: (id) => `/members/${id}/`,
-    checkin: '/members/checkin/',
-    search: '/members/search/',
+    checkin: (id) => `/members/${id}/checkin/`,
+    search: '/members/',
+    checkin: (id) => `/members/${id}/checkin/`,
   },
   
   // Memberships
