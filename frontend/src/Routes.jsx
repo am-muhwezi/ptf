@@ -10,13 +10,17 @@ import IndoorMemberships from './pages/Memberships/IndoorMemberships';
 import OutdoorMemberships from './pages/Memberships/OutdoorMemberships';
 import RenewalsDue from './pages/Memberships/RenewalsDue';
 import PaymentsDue from './pages/Memberships/PaymentsDue';
-import DesignShowcase from './pages/DesignShowcase/'
+import Attendance from './pages/Attendance';
+import Bookings from './pages/Bookings';
+import ComingSoon from './pages/ComingSoon';
+import DesignShowcase from './pages/DesignShowcase';
 
 const AppRoutes = () => {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/design-showcase" element={<DesignShowcase />} />
         <Route path="/memberships/indoor" element={<IndoorMemberships />} />
         <Route path="/memberships/outdoor" element={<OutdoorMemberships />} />
         <Route path="/memberships/renewals" element={<RenewalsDue />} />

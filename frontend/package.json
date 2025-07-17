@@ -6,7 +6,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "serve": "vite preview",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "script": "bash ../start_backend.sh"
   },
   "dependencies": {
     "@dhiwise/component-tagger": "^1.0.9",

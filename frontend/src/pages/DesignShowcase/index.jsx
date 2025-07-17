@@ -692,5 +692,4 @@ const DesignShowcase = () => {
     </div>
   );
 };
-
 export default DesignShowcase;

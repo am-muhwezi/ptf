@@ -5,6 +5,7 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
+import UpdateMemberProfileForm from '../../components/forms/UpdateMemberProfileForm';
 import { useApi, useApiMutation } from '../../hooks/useApi';
 import { membershipService } from '../../services/membershipService';
 import { formatCurrency, formatDate, isExpiringSoon } from '../../utils/formatters';
@@ -15,6 +16,7 @@ const IndoorMemberships = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedMember, setSelectedMember] = useState(null);
   const [showMemberModal, setShowMemberModal] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   // API hooks
@@ -66,6 +68,26 @@ const IndoorMemberships = () => {
     }
   };
 
+  const handleUpdateMemberProfile = async (updatedData) => {
+    try {
+      // Update the selected member with new data
+      const updatedMember = { ...selectedMember, ...updatedData };
+      
+      // Update the members array
+      const updatedMembers = members.map(member => 
+        member.id === selectedMember.id ? updatedMember : member
+      );
+      
+      setMembers(updatedMembers);
+      setSelectedMember(updatedMember);
+      setShowUpdateModal(false);
+      
+      showToast(`Profile updated successfully for ${selectedMember.firstName} ${selectedMember.lastName}`, 'success');
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  };
+
   const getStatusBadge = (status) => {
     const statusStyles = {
       active: 'bg-green-100 text-green-800',
@@ -92,6 +114,30 @@ const IndoorMemberships = () => {
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
     );
+  };
+
+  const getFitnessLevelBadge = (level) => {
+    const levelStyles = {
+      beginner: 'bg-yellow-100 text-yellow-800',
+      intermediate: 'bg-blue-100 text-blue-800',
+      advanced: 'bg-green-100 text-green-800',
+      athlete: 'bg-purple-100 text-purple-800'
+    };
+    
+    return (
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${levelStyles[level] || 'bg-gray-100 text-gray-800'}`}>
+        {level ? level.charAt(0).toUpperCase() + level.slice(1) : 'Not Set'}
+      </span>
+    );
+  };
+
+  const getBMICategory = (bmi) => {
+    if (!bmi) return { label: 'Not Available', style: 'bg-gray-100 text-gray-800' };
+    const bmiValue = parseFloat(bmi);
+    if (bmiValue < 18.5) return { label: 'Underweight', style: 'bg-yellow-100 text-yellow-800' };
+    if (bmiValue < 25) return { label: 'Normal', style: 'bg-green-100 text-green-800' };
+    if (bmiValue < 30) return { label: 'Overweight', style: 'bg-orange-100 text-orange-800' };
+    return { label: 'Obese', style: 'bg-red-100 text-red-800' };
   };
 
   // Loading state
@@ -374,6 +420,103 @@ const IndoorMemberships = () => {
               </div>
             </div>
             
+            {/* Health Analysis Section */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Health Analysis</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {selectedMember.height ? `${selectedMember.height} cm` : 'N/A'}
+                  </div>
+                  <div className="text-sm text-gray-600">Height</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {selectedMember.weight ? `${selectedMember.weight} kg` : 'N/A'}
+                  </div>
+                  <div className="text-sm text-gray-600">Weight</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {selectedMember.bmi || 'N/A'}
+                  </div>
+                  <div className="text-sm text-gray-600">BMI</div>
+                  {selectedMember.bmi && (
+                    <div className="mt-1">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getBMICategory(selectedMember.bmi).style}`}>
+                        {getBMICategory(selectedMember.bmi).label}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {selectedMember.bodyFatPercentage ? `${selectedMember.bodyFatPercentage}%` : 'N/A'}
+                  </div>
+                  <div className="text-sm text-gray-600">Body Fat</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Fitness Level & Test Results */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Fitness Assessment</h3>
+              <div className="mb-4">
+                <label className="text-sm font-medium text-gray-500">Fitness Level</label>
+                <div className="mt-1">{getFitnessLevelBadge(selectedMember.fitnessLevel)}</div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Strength Test Results</label>
+                  <div className="mt-1 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-700">
+                      {selectedMember.strengthTestResults || 'No data available'}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Cardio Test Results</label>
+                  <div className="mt-1 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-700">
+                      {selectedMember.cardioTestResults || 'No data available'}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Flexibility Test Results</label>
+                  <div className="mt-1 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-700">
+                      {selectedMember.flexibilityTestResults || 'No data available'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Goals Section */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Fitness Goals</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Short-term Goals (3-6 months)</label>
+                  <div className="mt-1 p-3 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-blue-900">
+                      {selectedMember.shortTermGoals || 'No goals set yet'}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Long-term Goals (6+ months)</label>
+                  <div className="mt-1 p-3 bg-green-50 rounded-lg">
+                    <p className="text-sm text-green-900">
+                      {selectedMember.longTermGoals || 'No goals set yet'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">Activity Summary</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -393,8 +536,38 @@ const IndoorMemberships = () => {
                 </div>
               </div>
             </div>
+
+            <div className="flex justify-end space-x-4 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowUpdateModal(true)}
+              >
+                Edit Profile
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => handleRenewMembership(selectedMember.id)}
+                disabled={renewLoading}
+              >
+                Renew Membership
+              </Button>
+            </div>
           </div>
         )}
+      </Modal>
+
+      {/* Update Member Profile Modal */}
+      <Modal
+        isOpen={showUpdateModal}
+        onClose={() => setShowUpdateModal(false)}
+        title="Update Member Profile"
+        size="full"
+      >
+        <UpdateMemberProfileForm
+          initialData={selectedMember}
+          onSubmit={handleUpdateMemberProfile}
+          onCancel={() => setShowUpdateModal(false)}
+        />
       </Modal>
 
       {/* Toast Notifications */}
