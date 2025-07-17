@@ -65,10 +65,3 @@ export const formatPhoneNumber = (phone) => {
   
   return phone; // Return original if format not recognized
 };
-
-// Generate member ID
-export const generateMemberId = (prefix = 'PTF') => {
-  const timestamp = Date.now().toString().slice(-6);
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-  return `${prefix}${timestamp}${random}`;
-};

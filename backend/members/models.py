@@ -66,13 +66,3 @@ class Member(models.Model):
 
     def __str__(self) -> str:
         return f"{self.first_name} {self.last_name} ({self.email})"
-
-    def check_in(self):
-        """Check in the member"""
-
-        if not self.is_checked_in:
-            self.is_checked_in = True
-            self.total_visits += 1
-            self.save
-            return True
-        return False

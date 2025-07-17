@@ -5,11 +5,9 @@ from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
 
-
-router.register(r"members", views.MemberViewset, basename="member")
+router.register(r"bookings", views.BookingViewSet, basename="booking")
 
 urlpatterns = [
-    # Add member-specific URLs here as needed
-    path("homepage/", views.homepage, name="members_homepage"),
+    path("homepage/", views.homepage, name="bookings_homepage"),
     path("", include(router.urls)),
 ]

@@ -1,5 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import ComingSoon from './pages/ComingSoon';
+import Attendance from './pages/Attendance';
+import Bookings from './pages/Bookings';
 
 // Import page components
 import DashboardPage from './pages/Dashboard';
@@ -28,6 +31,7 @@ const AppRoutes = () => {
         <Route path="/communication" element={<ComingSoon />} />
         <Route path="/inventory" element={<ComingSoon />} />
         <Route path="/designs" element={<DesignShowcase />} />
+        <Route path="*" element={<ComingSoon />} />
       </Routes>
     </Router>
   );

@@ -18,7 +18,9 @@ const Dashboard = () => {
   
   // API hooks
   const { data: dashboardStats, loading: statsLoading, error: statsError } = useApi(dashboardService.getDashboardStats);
-  const { data: notifications = [], loading: notificationsLoading } = useApi(dashboardService.getNotifications);
+  const { data: notificationsData, loading: notificationsLoading } = useApi(dashboardService.getNotifications);
+
+  const notifications = Array.isArray(notificationsData) ? notificationsData : [];
 
   // Modal and Toast states
   const [showRegisterModal, setShowRegisterModal] = useState(false);
@@ -55,6 +57,7 @@ const Dashboard = () => {
 
   const stats = dashboardStats || defaultStats;
 
+
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
   };
@@ -75,19 +78,25 @@ const Dashboard = () => {
     try {
       await memberService.createMember(memberData);
       setShowRegisterModal(false);
-      showToast(`Member ${memberData.firstName} ${memberData.lastName} registered successfully!`, 'success');
+      showToast(`${memberData.first_name} ${memberData.last_name} registered successfully!`, 'success');
     } catch (error) {
       showToast(error.message, 'error');
     }
   };
 
-  const handleCheckInSubmit = async (checkInData) => {
+  const handleCheckInSubmit = async (memberData) => {
     try {
-      await memberService.checkinMember(checkInData);
+    const result = await memberService.checkinMember(memberData.id);
       setShowCheckInModal(false);
-      showToast(`${checkInData.memberName} checked in successfully!`, 'success');
+
+      showToast(`${memberData.first_name} ${memberData.last_name} checked in successfully!`, 'success');
+
+      return result;
+
+
     } catch (error) {
       showToast(error.message, 'error');
+      throw error;
     }
   };
 
@@ -191,23 +200,23 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card
                   title="Indoor Memberships"
-                  value={stats.membershipData.indoor}
-                  onClick={() => handleCardClick('Indoor Memberships', stats.membershipData.indoor, '/memberships/indoor')}
+                  value={stats.membershipData?.indoor ?? 0}
+                  onClick={() => handleCardClick('Indoor Memberships', stats.membershipData?.indoor ?? 0, '/memberships/indoor')}
                 />
                 <Card
                   title="Outdoor Memberships"
-                  value={stats.membershipData.outdoor}
-                  onClick={() => handleCardClick('Outdoor Memberships', stats.membershipData.outdoor, '/memberships/outdoor')}
+                  value={stats.membershipData?.outdoor ?? 0}
+                  onClick={() => handleCardClick('Outdoor Memberships', stats.membershipData?.outdoor ?? 0, '/memberships/outdoor')}
                 />
                 <Card
                   title="Renewals Due"
-                  value={stats.membershipData.renewalsDue}
-                  onClick={() => handleCardClick('Renewals Due', stats.membershipData.renewalsDue, '/memberships/renewals')}
+                  value={stats.membershipData?.renewalsDue ?? 0}
+                  onClick={() => handleCardClick('Renewals Due', stats.membershipData?.renewalsDue ?? 0, '/memberships/renewals')}
                 />
                 <Card
                   title="Payment Overdue"
-                  value={stats.membershipData.paymentOverdue}
-                  onClick={() => handleCardClick('Payment Overdue', stats.membershipData.paymentOverdue, '/memberships/payments')}
+                  value={stats.membershipData?.paymentOverdue ?? 0}
+                  onClick={() => handleCardClick('Payment Overdue', stats.membershipData?.paymentOverdue ?? 0, '/memberships/payments')}
                 />
               </div>
             </section>
@@ -245,7 +254,7 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card
                   title="Indoor Visits Today"
-                  value={stats.attendanceData.indoorVisits}
+                  value={stats?.attendanceData?.indoorVisits || 0}
                   onClick={() => handleCardClick('Indoor Visits Today', stats.attendanceData.indoorVisits)}
                 />
                 <Card

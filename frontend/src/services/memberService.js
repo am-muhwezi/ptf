@@ -64,14 +64,14 @@ export const memberService = {
   },
 
   // Check-in member
-  checkinMember: async (checkinData) => {
+  checkinMember: async (memberId) => {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.members.checkin, checkinData);
+      const response = await apiClient.post(API_ENDPOINTS.members.checkin(memberId));
       return response.data;
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Failed to check-in member');
     }
-  },
+  }
 };
 
 export default memberService;

@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import Button from '../ui/Button';
-import { generateMemberId } from '../../utils/formatters';
 
 const RegisterMemberForm = ({ onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone: '',
     idPassport: '',
@@ -40,12 +39,12 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.firstName.trim()) {
-      newErrors.firstName = 'First name is required';
+    if (!formData.first_name.trim()) {
+      newErrors.first_name = 'First name is required';
     }
 
-    if (!formData.lastName.trim()) {
-      newErrors.lastName = 'Last name is required';
+    if (!formData.last_name.trim()) {
+      newErrors.last_name = 'Last name is required';
     }
 
     if (!formData.email.trim()) {
@@ -90,7 +89,6 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
     try {
       const memberData = {
         ...formData,
-        memberId: generateMemberId(),
         registrationDate: new Date().toISOString(),
         status: 'active'
       };
@@ -114,39 +112,39 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
         {/* Personal Information */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="first_name" className="block text-sm font-medium text-gray-700 mb-1">
               First Name *
             </label>
             <input
               type="text"
-              id="firstName"
-              name="firstName"
-              value={formData.firstName}
+              id="first_name"
+              name="first_name"
+              value={formData.first_name}
               onChange={handleChange}
               className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.firstName ? 'border-red-500' : 'border-gray-300'
+                errors.first_name ? 'border-red-500' : 'border-gray-300'
               }`}
               placeholder="Enter first name"
             />
-            {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName}</p>}
+            {errors.first_name && <p className="text-red-500 text-xs mt-1">{errors.first_name}</p>}
           </div>
 
           <div>
-            <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="last_name" className="block text-sm font-medium text-gray-700 mb-1">
               Last Name *
             </label>
             <input
               type="text"
-              id="lastName"
-              name="lastName"
-              value={formData.lastName}
+              id="last_name"
+              name="last_name"
+              value={formData.last_name}
               onChange={handleChange}
               className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.lastName ? 'border-red-500' : 'border-gray-300'
+                errors.last_name ? 'border-red-500' : 'border-gray-300'
               }`}
               placeholder="Enter last name"
             />
-            {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>}
+            {errors.last_name && <p className="text-red-500 text-xs mt-1">{errors.last_name}</p>}
           </div>
         </div>
 
