@@ -260,7 +260,6 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
             >
               <option value="indoor">Indoor Membership</option>
               <option value="outdoor">Outdoor Membership</option>
-              <option value="both">Indoor + Outdoor</option>
             </select>
           </div>
         </div>

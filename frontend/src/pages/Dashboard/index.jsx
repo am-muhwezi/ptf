@@ -84,22 +84,17 @@ const Dashboard = () => {
     }
   };
 
-  const handleCheckInSubmit = async (memberData) => {
-    try {
-    const result = await memberService.checkinMember(memberData.id);
-      setShowCheckInModal(false);
-
-      showToast(`${memberData.first_name} ${memberData.last_name} checked in successfully!`, 'success');
-
-      return result;
-
-
-    } catch (error) {
-      showToast(error.message, 'error');
-      throw error;
-    }
-  };
-
+const handleCheckInSubmit = async (memberData) => {
+  try {
+    const result = await memberService.checkinMember(memberData.memberId);  // ✅ Correct property
+    setShowCheckInModal(false);
+    showToast(`${memberData.memberName} checked in successfully!`, 'success');  // ✅ Use pre-formatted name
+    return result;
+  } catch (error) {
+    showToast(error.message, 'error');
+    throw error;
+  }
+};
   const handleCardClick = (cardType, value, route) => {
     if (route) {
       navigate(route);
