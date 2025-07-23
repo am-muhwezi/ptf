@@ -22,5 +22,6 @@ class MemberSerializer(serializers.ModelSerializer):
             "dateOfBirth",
             "medicalConditions",
             "registrationDate",
-            "is_checked_in",
+            "active",
+            "checked_in",
         ]

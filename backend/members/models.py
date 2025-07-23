@@ -1,30 +1,5 @@
 from django.db import models
-
-
-"""
-class Member(models.Model):
-    id int
-    first_name str
-    last_name str
-    email 
-    phone_number 
-    address	""
-
-    bloodGroup	"O+"
-    dateOfBirth	"2002-01-01"
-    email	"intricatesyllable@gmail.ckl"
-    emergencyContact	"Muhwezi"
-    emergencyPhone	"0111111111"
-    first_name	"Thabos"
-    idPassport	"aii12121"
-    last_name	"Muhanguzi"
-    medicalConditions	"Lovely"
-    memberId	"PTF209969171"
-    membershipType	"indoor"
-    phone	"0115001965"
-    registrationDate	"2025-07-09T12:13:29.969Z"
-    status	"active"
-"""
+from memberships.models import MembershipPlan
 
 
 class Member(models.Model):
@@ -32,7 +7,6 @@ class Member(models.Model):
     MEMBERSHIP_TYPES = [
         ("indoor", "Indoor"),
         ("outdoor", "Outdoor"),
-        ("both", "Both"),
     ]
     BLOOD_GROUPS = [
         ("A+", "A+"),
@@ -45,6 +19,7 @@ class Member(models.Model):
         ("O-", "O-"),
         ("nil", "Not Specified"),
     ]
+    id = models.AutoField(primary_key=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
@@ -56,13 +31,17 @@ class Member(models.Model):
     bloodGroup = models.CharField(max_length=3, choices=BLOOD_GROUPS, default="nil")
     dateOfBirth = models.DateTimeField(auto_now_add=True)
     idPassport = models.CharField(max_length=50, unique=True, blank=True, null=True)
-    emergencyPhone = models.CharField(max_length=15, blank=True, null=True)
     medicalConditions = models.TextField(max_length=500)
+    active = models.BooleanField(default=True)
+    emergencyPhone = models.CharField(max_length=15, blank=True, null=True)
     emergencyContact = models.CharField(max_length=100, blank=True, null=True)
     registrationDate = models.DateTimeField(auto_now_add=True)
+    membership_plan = models.ForeignKey(
+        MembershipPlan, on_delete=models.SET_NULL, null=True, blank=True
+    )
 
-    is_checked_in = models.BooleanField(default=False)
+    checked_in = models.BooleanField(default=False)
     total_visits = models.PositiveIntegerField(default=0)
 
-    def __str__(self) -> str:
-        return f"{self.first_name} {self.last_name} ({self.email})"
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} ({self.membership_type})"

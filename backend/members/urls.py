@@ -8,8 +8,8 @@ router = DefaultRouter()
 
 router.register(r"members", views.MemberViewset, basename="member")
 
+
 urlpatterns = [
-    # Add member-specific URLs here as needed
     path("homepage/", views.homepage, name="members_homepage"),
     path("", include(router.urls)),
 ]
