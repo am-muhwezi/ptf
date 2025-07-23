@@ -1,7 +1,7 @@
 import apiClient, { API_ENDPOINTS } from '../config/api';
 
 export const memberService = {
-  // Get all members
+  // Get all members with pagination
   getMembers: async (params = {}) => {
     try {
       const response = await apiClient.get(API_ENDPOINTS.members.list, { params });
@@ -51,25 +51,88 @@ export const memberService = {
     }
   },
 
-  // Search members
-  searchMembers: async (query) => {
+  // Search members - FIXED: Proper endpoint and error handling
+  searchMembers: async (query, page = 1, limit = 10) => {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.members.search, {
-        params: { q: query }
+      // Ensure we're calling the correct endpoint
+      const response = await apiClient.get(`${API_ENDPOINTS.members.list}`, {
+        params: { 
+          q: query,
+          page: page,
+          limit: limit
+        }
       });
-      return response.data;
+      
+      // Handle the response structure from your Django backend
+      const data = response.data;
+      
+      // Your Django backend returns { results: [], count: number, query: string }
+      return {
+        results: data.results || [],
+        count: data.count || 0,
+        query: data.query || query,
+        hasMore: false // Since you limit to 10, implement pagination if needed
+      };
     } catch (error) {
+      console.error('Search API Error:', error);
       throw new Error(error.response?.data?.message || 'Failed to search members');
     }
   },
 
-  // Check-in member
+
   checkinMember: async (memberId) => {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.members.checkin(memberId));
+
+      const response = await apiClient.post(`${API_ENDPOINTS.members.list}${memberId}/checkin/`);
       return response.data;
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to check-in member');
+      console.error('Check-in API Error:', error);
+      throw new Error(error.response?.data?.error || 'Failed to check-in member');
+    }
+  },
+
+  // Check-out member
+  checkoutMember: async (memberId) => {
+    try {
+      const response = await apiClient.post(`${API_ENDPOINTS.members.list}${memberId}/checkout/`);
+      return response.data;
+    } catch (error) {
+      console.error('Check-out API Error:', error);
+      throw new Error(error.response?.data?.error || 'Failed to check-out member');
+    }
+  },
+
+  // Get outdoor memberships
+  getOutdoorMemberships: async () => {
+    try {
+    
+
+      const response = await apiClient.get(`${API_ENDPOINTS.members.list}outdoorMemberships/`);
+      return response.data;
+
+  
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch outdoor memberships');
+    }
+  },
+
+  // Get indoor memberships
+  getIndoorMemberships: async () => {
+    try {
+      const response = await apiClient.get(`${API_ENDPOINTS.members.list}indoorMemberships/`);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch indoor memberships');
+    }
+  },
+
+  // Get checked-in members
+  getCheckedInMembers: async () => {
+    try {
+      const response = await apiClient.get(`${API_ENDPOINTS.members.list}checked_in_members/`);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch checked-in members');
     }
   }
 };

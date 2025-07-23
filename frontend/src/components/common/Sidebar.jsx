@@ -9,7 +9,7 @@ const Sidebar = () => {
   const menuItems = [
     { name: 'Dashboard', icon: '/images/img_vector_0.svg', path: '/' },
     { 
-      name: 'Members', 
+      name: 'Memberships', 
       icon: '/images/img_vector_0_gray_900.svg', 
       path: '/members',
       subItems: [
