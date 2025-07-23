@@ -4,6 +4,8 @@ from django.urls import re_path
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+from dashboard.views import DashboardStatsView
+from dashboard.views import DashboardNotificationsView
 
 ...
 
@@ -31,4 +33,10 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("members.urls")),
     path("", include("bookings.urls")),
+    path("dashboard/stats/", DashboardStatsView.as_view(), name="dashboard-stats"),
+    path(
+        "dashboard/notifications/",
+        DashboardNotificationsView.as_view(),
+        name="dashboard-notifications",
+    ),
 ]

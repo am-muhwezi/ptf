@@ -37,9 +37,12 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.sites",
     "members",
     "accounts",
     "bookings",
+    "dashboard",
+    "memberships",
     "django_extensions",
     # Third-party apps
     "rest_framework",

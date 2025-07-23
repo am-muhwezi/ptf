@@ -1,8 +1,11 @@
 from rest_framework import serializers
 from .models import Booking
+from members.serializers import MemberSerializer
 
 
 class BookingSerializer(serializers.ModelSerializer):
+    member = MemberSerializer(read_only=True)
+    member_id = serializers.IntegerField(write_only=True)
     class Meta:
         model = Booking
         fields = "__all__"

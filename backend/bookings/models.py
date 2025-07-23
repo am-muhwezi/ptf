@@ -11,6 +11,7 @@ class Booking(models.Model):
         ("pending", "Pending"),
         ("confirmed", "Confirmed"),
         ("cancelled", "Cancelled"),
+        ("completed", "Completed"),
     ]
 
     member = models.ForeignKey(
