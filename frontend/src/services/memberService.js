@@ -80,57 +80,16 @@ export const memberService = {
   },
 
 
-  
-  
-      
-    
-  
-      
-      
-// Enhanced debugging version of checkinMember function
-checkinMember: async (memberId) => {
-  try {
-    console.log('🔄 checkinMember called with:', memberId);
-    console.log('🔄 memberId type:', typeof memberId);
-    console.log('🔄 memberId stringified:', JSON.stringify(memberId));
-    
-    // Validate memberId before making the request
-    if (!memberId || isNaN(Number(memberId))) {
-      throw new Error(`Invalid member ID: ${memberId}`);
+  checkinMember: async (memberId) => {
+    try {
+
+      const response = await apiClient.post(`${API_ENDPOINTS.members.list}${memberId}/checkin/`);
+      return response.data;
+    } catch (error) {
+      console.error('Check-in API Error:', error);
+      throw new Error(error.response?.data?.error || 'Failed to check-in member');
     }
-
-    console.log('🔄 API_ENDPOINTS.members.list:', API_ENDPOINTS.members.list);
-    
-    // Ensure memberId is a number and construct URL carefully
-    const cleanMemberId = Number(memberId);
-    console.log('🔄 cleanMemberId:', cleanMemberId);
-    
-    // Remove trailing slash if it exists, then add proper path
-    const baseUrl = API_ENDPOINTS.members.list;
-    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-    const checkInUrl = `${cleanBaseUrl}/${cleanMemberId}/checkin/`;
-    
-    console.log('🔄 Constructed check-in URL:', checkInUrl);
-
-    // Make the request
-    console.log('🔄 About to make POST request to:', checkInUrl);
-    const response = await apiClient.post(checkInUrl);
-    
-    console.log('✅ Raw response:', response);
-    console.log('✅ Response data:', response.data);
-    console.log('✅ Response status:', response.status);
-    
-    return response.data;
-  } catch (error) {
-    console.error('❌ checkinMember error:', error);
-    console.error('❌ Error response status:', error.response?.status);
-    console.error('❌ Error response data:', error.response?.data);
-    console.error('❌ Error config:', error.config);
-    console.error('❌ Error config url:', error.config?.url);
-    
-    throw new Error(error.response?.data?.error || error.message || 'Failed to check-in member');
-  }
-},
+  },
 
   // Check-out member
   checkoutMember: async (memberId) => {
