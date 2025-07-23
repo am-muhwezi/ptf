@@ -10,9 +10,6 @@ import IndoorMemberships from './pages/Memberships/IndoorMemberships';
 import OutdoorMemberships from './pages/Memberships/OutdoorMemberships';
 import RenewalsDue from './pages/Memberships/RenewalsDue';
 import PaymentsDue from './pages/Memberships/PaymentsDue';
-import Attendance from './pages/Attendance';
-import Bookings from './pages/Bookings';
-import ComingSoon from './pages/ComingSoon';
 import DesignShowcase from './pages/DesignShowcase';
 
 const AppRoutes = () => {
