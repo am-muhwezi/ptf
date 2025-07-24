@@ -5,6 +5,8 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
+import PaymentForm from '../../components/forms/PaymentForm';
+import Receipt from '../../components/ui/Receipt';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import UpdateMemberProfileForm from '../../components/forms/UpdateMemberProfileForm';
 import { useApi, useApiMutation } from '../../hooks/useApi';
@@ -21,6 +23,9 @@ const Members = () => {
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [paymentData, setPaymentData] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   // Mock data - replace with API call
@@ -226,6 +231,25 @@ const Members = () => {
     } catch (error) {
       showToast(error.message, 'error');
     }
+  };
+
+  const handleRequestPayment = (member) => {
+    setSelectedMember(member);
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentSuccess = (paymentResponse) => {
+    setPaymentData(paymentResponse);
+    setShowPaymentModal(false);
+    setShowReceiptModal(true);
+    
+    // Update member payment status
+    const updatedMembers = members.map(member =>
+      member.id === selectedMember.id 
+        ? { ...member, paymentStatus: 'paid', lastPayment: new Date().toISOString() }
+        : member
+    );
+    setMembers(updatedMembers);
   };
 
   const getStatusBadge = (status) => {
@@ -492,6 +516,12 @@ const Members = () => {
                           >
                             Edit
                           </button>
+                          <button
+                            onClick={() => handleRequestPayment(member)}
+                            className="text-purple-600 hover:text-purple-900"
+                          >
+                            Payment
+                          </button>
                           {member.status === 'active' ? (
                             <button
                               onClick={() => handleUpdateMemberStatus(member.id, 'inactive')}
@@ -712,6 +742,29 @@ const Members = () => {
           initialData={selectedMember}
           onSubmit={handleUpdateMemberProfile}
           onCancel={() => setShowUpdateModal(false)}
+        />
+      </Modal>
+
+      {/* Payment Modal */}
+      <PaymentForm
+        member={selectedMember}
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
+
+      {/* Receipt Modal */}
+      <Modal
+        isOpen={showReceiptModal}
+        onClose={() => setShowReceiptModal(false)}
+        title="Payment Receipt"
+        size="medium"
+      >
+        <Receipt
+          paymentData={paymentData}
+          member={selectedMember}
+          onClose={() => setShowReceiptModal(false)}
+          onPrint={() => showToast('Receipt printed successfully', 'success')}
         />
       </Modal>
 
