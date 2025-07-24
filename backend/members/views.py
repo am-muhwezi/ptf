@@ -48,17 +48,19 @@ class MemberViewset(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Overrides the default queryset to handle search queries directly on the list view.
-        This allows `GET /members/?q=...` to work for searching.
         """
         queryset = super().get_queryset()
         query = self.request.query_params.get("q")
         if query:
-            return queryset.filter(
+            q_objects = (
                 Q(first_name__icontains=query)
                 | Q(last_name__icontains=query)
                 | Q(email__icontains=query)
-                | Q(id__icontains=query)
-            ).distinct()
+            )
+            if query.isdigit():
+                q_objects |= Q(id=query)
+
+            return queryset.filter(q_objects).distinct()
         return queryset
 
     @action(detail=True, methods=["post"])
@@ -69,8 +71,10 @@ class MemberViewset(viewsets.ModelViewSet):
         member = get_object_or_404(Member, pk=pk)
         logger.info(f"Check-in attempt for member ID: {pk}")
 
-        if not member.active:
-            logger.warning(f"Check-in denied for inactive member: {member.id}")
+        if member.status != "active":
+            logger.warning(
+                f"Check-in denied for member {member.id} with status '{member.status}'"
+            )
             return Response(
                 {
                     "error": f"Cannot check in {member.first_name}. Status is '{member.status}'."
@@ -78,22 +82,25 @@ class MemberViewset(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if getattr(member, "checked_in", False):
+        if member.is_checked_in:
             logger.info(f"Member {member.id} already checked in.")
             return Response(
                 {"message": f"{member.first_name} is already checked in."},
                 status=status.HTTP_200_OK,
             )
 
-        member.checked_in = True
-        if hasattr(member, "last_checkin_time"):
-            member.last_checkin_time = timezone.now()
-        member.save()
+        member.is_checked_in = True
+        # Verify this field name against your models.py if it still fails
+        member.last_visit = timezone.now()
 
-        logger.info("Successfully checked in member: %s", member.id)
-        return Response(    
+        # FIXED: Use the correct field names in the update_fields list
+        member.save(update_fields=["is_checked_in", "last_visit"])
+
+        logger.info(f"Successfully checked in member: {member.id}")
+        return Response(
             {
                 "message": f"{member.first_name} {member.last_name} checked in successfully.",
+                "member": serializer.data,
             },
             status=status.HTTP_200_OK,
         )
@@ -106,16 +113,18 @@ class MemberViewset(viewsets.ModelViewSet):
         member = get_object_or_404(Member, pk=pk)
         logger.info(f"Check-out attempt for member ID: {pk}")
 
-        if not getattr(member, "checked_in", False):
+        if not member.is_checked_in:
             return Response(
                 {"message": f"{member.first_name} is not currently checked in."},
                 status=status.HTTP_200_OK,
             )
 
-        member.checked_in = False
-        if hasattr(member, "last_checkout_time"):
-            member.last_checkout_time = timezone.now()
-        member.save()
+        member.is_checked_in = False
+        # Verify this field name against your models.py if it still fails
+        member.last_visit = timezone.now()
+
+        # FIXED: Use the correct field names in the update_fields list
+        member.save(update_fields=["is_checked_in", "last_visit"])
 
         logger.info(f"Successfully checked out member: {member.id}")
         serializer = self.get_serializer(member)

@@ -12,7 +12,7 @@ def get_dashboard_statistics():
 
     # --- Membership Stats (Using the 'Member' model) ---
     # An active member is one whose 'expiry' date is in the future.
-    active_members = Member.objects.filter(active=True)
+    active_members = Member.objects.filter(status="active")
 
     indoor_members = active_members.filter(membership_type="indoor").count()
     outdoor_members = active_members.filter(membership_type="outdoor").count()
