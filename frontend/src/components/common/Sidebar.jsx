@@ -8,10 +8,11 @@ const Sidebar = () => {
 
   const menuItems = [
     { name: 'Dashboard', icon: '/images/img_vector_0.svg', path: '/' },
+    { name: 'Members', icon: '/images/img_vector_0_gray_900.svg', path: '/members' },
     { 
       name: 'Memberships', 
       icon: '/images/img_vector_0_gray_900.svg', 
-      path: '/members',
+      path: '/memberships',
       subItems: [
         { name: 'Indoor Memberships', path: '/memberships/indoor' },
         { name: 'Outdoor Memberships', path: '/memberships/outdoor' },
