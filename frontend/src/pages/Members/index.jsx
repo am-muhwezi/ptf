@@ -7,6 +7,7 @@ import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
 import PaymentForm from '../../components/forms/PaymentForm';
 import Receipt from '../../components/ui/Receipt';
+import PaymentReminder from '../../components/ui/PaymentReminder';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import UpdateMemberProfileForm from '../../components/forms/UpdateMemberProfileForm';
 import { useApi, useApiMutation } from '../../hooks/useApi';
@@ -25,6 +26,7 @@ const Members = () => {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
@@ -250,6 +252,16 @@ const Members = () => {
         : member
     );
     setMembers(updatedMembers);
+  };
+
+  const handleSendReminder = (member) => {
+    setSelectedMember(member);
+    setShowReminderModal(true);
+  };
+
+  const handleReminderSent = () => {
+    showToast('Payment reminder sent successfully', 'success');
+    setShowReminderModal(false);
   };
 
   const getStatusBadge = (status) => {
@@ -522,6 +534,14 @@ const Members = () => {
                           >
                             Payment
                           </button>
+                          {member.paymentStatus === 'overdue' && (
+                            <button
+                              onClick={() => handleSendReminder(member)}
+                              className="text-orange-600 hover:text-orange-900"
+                            >
+                              Remind
+                            </button>
+                          )}
                           {member.status === 'active' ? (
                             <button
                               onClick={() => handleUpdateMemberStatus(member.id, 'inactive')}
@@ -767,6 +787,14 @@ const Members = () => {
           onPrint={() => showToast('Receipt printed successfully', 'success')}
         />
       </Modal>
+
+      {/* Payment Reminder Modal */}
+      <PaymentReminder
+        member={selectedMember}
+        isOpen={showReminderModal}
+        onClose={() => setShowReminderModal(false)}
+        onReminderSent={handleReminderSent}
+      />
 
       {/* Toast Notifications */}
       <Toast
