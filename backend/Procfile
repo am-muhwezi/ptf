@@ -1,1 +1,1 @@
-web: gunicorn ptf.wsgi:application --log-file -
+run_command: gunicorn ptf.wsgi:application --log-file -
