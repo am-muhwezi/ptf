@@ -5,6 +5,9 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 // Import page components
 import DashboardPage from './pages/Dashboard';
 import Members from './pages/Members';
+import Attendance from './pages/Attendance';
+import Bookings from './pages/Bookings';
+import ComingSoon from './pages/ComingSoon';
 import IndoorMemberships from './pages/Memberships/IndoorMemberships';
 import OutdoorMemberships from './pages/Memberships/OutdoorMemberships';
 import RenewalsDue from './pages/Memberships/RenewalsDue';

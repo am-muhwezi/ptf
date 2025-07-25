@@ -4,9 +4,8 @@
   "dev": "vite",
   "build": "vite build",
   "start": "serve -s build",
-  "format": "prettier --write .",
-  "script": "bash ../start_backend.sh"
-}
+  "format": "prettier --write ."
+  },
 
   "dependencies": {
     "@dhiwise/component-tagger": "^1.0.9",
