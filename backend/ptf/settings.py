@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "bookings",
     "dashboard",
     "memberships",
+    "attendance",  # Add this if it was missing
     "django_extensions",
     # Third-party apps
     "rest_framework",
@@ -86,16 +87,32 @@ TEMPLATES = [
 WSGI_APPLICATION = "ptf.wsgi.application"
 
 
-# Database
+# Database Configuration - FIXED VERSION
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# Default to SQLite for development, but allow PostgreSQL for production
-DATABASES = {
-    "default": dj_database_url.config(
-        # Set the default database URL to SQLite if DATABASE_URL is not in the environment
-        default=f"sqlite:///{os.path.join(BASE_DIR, 'db.sqlite3')}"
-    )
-}
+# Get DATABASE_URL from environment
+database_url = os.environ.get("DATABASE_URL")
+
+# Check if DATABASE_URL is properly set
+if database_url and database_url.strip() and "://" in database_url:
+    # Production: Use PostgreSQL or other database
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=database_url,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
+else:
+    # Development or fallback: Use SQLite
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+
+
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
@@ -184,3 +201,30 @@ CORS_ALLOW_HEADERS = [
     "x-csrftoken",
     "x-requested-with",
 ]
+
+# Logging configuration for better debugging
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.db.backends": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
