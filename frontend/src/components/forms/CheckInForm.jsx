@@ -102,10 +102,6 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
       return;
     }
 
-    if (!selectedMember.active) {
-      setError('Cannot check in inactive member. Please contact administration.');
-      return;
-    }
 
 
     try {
@@ -115,7 +111,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
 
       
 
-      // Call the actual backend check-in API
+  
       const response = await performCheckin(selectedMember.id);
       
 
@@ -242,9 +238,9 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
                       </span>
                       <div className="mt-1">
                         <span className={`inline-block px-2 py-1 text-xs rounded-full ${
-                          member.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          member.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                         }`}>
-                          {member.active ? 'Active' : 'Inactive'}
+                          {member.status === 'active' ? 'Active' : 'Inactive'}
                         </span>
                       </div>
                     </div>
@@ -306,9 +302,9 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Status:</span>
                 <span className={`text-sm font-medium px-2 py-1 rounded-full ${
-                  selectedMember.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  selectedMember.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                 }`}>
-                  {selectedMember.active ? 'Active' : 'Inactive'}
+                  {selectedMember.status === 'active' ? 'Active' : 'Inactive'}
                 </span>
               </div>
             </div>
@@ -337,7 +333,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
         )}
 
         {/* Ready to Check-in Message */}
-        {selectedMember && selectedMember.active && !successMessage && (
+        {selectedMember && selectedMember.status === 'active' && !successMessage && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex">
               <div className="flex-shrink-0">

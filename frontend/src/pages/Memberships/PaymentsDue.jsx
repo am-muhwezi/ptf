@@ -5,6 +5,8 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
+import PaymentForm from '../../components/forms/PaymentForm';
+import Receipt from '../../components/ui/Receipt';
 
 const PaymentsDue = () => {
   const [payments, setPayments] = useState([]);
@@ -13,6 +15,9 @@ const PaymentsDue = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showPaymentFormModal, setShowPaymentFormModal] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [paymentData, setPaymentData] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   // Mock data - replace with API call
@@ -128,7 +133,26 @@ const PaymentsDue = () => {
   };
 
   const handleRecordPayment = (paymentId) => {
-    showToast(`Payment recorded for member ${paymentId}`, 'success');
+    const payment = payments.find(p => p.id === paymentId);
+    if (payment) {
+      setSelectedPayment(payment);
+      setShowPaymentFormModal(true);
+    }
+  };
+
+  const handlePaymentSuccess = (paymentResponse) => {
+    setPaymentData(paymentResponse);
+    setShowPaymentFormModal(false);
+    setShowReceiptModal(true);
+    
+    // Update payment status
+    const updatedPayments = payments.map(payment =>
+      payment.id === selectedPayment.id 
+        ? { ...payment, status: 'paid', paymentStatus: 'paid' }
+        : payment
+    );
+    setPayments(updatedPayments);
+    setFilteredPayments(updatedPayments);
   };
 
   const handleSendInvoice = (paymentId) => {
@@ -352,7 +376,7 @@ const PaymentsDue = () => {
                             onClick={() => handleRecordPayment(payment.id)}
                             className="text-green-600 hover:text-green-900"
                           >
-                            Record
+                            Pay Now
                           </button>
                           <button
                             onClick={() => handleSendInvoice(payment.id)}
@@ -486,6 +510,29 @@ const PaymentsDue = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Payment Form Modal */}
+      <PaymentForm
+        member={selectedPayment}
+        isOpen={showPaymentFormModal}
+        onClose={() => setShowPaymentFormModal(false)}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
+
+      {/* Receipt Modal */}
+      <Modal
+        isOpen={showReceiptModal}
+        onClose={() => setShowReceiptModal(false)}
+        title="Payment Receipt"
+        size="medium"
+      >
+        <Receipt
+          paymentData={paymentData}
+          member={selectedPayment}
+          onClose={() => setShowReceiptModal(false)}
+          onPrint={() => showToast('Receipt printed successfully', 'success')}
+        />
       </Modal>
 
       {/* Toast Notifications */}

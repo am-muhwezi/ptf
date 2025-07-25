@@ -11,8 +11,9 @@ const Sidebar = () => {
     { 
       name: 'Memberships', 
       icon: '/images/img_vector_0_gray_900.svg', 
-      path: '/members',
+      path: '/memberships',
       subItems: [
+        { name: 'All Members', path: '/members' },
         { name: 'Indoor Memberships', path: '/memberships/indoor' },
         { name: 'Outdoor Memberships', path: '/memberships/outdoor' },
         { name: 'Renewals Due', path: '/memberships/renewals' },
