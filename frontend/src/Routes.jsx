@@ -1,8 +1,5 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import ComingSoon from './pages/ComingSoon';
-import Attendance from './pages/Attendance';
-import Bookings from './pages/Bookings';
 
 
 // Import page components
@@ -18,7 +15,8 @@ const AppRoutes = () => {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<DashboardPage />} />4
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/design-showcase" element={<DesignShowcase />} />
         <Route path="/members" element={<Members />} />
         <Route path="/memberships/indoor" element={<IndoorMemberships />} />
         <Route path="/memberships/outdoor" element={<OutdoorMemberships />} />
