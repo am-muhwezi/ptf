@@ -1,5 +1,5 @@
 name: ptf-app
-region: bga # Change to your region: nyc, sfo, sgp, etc.
+region: bga
 
 services:
   - name: frontend
@@ -11,7 +11,6 @@ services:
       deploy_on_push: true
     build_command: npm install && npm run build
     run_command: npm start
-    output_dir: build
     routes:
       - path: /
 
@@ -24,20 +23,16 @@ services:
       deploy_on_push: true
     build_command: >
       pip install -r requirements.txt &&
-      python manage.py collectstatic --noinput &&
       python manage.py migrate
-    run_command: gunicorn ptf.wsgi
+    run_command: gunicorn ptf.wsgi:application --log-file -
     routes:
-      - path: /
+      - path: /api
     envs:
       - key: DJANGO_SETTINGS_MODULE
         value: ptf.settings
       - key: DEBUG
-        value: false
+        value: "false"  # Should be string
       - key: SECRET_KEY
         value: changeme-secret-key
       - key: ALLOWED_HOSTS
-        value: ptf-app.ondigitalocean.app
-      # Optional if using DO managed PostgreSQL
-      - key: DATABASE_URL
-        value: postgres://user:password@db:5432/ptf_db
+        value: ptf-app-*.ondigitalocean.app  # Use wildcard for auto-generated domains
