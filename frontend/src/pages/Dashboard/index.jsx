@@ -160,7 +160,7 @@ const handleCheckInSubmit = async (memberData) => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-emerald-50">
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -170,12 +170,12 @@ const handleCheckInSubmit = async (memberData) => {
           <div className="max-w-7xl mx-auto space-y-8">
             {/* Quick Actions */}
             <section>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
+              <h2 className="text-xl font-bold text-emerald-900 mb-4">Quick Actions</h2>
               <div className="flex space-x-4">
                 <Button 
                   variant="primary" 
                   onClick={handleRegisterMember}
-                  className="px-4 py-3"
+                  className="px-4 py-3 bg-emerald-500 hover:bg-emerald-600"
                 >
                   Register New Member
                 </Button>
@@ -191,7 +191,7 @@ const handleCheckInSubmit = async (memberData) => {
 
             {/* Membership Management */}
             <section>
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Membership Management</h2>
+              <h2 className="text-xl font-bold text-emerald-900 mb-6">Membership Management</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card
                   title="Indoor Memberships"
@@ -218,7 +218,7 @@ const handleCheckInSubmit = async (memberData) => {
 
             {/* Bookings */}
             <section>
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Bookings</h2>
+              <h2 className="text-xl font-bold text-emerald-900 mb-6">Bookings</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card
                   title="Group Sessions Today"
@@ -245,7 +245,7 @@ const handleCheckInSubmit = async (memberData) => {
 
             {/* Attendance Logs */}
             <section>
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Attendance Logs</h2>
+              <h2 className="text-xl font-bold text-emerald-900 mb-6">Attendance Logs</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card
                   title="Indoor Visits Today"
@@ -262,7 +262,7 @@ const handleCheckInSubmit = async (memberData) => {
 
             {/* Complaints & Feedback */}
             <section>
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Complaints & Feedback</h2>
+              <h2 className="text-xl font-bold text-emerald-900 mb-6">Complaints & Feedback</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card
                   title="Open Tickets"
@@ -279,7 +279,7 @@ const handleCheckInSubmit = async (memberData) => {
 
             {/* Communication & Alerts */}
             <section>
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Communication & Alerts</h2>
+              <h2 className="text-xl font-bold text-emerald-900 mb-6">Communication & Alerts</h2>
               {notificationsLoading ? (
                 <div className="animate-pulse space-y-4">
                   {[...Array(3)].map((_, i) => (
@@ -293,7 +293,7 @@ const handleCheckInSubmit = async (memberData) => {
 
             {/* Inventory & Merchandise */}
             <section>
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Inventory & Merchandise</h2>
+              <h2 className="text-xl font-bold text-emerald-900 mb-6">Inventory & Merchandise</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card
                   title="Available Stock Levels"

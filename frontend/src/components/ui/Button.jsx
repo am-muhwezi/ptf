@@ -12,9 +12,9 @@ const Button = ({
   const baseClasses = 'font-bold rounded-2xl transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 cursor-pointer';
   
   const variants = {
-    primary: 'bg-blue-500 text-white hover:bg-blue-600 focus:ring-blue-500',
+    primary: 'bg-emerald-500 text-white hover:bg-emerald-600 focus:ring-emerald-500',
     secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500',
-    outline: 'border border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-500',
+    outline: 'border border-emerald-300 text-emerald-700 hover:bg-emerald-50 focus:ring-emerald-500',
   };
   
   const sizes = {
