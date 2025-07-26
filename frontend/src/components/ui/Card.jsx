@@ -20,12 +20,12 @@ const Card = ({
     >
       {title && (
         <div className="space-y-2">
-          <h3 className="text-base font-medium text-gray-900 leading-6">{title}</h3>
+          <h3 className="text-base font-medium text-emerald-900 leading-6">{title}</h3>
           {value && (
-            <p className="text-2xl font-bold text-gray-900 leading-8">{value}</p>
+            <p className="text-2xl font-bold text-emerald-800 leading-8">{value}</p>
           )}
           {subtitle && (
-            <p className="text-sm text-gray-600">{subtitle}</p>
+            <p className="text-sm text-emerald-600">{subtitle}</p>
           )}
         </div>
       )}

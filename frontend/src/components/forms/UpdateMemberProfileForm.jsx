@@ -15,11 +15,25 @@ const UpdateMemberProfileForm = ({ initialData, onSubmit, onCancel }) => {
     membershipPlan: initialData?.membershipPlan || '',
     membershipStartDate: initialData?.membershipStartDate || '',
     membershipEndDate: initialData?.membershipEndDate || '',
-    paymentStatus: initialData?.paymentStatus || 'paid'
+    paymentStatus: initialData?.paymentStatus || 'paid',
+    exercises: initialData?.exercises || []
   });
 
+  const [newExercise, setNewExercise] = useState({
+    name: '',
+    type: '',
+    targetMuscleGroup: '',
+    description: '',
+    initialWeight: '',
+    initialReps: '',
+    initialSets: ''
+  });
+
+  const [showAddExercise, setShowAddExercise] = useState(false);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showProgressChart, setShowProgressChart] = useState(false);
+  const [selectedExerciseProgress, setSelectedExerciseProgress] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -35,6 +49,121 @@ const UpdateMemberProfileForm = ({ initialData, onSubmit, onCancel }) => {
         [name]: ''
       }));
     }
+  };
+
+  const handleExerciseChange = (e) => {
+    const { name, value } = e.target;
+    setNewExercise(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const addExercise = () => {
+    if (!newExercise.name || !newExercise.type) {
+      return;
+    }
+
+    const exercise = {
+      id: Date.now(),
+      ...newExercise,
+      dateAdded: new Date().toISOString(),
+      progressHistory: [{
+        date: new Date().toISOString(),
+        weight: parseFloat(newExercise.initialWeight) || 0,
+        reps: parseInt(newExercise.initialReps) || 0,
+        sets: parseInt(newExercise.initialSets) || 0,
+        notes: 'Initial baseline'
+      }]
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      exercises: [...prev.exercises, exercise]
+    }));
+
+    setNewExercise({
+      name: '',
+      type: '',
+      targetMuscleGroup: '',
+      description: '',
+      initialWeight: '',
+      initialReps: '',
+      initialSets: ''
+    });
+    setShowAddExercise(false);
+  };
+
+  const removeExercise = (exerciseId) => {
+    setFormData(prev => ({
+      ...prev,
+      exercises: prev.exercises.filter(ex => ex.id !== exerciseId)
+    }));
+  };
+
+  const addProgressEntry = (exerciseId, progressData) => {
+    setFormData(prev => ({
+      ...prev,
+      exercises: prev.exercises.map(exercise => 
+        exercise.id === exerciseId 
+          ? {
+              ...exercise,
+              progressHistory: [...exercise.progressHistory, {
+                ...progressData,
+                date: new Date().toISOString()
+              }]
+            }
+          : exercise
+      )
+    }));
+  };
+
+  const exportProgressChart = (exercise) => {
+    // Create a simple CSV export for the progress data
+    const csvData = [
+      ['Date', 'Weight (kg)', 'Reps', 'Sets', 'Notes'],
+      ...exercise.progressHistory.map(entry => [
+        new Date(entry.date).toLocaleDateString(),
+        entry.weight,
+        entry.reps,
+        entry.sets,
+        entry.notes || ''
+      ])
+    ];
+
+    const csvContent = csvData.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${exercise.name}_progress_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const getProgressTrend = (exercise) => {
+    if (exercise.progressHistory.length < 2) return 'No trend data';
+    
+    const latest = exercise.progressHistory[exercise.progressHistory.length - 1];
+    const previous = exercise.progressHistory[exercise.progressHistory.length - 2];
+    
+    const weightChange = latest.weight - previous.weight;
+    const repsChange = latest.reps - previous.reps;
+    
+    if (weightChange > 0 || repsChange > 0) return 'Improving 📈';
+    if (weightChange < 0 || repsChange < 0) return 'Declining 📉';
+    return 'Stable ➡️';
+  };
+
+  const shouldShowProgressReminder = (exercise) => {
+    if (exercise.progressHistory.length === 0) return false;
+    
+    const lastEntry = exercise.progressHistory[exercise.progressHistory.length - 1];
+    const daysSinceLastEntry = Math.floor((new Date() - new Date(lastEntry.date)) / (1000 * 60 * 60 * 24));
+    
+    return daysSinceLastEntry >= 21;
   };
 
   const validateForm = () => {
@@ -301,7 +430,7 @@ const UpdateMemberProfileForm = ({ initialData, onSubmit, onCancel }) => {
                 value={formData.shortTermGoals}
                 onChange={handleChange}
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="e.g., Lose 5kg, Run 5K without stopping, Increase bench press by 10kg"
               />
             </div>
@@ -316,13 +445,254 @@ const UpdateMemberProfileForm = ({ initialData, onSubmit, onCancel }) => {
                 value={formData.longTermGoals}
                 onChange={handleChange}
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="e.g., Complete a marathon, Achieve target body composition, Build lean muscle mass"
               />
             </div>
           </div>
         </div>
 
+        {/* Exercise Tracking */}
+        <div className="border-b pb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Exercise Tracking & Progress</h3>
+            <Button
+              type="button"
+              onClick={() => setShowAddExercise(true)}
+              className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm"
+            >
+              Add Exercise
+            </Button>
+          </div>
+
+          {/* Add Exercise Form */}
+          {showAddExercise && (
+            <div className="bg-emerald-50 rounded-lg p-6 mb-6 border border-emerald-200">
+              <h4 className="text-md font-medium text-emerald-900 mb-4">Add New Exercise</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-emerald-700 mb-1">Exercise Name</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={newExercise.name}
+                    onChange={handleExerciseChange}
+                    className="w-full px-3 py-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="e.g., Bench Press"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-emerald-700 mb-1">Exercise Type</label>
+                  <select
+                    name="type"
+                    value={newExercise.type}
+                    onChange={handleExerciseChange}
+                    className="w-full px-3 py-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">Select type</option>
+                    <option value="strength">Strength Training</option>
+                    <option value="cardio">Cardio</option>
+                    <option value="flexibility">Flexibility</option>
+                    <option value="functional">Functional</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-emerald-700 mb-1">Target Muscle Group</label>
+                  <select
+                    name="targetMuscleGroup"
+                    value={newExercise.targetMuscleGroup}
+                    onChange={handleExerciseChange}
+                    className="w-full px-3 py-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">Select muscle group</option>
+                    <option value="chest">Chest</option>
+                    <option value="back">Back</option>
+                    <option value="shoulders">Shoulders</option>
+                    <option value="arms">Arms</option>
+                    <option value="legs">Legs</option>
+                    <option value="core">Core</option>
+                    <option value="full-body">Full Body</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-emerald-700 mb-1">Initial Weight (kg)</label>
+                  <input
+                    type="number"
+                    name="initialWeight"
+                    value={newExercise.initialWeight}
+                    onChange={handleExerciseChange}
+                    className="w-full px-3 py-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="0"
+                    step="0.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-emerald-700 mb-1">Initial Reps</label>
+                  <input
+                    type="number"
+                    name="initialReps"
+                    value={newExercise.initialReps}
+                    onChange={handleExerciseChange}
+                    className="w-full px-3 py-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-emerald-700 mb-1">Initial Sets</label>
+                  <input
+                    type="number"
+                    name="initialSets"
+                    value={newExercise.initialSets}
+                    onChange={handleExerciseChange}
+                    className="w-full px-3 py-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-emerald-700 mb-1">Description/Notes</label>
+                <textarea
+                  name="description"
+                  value={newExercise.description}
+                  onChange={handleExerciseChange}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="Exercise description or special notes"
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowAddExercise(false)}
+                  className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={addExercise}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                >
+                  Add Exercise
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Exercise List */}
+          <div className="space-y-4">
+            {formData.exercises.map((exercise) => (
+              <div key={exercise.id} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h4 className="text-lg font-medium text-gray-900">{exercise.name}</h4>
+                    <div className="flex items-center space-x-4 mt-2">
+                      <span className="px-2 py-1 text-xs bg-emerald-100 text-emerald-800 rounded-full">
+                        {exercise.type}
+                      </span>
+                      <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                        {exercise.targetMuscleGroup}
+                      </span>
+                      <span className="text-sm text-gray-600">
+                        {getProgressTrend(exercise)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button
+                      type="button"
+                      onClick={() => exportProgressChart(exercise)}
+                      className="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1 text-xs rounded"
+                    >
+                      Export 📊
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => removeExercise(exercise.id)}
+                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 text-xs rounded"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Progress Reminder */}
+                {shouldShowProgressReminder(exercise) && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                    <div className="flex items-center">
+                      <span className="text-yellow-600 mr-2">⏰</span>
+                      <span className="text-sm text-yellow-800">
+                        It's been 21+ days since your last progress update for this exercise!
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Current Stats */}
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="bg-gray-50 rounded-lg p-3 text-center">
+                    <div className="text-lg font-bold text-gray-900">
+                      {exercise.progressHistory.length > 0 
+                        ? `${exercise.progressHistory[exercise.progressHistory.length - 1].weight} kg`
+                        : 'N/A'
+                      }
+                    </div>
+                    <div className="text-sm text-gray-600">Current Weight</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3 text-center">
+                    <div className="text-lg font-bold text-gray-900">
+                      {exercise.progressHistory.length > 0 
+                        ? exercise.progressHistory[exercise.progressHistory.length - 1].reps
+                        : 'N/A'
+                      }
+                    </div>
+                    <div className="text-sm text-gray-600">Current Reps</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3 text-center">
+                    <div className="text-lg font-bold text-gray-900">
+                      {exercise.progressHistory.length > 0 
+                        ? exercise.progressHistory[exercise.progressHistory.length - 1].sets
+                        : 'N/A'
+                      }
+                    </div>
+                    <div className="text-sm text-gray-600">Current Sets</div>
+                  </div>
+                </div>
+
+                {/* Progress History */}
+                <div>
+                  <h5 className="text-sm font-medium text-gray-700 mb-2">Progress History ({exercise.progressHistory.length} entries)</h5>
+                  <div className="max-h-32 overflow-y-auto">
+                    {exercise.progressHistory.slice(-3).reverse().map((entry, index) => (
+                      <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
+                        <div className="text-sm text-gray-600">
+                          {new Date(entry.date).toLocaleDateString()}
+                        </div>
+                        <div className="text-sm text-gray-900">
+                          {entry.weight}kg × {entry.reps} reps × {entry.sets} sets
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {exercise.description && (
+                  <div className="mt-3 text-sm text-gray-600">
+                    <strong>Notes:</strong> {exercise.description}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {formData.exercises.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                <div className="text-4xl mb-2">🏋️‍♂️</div>
+                <p>No exercises added yet. Click "Add Exercise" to start tracking progress!</p>
+              </div>
+            )}
+          </div>
+        </div>
         {/* Membership Details */}
         <div>
           <h3 className="text-lg font-medium text-gray-900 mb-4">Membership Details</h3>

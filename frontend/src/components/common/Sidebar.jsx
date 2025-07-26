@@ -67,7 +67,7 @@ const Sidebar = () => {
               onClick={() => handleItemClick(item)}
               className={`flex items-center px-3 py-2 rounded-2xl cursor-pointer transition-colors ${
                 isActive(item.path) || isParentActive(item) || activeItem === item.path
-                  ? 'bg-gray-200' 
+                  ? 'bg-emerald-100 text-emerald-800' 
                   : 'hover:bg-gray-100'
               }`}
             >
@@ -100,7 +100,7 @@ const Sidebar = () => {
                     onClick={() => handleSubItemClick(subItem)}
                     className={`px-3 py-2 rounded-lg cursor-pointer transition-colors text-sm ${
                       isActive(subItem.path)
-                        ? 'bg-blue-100 text-blue-800 font-medium'
+                        ? 'bg-emerald-100 text-emerald-800 font-medium'
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                     }`}
                   >

@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
+// Import landing page
+import LandingPage from './pages/LandingPage';
 
 // Import page components
 import DashboardPage from './pages/Dashboard';
@@ -18,6 +20,7 @@ const AppRoutes = () => {
   return (
     <Router>
       <Routes>
+        <Route path="/landing" element={<LandingPage />} />
         <Route path="/" element={<DashboardPage />} />
         <Route path="/design-showcase" element={<DesignShowcase />} />
         <Route path="/members" element={<Members />} />
