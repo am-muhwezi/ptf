@@ -1,13 +1,15 @@
+import axios from 'axios';
+
+// Define the base URL, preferably from environment variables
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/';
 
 // API endpoints configuration
 export const API_ENDPOINTS = {
   // Authentication
   auth: {
-    login: '/auth/login/',
-    logout: '/auth/logout/',
-    refresh: '/auth/refresh/',
-    register: '/auth/register/',
+    login: '/token/',
+    refresh: '/token/refresh/',
+    register: '/accounts/',
   },
   
   // Members
@@ -69,8 +71,6 @@ export const API_ENDPOINTS = {
 };
 
 // Create axios instance with default config
-import axios from 'axios';
-
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
@@ -99,12 +99,14 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
+    // Check if the error is a 401 and it's not a retry request
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
       try {
         const refreshToken = localStorage.getItem('refresh_token');
         if (refreshToken) {
+          // Use a new axios instance for the refresh request to avoid interceptor loop
           const response = await axios.post(`${API_BASE_URL}${API_ENDPOINTS.auth.refresh}`, {
             refresh: refreshToken,
           });
@@ -112,15 +114,23 @@ apiClient.interceptors.response.use(
           const { access } = response.data;
           localStorage.setItem('access_token', access);
           
-          // Retry original request with new token
+          // Update the authorization header for the original request
           originalRequest.headers.Authorization = `Bearer ${access}`;
+          
+          // Retry original request with new token
           return apiClient(originalRequest);
+        } else {
+            // No refresh token available, redirect to login
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            window.location.href = '/landing';
         }
       } catch (refreshError) {
-        // Refresh failed, redirect to login
+        // Refresh failed, clear storage and redirect to login
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
+        window.location.href = '/landing';
+        return Promise.reject(refreshError);
       }
     }
     
