@@ -4,9 +4,8 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import tagger from "@dhiwise/component-tagger";
 
-// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(),tagger()],
+  plugins: [react(), tagger()],
   build: {
     outDir: "build",
   },
@@ -24,5 +23,18 @@ export default defineConfig({
     port: "4028",
     host: "0.0.0.0",
     strictPort: true,
+    proxy: {
+      // Adjust the path and target to match your backend
+      '/notifications': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path,
+      },
+      '/stats': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path,
+      }
+    }
   }
 });
