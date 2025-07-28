@@ -16,6 +16,18 @@ import dj_database_url
 from django.core.management.utils import get_random_secret_key
 from pathlib import Path
 
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -46,7 +58,7 @@ INSTALLED_APPS = [
     "bookings",
     "dashboard",
     "memberships",
-    "attendance",  # Add this if it was missing
+    "attendance",
     "django_extensions",
     # Third-party apps
     "rest_framework",
@@ -147,8 +159,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-# STATIC_URL = "static/"
-# STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+STATIC_URL = "static/"
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 
 # Default primary key field type
@@ -167,14 +179,22 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTAuthentication",],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
 }
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all origins in debug mode
-CORS_ALLOWED_ORIGINS = os.environ.get(
-    "CORS_ALLOWED_ORIGINS",
-    "https://paulstropicalfitness.fit,https://www.paulstropicalfitness.fit,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173",
-).split(",")
+
+
+if os.getenv("CORS_ALLOW_ALL_ORIGINS", "False") == "True":
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    cors_origins = os.getenv(
+        "CORS_ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000"
+    )
+    CORS_ALLOWED_ORIGINS = cors_origins.split(",")
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -187,11 +207,12 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_SSL_REDIRECT = True
+    SECURE_SSL_REDIRECT = False
 
 # Allow all headers for development
 CORS_ALLOW_HEADERS = [
     "accept",
+    "access-control-allow-origin",
     "accept-encoding",
     "authorization",
     "content-type",

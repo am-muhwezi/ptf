@@ -35,7 +35,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         Custom action to confirm a booking.
         """
         booking = self.get_object()
-        if booking.status == "pending":
+        if booking.status != "pending":
             return Response(
                 {"detail": "Only pending can be confirmed."},
                 status=status.HTTP_400_BAD_REQUEST,
