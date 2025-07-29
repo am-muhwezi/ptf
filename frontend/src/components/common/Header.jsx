@@ -37,6 +37,7 @@ const Header = () => {
   const getUserDisplayName = () => {
     if (!user) return 'User';
     if (user.firstName && user.lastName) {
+      console.log('Header user:', user);
       return `${user.firstName} ${user.lastName}`;
     }
     return user.email || 'User';
@@ -83,7 +84,8 @@ const Header = () => {
                   {getUserDisplayName()}
                 </div>
                 <div className="text-xs text-gray-500">
-                  {user?.email || 'user@example.com'}
+                  {user?.email || ''}
+                  
                 </div>
               </div>
 

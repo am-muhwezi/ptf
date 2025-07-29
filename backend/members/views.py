@@ -41,6 +41,9 @@ class MemberViewset(viewsets.ModelViewSet):
     View to list, create, search, and manage members.
     """
 
+    authentication_classes = []
+    permission_classes = []
+
     queryset = Member.objects.all().order_by("id")
     serializer_class = MemberSerializer
     pagination_class = MemberPagination

@@ -137,12 +137,15 @@ const LandingPage = () => {
         navigate(returnUrl, { replace: true });
       } else {
         // Register new user
-        await authService.register({
+        const result = authService.register({
           email: formData.email,
           password: formData.password,
           first_name: formData.firstName,
           last_name: formData.lastName,
-          phone_number: formData.phone
+          username: formData.firstName.toLowerCase() + formData.lastName.toLowerCase(),
+          phone_number: formData.phone,
+          password: formData.password,
+          confirm_password: formData.confirmPassword
         });
         
         // After successful registration, log the user in automatically
@@ -151,7 +154,7 @@ const LandingPage = () => {
           password: formData.password
         });
         
-        console.log('Registration and login successful');
+        console.log('Registration and auto-login successful');
         
         // Navigate to dashboard
         navigate(returnUrl, { replace: true });

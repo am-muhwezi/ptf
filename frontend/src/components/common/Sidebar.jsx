@@ -57,7 +57,7 @@ const Sidebar = () => {
     <aside className="w-80 bg-gray-50 h-screen p-6 overflow-y-auto">
       <div className="mb-8">
         <h2 className="text-base font-medium text-gray-900">Paul's Tropical Fitness</h2>
-        <p className="text-sm text-gray-600 mt-1">Front Office: Muhwezi</p>
+        <p className="text-sm text-gray-600">The fitness journey starts here</p>
       </div>
       
       <nav className="space-y-2">

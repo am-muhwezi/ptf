@@ -7,9 +7,9 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000
 export const API_ENDPOINTS = {
   // Authentication
   auth: {
-    login: '/token/',
-    refresh: '/token/refresh/',
-    register: '/accounts/',
+    login: 'auth/login/',
+    refresh: 'auth/token/refresh/',
+    register: 'auth/register/',
   },
   
   // Members
@@ -77,15 +77,16 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Include credentials for CORS requests
 });
 
-// Request interceptor to add auth token
+
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    }
+    }    
     return config;
   },
   (error) => {
@@ -93,47 +94,49 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle token refresh
+// Response interceptor with better error handling
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    return response;
+  },
   async (error) => {
-    const originalRequest = error.config;
-    
-    // Check if the error is a 401 and it's not a retry request
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      
+    const original = error.config;
+
+    // Handle CORS errors specifically
+    if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+      console.error('Network/CORS Error:', error);
+      throw new Error('Unable to connect to server. Please check if the backend is running.');
+    }
+
+    if (error.response?.status === 401 && !original._retry) {
+      original._retry = true;
+
       try {
         const refreshToken = localStorage.getItem('refresh_token');
         if (refreshToken) {
-          // Use a new axios instance for the refresh request to avoid interceptor loop
-          const response = await axios.post(`${API_BASE_URL}${API_ENDPOINTS.auth.refresh}`, {
+          const response = await axios.post(`${API_BASE_URL}/auth/token/refresh/`, {
             refresh: refreshToken,
+          }, {
+            withCredentials: true
           });
           
           const { access } = response.data;
           localStorage.setItem('access_token', access);
           
-          // Update the authorization header for the original request
-          originalRequest.headers.Authorization = `Bearer ${access}`;
-          
-          // Retry original request with new token
-          return apiClient(originalRequest);
-        } else {
-            // No refresh token available, redirect to login
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            window.location.href = '/landing';
+          // Retry the original request with new token
+          original.headers.Authorization = `Bearer ${access}`;
+          return apiClient(original);
         }
       } catch (refreshError) {
-        // Refresh failed, clear storage and redirect to login
+        // Refresh failed, redirect to login
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
-        window.location.href = '/landing';
+        localStorage.removeItem('user_data');
+        window.location.href = '/';
         return Promise.reject(refreshError);
       }
     }
-    
+
     return Promise.reject(error);
   }
 );

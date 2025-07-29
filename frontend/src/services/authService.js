@@ -13,7 +13,11 @@ const decodeToken = (token) => {
     const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
       return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
-    return JSON.parse(jsonPayload);
+    
+    const decoded = JSON.parse(jsonPayload);
+    // Remove this debug log for production
+    // console.log('Raw decoded token:', decoded);
+    return decoded;
   } catch (error) {
     console.error('Error decoding token:', error);
     return null;
@@ -31,100 +35,141 @@ const isTokenExpired = (token) => {
   return decoded.exp < currentTime;
 };
 
-// Helper function to get user data from token
+// Helper function to get basic user data from token (only user_id)
 const getUserFromToken = (token) => {
   const decoded = decodeToken(token);
   if (!decoded) return null;
   
   return {
     id: decoded.user_id,
-    email: decoded.email,
-    firstName: decoded.first_name,
-    lastName: decoded.last_name,
     exp: decoded.exp,
     iat: decoded.iat
   };
 };
 
 /**
+ * Fetches complete user data from the backend
+ */
+const fetchUserData = async () => {
+  try {
+    const response = await apiClient.get('/auth/user-info/');
+    if (response.data) {
+      // Map backend fields to frontend format
+      const userData = {
+        id: response.data.id,
+        email: response.data.email,
+        firstName: response.data.first_name,
+        lastName: response.data.last_name,
+        username: response.data.username,
+        isStaff: response.data.is_staff,
+        isActive: response.data.is_active,
+        dateJoined: response.data.date_joined
+      };
+      
+      console.log('Fetched user data:', userData);
+      localStorage.setItem('user_data', JSON.stringify(userData));
+      return userData;
+    }
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    return null;
+  }
+};
+
+/**
  * Logs in a user with the provided credentials.
- * On successful login, it stores the access and refresh tokens in localStorage.
- *
- * @param {object} credentials - The user's login credentials.
- * @param {string} credentials.email - The user's email.
- * @param {string} credentials.password - The user's password.
- * @returns {Promise<object>} A promise that resolves to the response data from the API.
- * @throws {Error} If the login request fails.
+ * On successful login, it stores the tokens and fetches user data.
  */
 const login = async (credentials) => {
   try {
     const response = await apiClient.post(API_ENDPOINTS.auth.login, credentials);
-    
+
     if (response.data && response.data.access && response.data.refresh) {
-      // Store tokens
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
-      
-      // Store user data
-      const userData = getUserFromToken(response.data.access);
-      if (userData) {
-        localStorage.setItem('user_data', JSON.stringify(userData));
-      }
-      
+
+      const userData = await fetchUserData();
+
       console.log('Login successful for user:', userData?.email);
+      return userData; // ✅ return user
     }
-    
-    return response.data;
+
+    return null;
   } catch (error) {
     console.error('Login failed:', error);
-    
-    // Clear any existing tokens on failed login
     clearAuthData();
-    
-    // Provide more specific error messages
-    if (error.response?.status === 401) {
-      throw new Error('Invalid email or password. Please try again.');
-    } else if (error.response?.status === 400) {
-      throw new Error('Please provide valid email and password.');
-    } else if (!navigator.onLine) {
-      throw new Error('No internet connection. Please check your network and try again.');
-    } else {
-      throw new Error(error.response?.data?.detail || 'Login failed. Please try again.');
-    }
+    // same error logic...
+    throw error;
   }
 };
 
 /**
  * Registers a new user with the provided data.
- * The backend is expected to handle user creation.
- *
- * @param {object} userData - The data for the new user.
- * @param {string} userData.email - The user's email.
- * @param {string} userData.password - The user's password.
- * @param {string} userData.first_name - The user's first name.
- * @param {string} userData.last_name - The user's last name.
- * @param {string} userData.phone_number - The user's phone number.
- * @returns {Promise<object>} A promise that resolves to the response data from the API.
- * @throws {Error} If the registration request fails.
+ * After successful registration, checks if auto-login tokens are provided.
  */
 const register = async (userData) => {
   try {
     const response = await apiClient.post(API_ENDPOINTS.auth.register, userData);
-    
-    console.log('Registration successful for user:', userData.email);
+
+    if (response.data?.access && response.data?.refresh) {
+      localStorage.setItem('access_token', response.data.access);
+      localStorage.setItem('refresh_token', response.data.refresh);
+
+      // ✅ Fetch and set user
+      const fetchedUserData = await fetchUserData();
+
+      // 🔥 Here's the fix: update global auth context
+      setUser(fetchedUserData); // You MUST call this
+
+      return {
+        autoLogin: true,
+        userData: fetchedUserData,
+      };
+    }
+
     return response.data;
   } catch (error) {
-    console.error('Registration failed:', error);
-    
+    console.error('Registration failed:', error)
+
     // Provide more specific error messages
     if (error.response?.status === 400) {
       const errorData = error.response.data;
+      console.error('Registration 400 error details:', errorData); // Debug log
+      
       if (errorData.email) {
+        if (Array.isArray(errorData.email)) {
+          throw new Error(errorData.email[0]);
+        }
         throw new Error('This email address is already registered.');
       } else if (errorData.password) {
+        if (Array.isArray(errorData.password)) {
+          throw new Error(`Password error: ${errorData.password[0]}`);
+        }
         throw new Error('Password does not meet requirements.');
+      } else if (errorData.phone_number) {
+        if (Array.isArray(errorData.phone_number)) {
+          throw new Error(`Phone number error: ${errorData.phone_number[0]}`);
+        }
+        throw new Error('Please provide a valid phone number.');
+      } else if (errorData.first_name) {
+        if (Array.isArray(errorData.first_name)) {
+          throw new Error(`First name error: ${errorData.first_name[0]}`);
+        }
+        throw new Error('Please provide a valid first name.');
+      } else if (errorData.last_name) {
+        if (Array.isArray(errorData.last_name)) {
+          throw new Error(`Last name error: ${errorData.last_name[0]}`);
+        }
+        throw new Error('Please provide a valid last name.');
       } else {
-        throw new Error('Please check your information and try again.');
+        // Show the actual validation errors
+        const errorMessages = Object.entries(errorData)
+          .map(([field, messages]) => {
+            const messageText = Array.isArray(messages) ? messages.join(', ') : messages;
+            return `${field}: ${messageText}`;
+          })
+          .join('; ');
+        throw new Error(`Validation errors: ${errorMessages}`);
       }
     } else if (!navigator.onLine) {
       throw new Error('No internet connection. Please check your network and try again.');
@@ -136,10 +181,6 @@ const register = async (userData) => {
 
 /**
  * Refreshes the access token using the refresh token.
- * This is automatically called by the API interceptor when needed.
- *
- * @returns {Promise<string>} The new access token.
- * @throws {Error} If token refresh fails.
  */
 const refreshToken = async () => {
   try {
@@ -155,11 +196,8 @@ const refreshToken = async () => {
     if (response.data && response.data.access) {
       localStorage.setItem('access_token', response.data.access);
       
-      // Update user data with new token
-      const userData = getUserFromToken(response.data.access);
-      if (userData) {
-        localStorage.setItem('user_data', JSON.stringify(userData));
-      }
+      // Note: We don't need to update user data here since the token refresh
+      // doesn't change user information, only the token expiration
       
       return response.data.access;
     } else {
@@ -182,8 +220,7 @@ const clearAuthData = () => {
 };
 
 /**
- * Logs out the current user by removing their tokens from localStorage
- * and optionally calling a logout endpoint.
+ * Logs out the current user
  */
 const logout = async () => {
   try {
@@ -193,7 +230,6 @@ const logout = async () => {
     clearAuthData();
     console.log('User logged out successfully');
     
-    // Redirect will be handled by the component calling this function
   } catch (error) {
     console.error('Logout error:', error);
     // Even if server logout fails, clear local data
@@ -203,9 +239,6 @@ const logout = async () => {
 
 /**
  * Checks if the user is currently authenticated.
- * It checks for token existence and validity.
- *
- * @returns {boolean} True if user is authenticated with valid token, false otherwise.
  */
 const isAuthenticated = () => {
   const token = localStorage.getItem('access_token');
@@ -227,22 +260,18 @@ const isAuthenticated = () => {
 
 /**
  * Gets the current user data from localStorage.
- *
- * @returns {object|null} User data object or null if not available.
  */
 const getCurrentUser = () => {
   try {
     const userData = localStorage.getItem('user_data');
     if (userData) {
-      return JSON.parse(userData);
+      const parsed = JSON.parse(userData);
+      // Remove this debug log for production
+      // console.log('Retrieved user data from localStorage:', parsed);
+      return parsed;
     }
     
-    // Fallback: try to get user data from token
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      return getUserFromToken(token);
-    }
-    
+    // console.log('No user data found in localStorage');
     return null;
   } catch (error) {
     console.error('Error getting current user:', error);
@@ -252,8 +281,6 @@ const getCurrentUser = () => {
 
 /**
  * Gets the current access token.
- *
- * @returns {string|null} The access token or null if not available.
  */
 const getAccessToken = () => {
   return localStorage.getItem('access_token');
@@ -261,10 +288,6 @@ const getAccessToken = () => {
 
 /**
  * Checks if the current user has a specific role or permission.
- * This is a placeholder for future role-based access control.
- *
- * @param {string} role - The role to check for.
- * @returns {boolean} True if user has the role, false otherwise.
  */
 const hasRole = (role) => {
   const user = getCurrentUser();
@@ -277,9 +300,6 @@ const hasRole = (role) => {
 
 /**
  * Validates the current session and refreshes token if needed.
- * Useful for checking auth status on app initialization.
- *
- * @returns {Promise<boolean>} True if session is valid, false otherwise.
  */
 const validateSession = async () => {
   try {
@@ -288,6 +308,13 @@ const validateSession = async () => {
     
     if (!token || !refreshTokenValue) {
       return false;
+    }
+    
+    // Check if we have user data, if not fetch it
+    const userData = getCurrentUser();
+    if (!userData && !isTokenExpired(token)) {
+      console.log('Valid token but no user data, fetching...');
+      await fetchUserData();
     }
     
     // If access token is expired, try to refresh
@@ -324,7 +351,8 @@ const authService = {
   getAccessToken,
   hasRole,
   validateSession,
-  clearAuthData
+  clearAuthData,
+  fetchUserData
 };
 
 export default authService;

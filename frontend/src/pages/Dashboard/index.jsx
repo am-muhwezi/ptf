@@ -254,7 +254,7 @@ const handleCheckInSubmit = async (memberData) => {
                 />
                 <Card
                   title="Outdoor Visits Today"
-                  value={stats.attendanceData.outdoorVisits}
+                  value={stats?.attendanceData?.outdoorVisits || 0}
                   onClick={() => handleCardClick('Outdoor Visits Today', stats.attendanceData.outdoorVisits)}
                 />
               </div>
@@ -266,12 +266,12 @@ const handleCheckInSubmit = async (memberData) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card
                   title="Open Tickets"
-                  value={stats.feedbackData.openTickets}
+                  value={stats?.feedbackData?.openTickets || 0}
                   onClick={() => handleCardClick('Open Tickets', stats.feedbackData.openTickets)}
                 />
                 <Card
                   title="Average Resolution Time"
-                  value={stats.feedbackData.avgResolutionTime}
+                  value={stats?.feedbackData?.avgResolutionTime || '0 days'}
                   onClick={() => handleCardClick('Average Resolution Time', stats.feedbackData.avgResolutionTime)}
                 />
               </div>
@@ -297,12 +297,12 @@ const handleCheckInSubmit = async (memberData) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card
                   title="Available Stock Levels"
-                  value={stats.inventoryData.availableStock}
+                  value={stats?.inventoryData?.availableStock || 0}
                   onClick={() => handleCardClick('Available Stock Levels', stats.inventoryData.availableStock)}
                 />
                 <Card
                   title="Low Stock Alerts"
-                  value={stats.inventoryData.lowStockAlerts}
+                  value={stats?.inventoryData?.lowStockAlerts || 0}
                   onClick={() => handleCardClick('Low Stock Alerts', stats.inventoryData.lowStockAlerts)}
                 />
               </div>
