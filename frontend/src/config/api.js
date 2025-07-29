@@ -1,13 +1,15 @@
+import axios from 'axios';
+
+// Define the base URL, preferably from environment variables
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/';
 
 // API endpoints configuration
 export const API_ENDPOINTS = {
   // Authentication
   auth: {
-    login: '/auth/login/',
-    logout: '/auth/logout/',
-    refresh: '/auth/refresh/',
-    register: '/auth/register/',
+    login: 'auth/login/',
+    refresh: 'auth/token/refresh/',
+    register: 'auth/register/',
   },
   
   // Members
@@ -69,23 +71,22 @@ export const API_ENDPOINTS = {
 };
 
 // Create axios instance with default config
-import axios from 'axios';
-
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Include credentials for CORS requests
 });
 
-// Request interceptor to add auth token
+
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    }
+    }    
     return config;
   },
   (error) => {
@@ -93,37 +94,49 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle token refresh
+// Response interceptor with better error handling
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    return response;
+  },
   async (error) => {
-    const originalRequest = error.config;
-    
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      
+    const original = error.config;
+
+    // Handle CORS errors specifically
+    if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+      console.error('Network/CORS Error:', error);
+      throw new Error('Unable to connect to server. Please check if the backend is running.');
+    }
+
+    if (error.response?.status === 401 && !original._retry) {
+      original._retry = true;
+
       try {
         const refreshToken = localStorage.getItem('refresh_token');
         if (refreshToken) {
-          const response = await axios.post(`${API_BASE_URL}${API_ENDPOINTS.auth.refresh}`, {
+          const response = await axios.post(`${API_BASE_URL}/auth/token/refresh/`, {
             refresh: refreshToken,
+          }, {
+            withCredentials: true
           });
           
           const { access } = response.data;
           localStorage.setItem('access_token', access);
           
-          // Retry original request with new token
-          originalRequest.headers.Authorization = `Bearer ${access}`;
-          return apiClient(originalRequest);
+          // Retry the original request with new token
+          original.headers.Authorization = `Bearer ${access}`;
+          return apiClient(original);
         }
       } catch (refreshError) {
         // Refresh failed, redirect to login
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
+        localStorage.removeItem('user_data');
+        window.location.href = '/';
+        return Promise.reject(refreshError);
       }
     }
-    
+
     return Promise.reject(error);
   }
 );

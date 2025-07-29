@@ -25,7 +25,7 @@ class MembershipPlan(models.Model):
     ]
 
     plan_name = models.CharField(max_length=50, unique=True)
-    membersip_type = models.CharField(
+    membership_type = models.CharField(
         max_length=10, choices=MEMBERSHIP_TYPES, default="indoor"
     )
     duration = models.CharField(max_length=20, choices=PLAN_TYPES)
@@ -35,4 +35,4 @@ class MembershipPlan(models.Model):
     description = models.TextField(blank=True, null=True)
 
     def __str__(self):
-        return f"{self.plan_name} ({self.membersip_type}) - {self.duration}"
+        return f"{self.plan_name} ({self.membership_type}) - {self.duration}"

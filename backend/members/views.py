@@ -41,6 +41,9 @@ class MemberViewset(viewsets.ModelViewSet):
     View to list, create, search, and manage members.
     """
 
+    authentication_classes = []
+    permission_classes = []
+
     queryset = Member.objects.all().order_by("id")
     serializer_class = MemberSerializer
     pagination_class = MemberPagination
@@ -96,11 +99,13 @@ class MemberViewset(viewsets.ModelViewSet):
         # FIXED: Use the correct field names in the update_fields list
         member.save(update_fields=["is_checked_in", "last_visit"])
 
+        # Serialize the member data after check-in
+        serializer = self.get_serializer(member)
+
         logger.info(f"Successfully checked in member: {member.id}")
         return Response(
             {
-                "message": f"{member.first_name} {member.last_name} checked in successfully.",
-                "member": serializer.data,
+                "message": f"{member.first_name} {member.last_name} checked in successfully."
             },
             status=status.HTTP_200_OK,
         )
@@ -129,9 +134,6 @@ class MemberViewset(viewsets.ModelViewSet):
         logger.info(f"Successfully checked out member: {member.id}")
         serializer = self.get_serializer(member)
         return Response(
-            {
-                "message": f"{member.first_name} checked out successfully.",
-                "member": serializer.data,
-            },
+            {"message": f"{member.first_name} checked out successfully."},
             status=status.HTTP_200_OK,
         )

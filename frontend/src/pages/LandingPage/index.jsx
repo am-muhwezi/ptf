@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../../components/ui/Button';
+import authService from '../../services/authService';
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
@@ -15,6 +17,24 @@ const LandingPage = () => {
     lastName: '',
     phone: ''
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Get the return URL from location state (set by ProtectedRoute)
+  const returnUrl = location.state?.from || '/';
+
+  // Redirect to dashboard if user is already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (authService.isAuthenticated()) {
+        const isValid = await authService.validateSession();
+        if (isValid) {
+          navigate(returnUrl, { replace: true });
+        }
+      }
+    };
+    checkAuth();
+  }, [navigate, returnUrl]);
 
   const slides = [
     {
@@ -49,21 +69,120 @@ const LandingPage = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
+    // Clear error when user starts typing
+    if (error) {
+      setError('');
+    }
   };
 
-  const handleAuth = (e) => {
+  const validateForm = () => {
+    const { email, password, confirmPassword, firstName, lastName, phone } = formData;
+
+    if (!email || !password) {
+      setError('Email and password are required.');
+      return false;
+    }
+
+    if (!email.includes('@')) {
+      setError('Please enter a valid email address.');
+      return false;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return false;
+    }
+
+    if (authMode === 'signup') {
+      if (!firstName || !lastName) {
+        setError('First name and last name are required.');
+        return false;
+      }
+
+      if (password !== confirmPassword) {
+        setError('Passwords do not match.');
+        return false;
+      }
+
+      if (phone && !/^[\+]?[0-9\s\-\(\)]{10,}$/.test(phone)) {
+        setError('Please enter a valid phone number.');
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const handleAuth = async (e) => {
     e.preventDefault();
-    // Mock authentication - in real app, this would call your API
-    console.log('Auth attempt:', authMode, formData);
     
-    // Simulate successful login/signup
-    setTimeout(() => {
-      navigate('/');
-    }, 1000);
+    if (!validateForm()) {
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      if (authMode === 'login') {
+        await authService.login({
+          email: formData.email,
+          password: formData.password
+        });
+        
+        // Success notification could be added here
+        console.log('Login successful');
+        
+        // Navigate to the intended destination or dashboard
+        navigate(returnUrl, { replace: true });
+      } else {
+        // Register new user
+        const result = authService.register({
+          email: formData.email,
+          password: formData.password,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          username: formData.firstName.toLowerCase() + formData.lastName.toLowerCase(),
+          phone_number: formData.phone,
+          password: formData.password,
+          confirm_password: formData.confirmPassword
+        });
+        
+        // After successful registration, log the user in automatically
+        await authService.login({
+          email: formData.email,
+          password: formData.password
+        });
+        
+        console.log('Registration and auto-login successful');
+        
+        // Navigate to dashboard
+        navigate(returnUrl, { replace: true });
+      }
+    } catch (err) {
+      console.error('Authentication error:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const switchAuthMode = () => {
     setAuthMode(authMode === 'login' ? 'signup' : 'login');
+    setError('');
+    setFormData({
+      email: '',
+      password: '',
+      confirmPassword: '',
+      firstName: '',
+      lastName: '',
+      phone: ''
+    });
+  };
+
+  const handleBackToHome = () => {
+    setShowAuth(false);
+    setError('');
     setFormData({
       email: '',
       password: '',
@@ -123,6 +242,15 @@ const LandingPage = () => {
               </h2>
             </div>
 
+            {/* Show return URL message if redirected from protected route */}
+            {location.state?.from && (
+              <div className="mb-6 p-4 bg-emerald-600/30 backdrop-blur-sm rounded-lg border border-emerald-500/30">
+                <p className="text-emerald-100 text-sm">
+                  Please sign in to continue to your destination
+                </p>
+              </div>
+            )}
+
             {/* Slide Content */}
             <div className="mb-12">
               <h3 className="text-2xl md:text-3xl font-bold mb-4 text-emerald-100">
@@ -181,7 +309,7 @@ const LandingPage = () => {
             <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-white/20">
               {/* Back Button */}
               <button
-                onClick={() => setShowAuth(false)}
+                onClick={handleBackToHome}
                 className="mb-6 text-emerald-300 hover:text-emerald-200 transition-colors flex items-center"
               >
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -203,6 +331,13 @@ const LandingPage = () => {
               </div>
 
               <form onSubmit={handleAuth} className="space-y-6">
+                {/* Error Message Display */}
+                {error && (
+                  <div className="p-3 bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg text-center text-sm animate-shake">
+                    {error}
+                  </div>
+                )}
+
                 {authMode === 'signup' && (
                   <>
                     <div className="grid grid-cols-2 gap-4">
@@ -215,6 +350,7 @@ const LandingPage = () => {
                           onChange={handleInputChange}
                           className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
                           required
+                          disabled={loading}
                         />
                       </div>
                       <div>
@@ -226,6 +362,7 @@ const LandingPage = () => {
                           onChange={handleInputChange}
                           className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
                           required
+                          disabled={loading}
                         />
                       </div>
                     </div>
@@ -233,11 +370,11 @@ const LandingPage = () => {
                       <input
                         type="tel"
                         name="phone"
-                        placeholder="Phone Number"
+                        placeholder="Phone Number (Optional)"
                         value={formData.phone}
                         onChange={handleInputChange}
                         className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
-                        required
+                        disabled={loading}
                       />
                     </div>
                   </>
@@ -252,6 +389,7 @@ const LandingPage = () => {
                     onChange={handleInputChange}
                     className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
                     required
+                    disabled={loading}
                   />
                 </div>
 
@@ -264,6 +402,7 @@ const LandingPage = () => {
                     onChange={handleInputChange}
                     className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
                     required
+                    disabled={loading}
                   />
                 </div>
 
@@ -277,28 +416,45 @@ const LandingPage = () => {
                       onChange={handleInputChange}
                       className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
                       required
+                      disabled={loading}
                     />
                   </div>
                 )}
 
                 <Button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-3 rounded-xl font-semibold shadow-lg transform hover:scale-105 transition-all duration-300"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-3 rounded-xl font-semibold shadow-lg transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                 >
-                  {authMode === 'login' ? 'Sign In' : 'Create Account'}
+                  {loading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      {authMode === 'login' ? 'Signing In...' : 'Creating Account...'}
+                    </div>
+                  ) : (
+                    authMode === 'login' ? 'Sign In' : 'Create Account'
+                  )}
                 </Button>
               </form>
 
               <div className="mt-6 text-center">
                 <button
                   onClick={switchAuthMode}
-                  className="text-emerald-300 hover:text-emerald-200 transition-colors"
+                  className="text-emerald-300 hover:text-emerald-200 transition-colors disabled:opacity-50"
+                  disabled={loading}
                 >
                   {authMode === 'login' 
                     ? "Don't have an account? Sign up" 
                     : "Already have an account? Sign in"
                   }
                 </button>
+              </div>
+
+              {/* Additional Help Text */}
+              <div className="mt-4 text-center">
+                <p className="text-emerald-200/70 text-xs">
+                  By {authMode === 'signup' ? 'creating an account' : 'signing in'}, you agree to our Terms of Service
+                </p>
               </div>
             </div>
           </div>
