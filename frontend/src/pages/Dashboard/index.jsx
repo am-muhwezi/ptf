@@ -12,10 +12,16 @@ import CheckInForm from '../../components/forms/CheckInForm';
 import { useApi } from '../../hooks/useApi';
 import { dashboardService } from '../../services/dashboardService';
 import { memberService } from '../../services/memberService';
+import { useAuthContext } from '@/contexts/AuthContext';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  
+
+  const { user, isLoading } = useAuthContext();
+
+  console.log('Dashboard user:', user);
+  console.log('Dashboard - Auth context:', { user: user?.email, isLoading });
+
   // API hooks
   const { data: dashboardStats, loading: statsLoading, error: statsError } = useApi(dashboardService.getDashboardStats);
   const { data: notificationsData, loading: notificationsLoading } = useApi(dashboardService.getNotifications);

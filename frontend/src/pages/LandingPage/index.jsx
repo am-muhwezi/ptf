@@ -139,7 +139,6 @@ const LandingPage = () => {
         // Register new user
         const result = authService.register({
           email: formData.email,
-          password: formData.password,
           first_name: formData.firstName,
           last_name: formData.lastName,
           username: formData.firstName.toLowerCase() + formData.lastName.toLowerCase(),

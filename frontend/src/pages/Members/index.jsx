@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// frontend/src/pages/Members/index.jsx
+import React, { useState, useEffect, useCallback } from 'react';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
 import Card from '../../components/ui/Card';
@@ -10,16 +11,29 @@ import Receipt from '../../components/ui/Receipt';
 import PaymentReminder from '../../components/ui/PaymentReminder';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import UpdateMemberProfileForm from '../../components/forms/UpdateMemberProfileForm';
-import { useApi, useApiMutation } from '../../hooks/useApi';
 import { memberService } from '../../services/memberService';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 
 const Members = () => {
+  // State management
   const [members, setMembers] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [stats, setStats] = useState({
+    total_members: 0,
+    active_members: 0,
+    inactive_members: 0,
+    indoor_members: 0,
+    outdoor_members: 0
+  });
+
+  // Filter and search states
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterMembershipType, setFilterMembershipType] = useState('all');
+
+  // Modal states
   const [selectedMember, setSelectedMember] = useState(null);
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
@@ -30,149 +44,69 @@ const Members = () => {
   const [paymentData, setPaymentData] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  // Mock data - replace with API call
-  const mockMembers = [
-    {
-      id: 'PTF001234',
-      firstName: 'Sophia',
-      lastName: 'Carter',
-      email: 'sophia.carter@email.com',
-      phone: '+256 700 123 456',
-      membershipType: 'indoor',
-      planType: 'Premium',
-      status: 'active',
-      joinDate: '2024-01-15',
-      expiryDate: '2024-07-15',
-      lastVisit: '2024-01-21',
-      totalVisits: 45,
-      amount: 150000,
-      paymentStatus: 'paid',
-      address: '123 Main St, Kampala',
-      dateOfBirth: '1990-05-15',
-      emergencyContact: 'John Carter',
-      emergencyPhone: '+256 700 123 457',
-      medicalConditions: 'None',
-      height: 165,
-      weight: 60,
-      bmi: 22.0,
-      fitnessLevel: 'intermediate',
-      shortTermGoals: 'Lose 5kg, improve cardio',
-      longTermGoals: 'Run a marathon'
-    },
-    {
-      id: 'PTF001235',
-      firstName: 'Ethan',
-      lastName: 'Bennett',
-      email: 'ethan.bennett@email.com',
-      phone: '+256 700 123 458',
-      membershipType: 'outdoor',
-      planType: 'Standard',
-      status: 'active',
-      joinDate: '2024-01-10',
-      expiryDate: '2024-04-10',
-      lastVisit: '2024-01-20',
-      totalVisits: 32,
-      amount: 120000,
-      paymentStatus: 'paid',
-      address: '456 Oak Ave, Kampala',
-      dateOfBirth: '1988-08-22',
-      emergencyContact: 'Sarah Bennett',
-      emergencyPhone: '+256 700 123 459',
-      medicalConditions: 'Mild asthma',
-      height: 178,
-      weight: 75,
-      bmi: 23.7,
-      fitnessLevel: 'advanced',
-      shortTermGoals: 'Build muscle mass',
-      longTermGoals: 'Compete in bodybuilding'
-    },
-    {
-      id: 'PTF001236',
-      firstName: 'Olivia',
-      lastName: 'Hayes',
-      email: 'olivia.hayes@email.com',
-      phone: '+256 700 123 460',
-      membershipType: 'both',
-      planType: 'Basic',
-      status: 'inactive',
-      joinDate: '2023-12-01',
-      expiryDate: '2024-01-01',
-      lastVisit: '2023-12-28',
-      totalVisits: 18,
-      amount: 100000,
-      paymentStatus: 'overdue',
-      address: '789 Pine Rd, Kampala',
-      dateOfBirth: '1995-03-10',
-      emergencyContact: 'Mike Hayes',
-      emergencyPhone: '+256 700 123 461',
-      medicalConditions: 'Previous knee injury',
-      height: 160,
-      weight: 55,
-      bmi: 21.5,
-      fitnessLevel: 'beginner',
-      shortTermGoals: 'Get back in shape',
-      longTermGoals: 'Maintain healthy lifestyle'
-    },
-    {
-      id: 'PTF001237',
-      firstName: 'Liam',
-      lastName: 'Foster',
-      email: 'liam.foster@email.com',
-      phone: '+256 700 123 462',
-      membershipType: 'indoor',
-      planType: 'Premium',
-      status: 'active',
-      joinDate: '2024-01-05',
-      expiryDate: '2025-01-05',
-      lastVisit: '2024-01-21',
-      totalVisits: 52,
-      amount: 1800000,
-      paymentStatus: 'paid',
-      address: '321 Elm St, Kampala',
-      dateOfBirth: '1992-11-30',
-      emergencyContact: 'Emma Foster',
-      emergencyPhone: '+256 700 123 463',
-      medicalConditions: 'None',
-      height: 182,
-      weight: 80,
-      bmi: 24.2,
-      fitnessLevel: 'advanced',
-      shortTermGoals: 'Increase bench press to 100kg',
-      longTermGoals: 'Become a certified trainer'
-    }
-  ];
 
+  // Helper function to safely get member names
+  const getMemberDisplayName = (member) => {
+    if (!member) return '';
+    return member.full_name || `${member.first_name || ''} ${member.last_name || ''}`.trim();
+  };
+
+  // Helper function to safely get member initials
+  const getMemberInitials = (member) => {
+    if (!member) return '';
+    const firstInitial = member.first_name?.charAt(0) || '';
+    const lastInitial = member.last_name?.charAt(0) || '';
+    return `${firstInitial}${lastInitial}`;
+  };
+
+  // Fetch members data
+  const fetchMembers = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const params = {};
+      if (searchTerm) params.search = searchTerm;
+      if (filterStatus !== 'all') params.status = filterStatus;
+      if (filterMembershipType !== 'all') params.membership_type = filterMembershipType;
+
+      const response = await memberService.getMembers(params);
+      setMembers(response.results || response);
+
+    } catch (err) {
+      setError(err.message);
+      showToast(err.message, 'error');
+      console.error('Error fetching members:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm, filterStatus, filterMembershipType]);
+
+
+  // Initial data fetch
   useEffect(() => {
-    setMembers(mockMembers);
-    setFilteredMembers(mockMembers);
-  }, []);
+    fetchMembers();
+  }, [fetchMembers]);
 
+  // Add this new block to calculate stats automatically
   useEffect(() => {
-    let filtered = members;
-
-    // Filter by search term
-    if (searchTerm) {
-      filtered = filtered.filter(member =>
-        member.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.id.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    if (members && members.length > 0) {
+      setStats({
+        total_members: members.length,
+        active_members: members.filter(m => m.status === 'active').length,
+        inactive_members: members.filter(m => m.status === 'inactive').length,
+        indoor_members: members.filter(m => m.membership_type === 'indoor' || m.membership_type === 'both').length,
+        outdoor_members: members.filter(m => m.membership_type === 'outdoor' || m.membership_type === 'both').length,
+      });
     }
+}, [members]);
 
-    // Filter by status
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(member => member.status === filterStatus);
-    }
+  // Update filtered members when members change
+  useEffect(() => {
+    setFilteredMembers(members);
+  }, [members]);
 
-    // Filter by membership type
-    if (filterMembershipType !== 'all') {
-      filtered = filtered.filter(member => member.membershipType === filterMembershipType);
-    }
-
-    setFilteredMembers(filtered);
-  }, [searchTerm, filterStatus, filterMembershipType, members]);
-
+  // Toast helper functions
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
   };
@@ -180,7 +114,15 @@ const Members = () => {
   const hideToast = () => {
     setToast({ show: false, message: '', type: 'success' });
   };
+  
+  const refreshData = async () => {
+      await Promise.all([
+          fetchMembers(),
+          fetchStats()
+      ]);
+  };
 
+  // Member action handlers
   const handleViewMember = (member) => {
     setSelectedMember(member);
     setShowMemberModal(true);
@@ -191,29 +133,22 @@ const Members = () => {
     setShowUpdateModal(true);
   };
 
-  const handleUpdateMemberStatus = (memberId, newStatus) => {
-    const updatedMembers = members.map(member =>
-      member.id === memberId ? { ...member, status: newStatus } : member
-    );
-    setMembers(updatedMembers);
-    showToast(`Member status updated to ${newStatus}`, 'success');
+  const handleUpdateMemberStatus = async (memberId, newStatus) => {
+    try {
+      await memberService.updateMemberStatus(memberId, newStatus);
+      showToast(`Member status updated to ${newStatus}`, 'success');
+      await refreshData();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
   };
 
   const handleRegisterMember = async (memberData) => {
     try {
-      // In real implementation, this would call the API
-      const newMember = {
-        ...memberData,
-        id: `PTF${Date.now()}`,
-        totalVisits: 0,
-        lastVisit: null,
-        status: 'active',
-        paymentStatus: 'paid'
-      };
-      
-      setMembers([...members, newMember]);
+      const response = await memberService.createMember(memberData);
+      showToast(response.message || 'Member registered successfully!', 'success');
       setShowRegisterModal(false);
-      showToast(`${memberData.first_name} ${memberData.last_name} registered successfully!`, 'success');
+      await refreshData();
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -221,15 +156,10 @@ const Members = () => {
 
   const handleUpdateMemberProfile = async (updatedData) => {
     try {
-      const updatedMembers = members.map(member =>
-        member.id === selectedMember.id ? { ...member, ...updatedData } : member
-      );
-      
-      setMembers(updatedMembers);
-      setSelectedMember({ ...selectedMember, ...updatedData });
+      const response = await memberService.updateMemberProfile(selectedMember.id, updatedData);
+      showToast(response.message || 'Profile updated successfully', 'success');
       setShowUpdateModal(false);
-      
-      showToast(`Profile updated successfully for ${selectedMember.firstName} ${selectedMember.lastName}`, 'success');
+      await refreshData();
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -240,18 +170,17 @@ const Members = () => {
     setShowPaymentModal(true);
   };
 
-  const handlePaymentSuccess = (paymentResponse) => {
-    setPaymentData(paymentResponse);
-    setShowPaymentModal(false);
-    setShowReceiptModal(true);
-    
-    // Update member payment status
-    const updatedMembers = members.map(member =>
-      member.id === selectedMember.id 
-        ? { ...member, paymentStatus: 'paid', lastPayment: new Date().toISOString() }
-        : member
-    );
-    setMembers(updatedMembers);
+  const handlePaymentSuccess = async (paymentFormData) => {
+    try {
+      const response = await memberService.processPayment(selectedMember.id, paymentFormData);
+      setPaymentData(response.payment);
+      setShowPaymentModal(false);
+      setShowReceiptModal(true);
+      showToast(response.message || 'Payment processed successfully', 'success');
+      await refreshData();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
   };
 
   const handleSendReminder = (member) => {
@@ -259,11 +188,35 @@ const Members = () => {
     setShowReminderModal(true);
   };
 
-  const handleReminderSent = () => {
-    showToast('Payment reminder sent successfully', 'success');
-    setShowReminderModal(false);
+  const handleReminderSent = async (reminderData) => {
+    try {
+      await memberService.sendPaymentReminder(selectedMember.id, reminderData);
+      showToast('Payment reminder sent successfully', 'success');
+      setShowReminderModal(false);
+    } catch (error) {
+      showToast(error.message, 'error');
+      setShowReminderModal(false);
+    }
   };
 
+  const handleExportMembers = async () => {
+    try {
+      const blob = await memberService.exportMembers('csv');
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `members_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      showToast('Members data exported successfully', 'success');
+    } catch (error) {
+      showToast(error.message || 'Export failed.', 'error');
+    }
+  };
+
+  // Badge helper functions
   const getStatusBadge = (status) => {
     const statusStyles = {
       active: 'bg-green-100 text-green-800',
@@ -273,7 +226,7 @@ const Members = () => {
     
     return (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusStyles[status] || 'bg-gray-100 text-gray-800'}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown'}
       </span>
     );
   };
@@ -287,7 +240,7 @@ const Members = () => {
     
     return (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${typeStyles[type] || 'bg-gray-100 text-gray-800'}`}>
-        {type === 'both' ? 'Indoor + Outdoor' : type.charAt(0).toUpperCase() + type.slice(1)}
+        {type === 'both' ? 'Indoor + Outdoor' : type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Unknown'}
       </span>
     );
   };
@@ -301,7 +254,7 @@ const Members = () => {
     
     return (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusStyles[status] || 'bg-gray-100 text-gray-800'}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown'}
       </span>
     );
   };
@@ -315,17 +268,57 @@ const Members = () => {
     return { label: 'Obese', style: 'bg-red-100 text-red-800' };
   };
 
-  const getMemberStats = () => {
-    return {
-      total: members.length,
-      active: members.filter(m => m.status === 'active').length,
-      inactive: members.filter(m => m.status === 'inactive').length,
-      indoor: members.filter(m => m.membershipType === 'indoor').length,
-      outdoor: members.filter(m => m.membershipType === 'outdoor').length
-    };
-  };
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header />
+          <main className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="animate-pulse space-y-6">
+                <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                  ))}
+                </div>
+                <div className="h-96 bg-gray-200 rounded"></div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
-  const stats = getMemberStats();
+  // Error state
+  if (error) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header />
+          <main className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+                <h3 className="text-lg font-medium text-red-800 mb-2">Error Loading Members</h3>
+                <p className="text-red-600">{error}</p>
+                <Button 
+                  variant="primary" 
+                  onClick={fetchMembers}
+                  className="mt-4"
+                >
+                  Retry
+                </Button>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -343,7 +336,9 @@ const Members = () => {
                 <p className="text-gray-600 mt-1">Manage all gym members and their information</p>
               </div>
               <div className="flex space-x-3">
-                <Button variant="outline">Export Members</Button>
+                <Button variant="outline" onClick={handleExportMembers}>
+                  Export Members
+                </Button>
                 <Button 
                   variant="primary"
                   onClick={() => setShowRegisterModal(true)}
@@ -357,30 +352,30 @@ const Members = () => {
             <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
               <Card
                 title="Total Members"
-                value={stats.total}
+                value={stats.total_members}
                 subtitle="All registered"
               />
               <Card
                 title="Active Members"
-                value={stats.active}
+                value={stats.active_members}
                 subtitle="Currently active"
                 className="border-green-200"
               />
               <Card
                 title="Inactive Members"
-                value={stats.inactive}
+                value={stats.inactive_members}
                 subtitle="Need attention"
                 className="border-red-200"
               />
               <Card
                 title="Indoor Members"
-                value={stats.indoor}
+                value={stats.indoor_members}
                 subtitle="Indoor access"
                 className="border-blue-200"
               />
               <Card
                 title="Outdoor Members"
-                value={stats.outdoor}
+                value={stats.outdoor_members}
                 subtitle="Outdoor access"
                 className="border-green-200"
               />
@@ -398,7 +393,7 @@ const Members = () => {
                     </div>
                     <input
                       type="text"
-                      placeholder="Search members"
+                      placeholder="Search members..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -454,355 +449,124 @@ const Members = () => {
 
             {/* Members Table */}
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Member
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Membership Type
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Plan & Amount
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Activity
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredMembers.map((member) => (
-                      <tr key={member.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 h-10 w-10">
-                              <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                                <span className="text-sm font-medium text-gray-700">
-                                  {member.firstName.charAt(0)}{member.lastName.charAt(0)}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">
-                                {member.firstName} {member.lastName}
-                              </div>
-                              <div className="text-sm text-gray-500">{member.email}</div>
-                              <div className="text-xs text-gray-400">{member.id}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {getMembershipTypeBadge(member.membershipType)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {getStatusBadge(member.status)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{member.planType}</div>
-                          <div className="text-sm text-gray-500">{formatCurrency(member.amount)}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">
-                            {member.lastVisit ? formatDate(member.lastVisit) : 'Never'}
-                          </div>
-                          <div className="text-xs text-gray-500">{member.totalVisits} total visits</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                          <button
-                            onClick={() => handleViewMember(member)}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            View
-                          </button>
-                          <button
-                            onClick={() => handleEditMember(member)}
-                            className="text-green-600 hover:text-green-900"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleRequestPayment(member)}
-                            className="text-purple-600 hover:text-purple-900"
-                          >
-                            Payment
-                          </button>
-                          {member.paymentStatus === 'overdue' && (
-                            <button
-                              onClick={() => handleSendReminder(member)}
-                              className="text-orange-600 hover:text-orange-900"
-                            >
-                              Remind
-                            </button>
-                          )}
-                          {member.status === 'active' ? (
-                            <button
-                              onClick={() => handleUpdateMemberStatus(member.id, 'inactive')}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              Suspend
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleUpdateMemberStatus(member.id, 'active')}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              Activate
-                            </button>
-                          )}
-                        </td>
+              {filteredMembers.length === 0 ? (
+                <div className="text-center py-12">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <h3 className="mt-4 text-lg font-medium text-gray-900">No members found</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {searchTerm || filterStatus !== 'all' || filterMembershipType !== 'all' 
+                      ? 'Try adjusting your search or filter criteria.'
+                      : 'Get started by adding your first member.'
+                    }
+                  </p>
+                  {(!searchTerm && filterStatus === 'all' && filterMembershipType === 'all') && (
+                    <Button 
+                      variant="primary" 
+                      onClick={() => setShowRegisterModal(true)}
+                      className="mt-4"
+                    >
+                      Add First Member
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Member</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Membership Type</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan & Amount</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activity</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredMembers.map((member) => (
+                        <tr key={member.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-10 w-10">
+                                <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                                  <span className="text-sm font-medium text-gray-700">
+                                    {getMemberInitials(member)}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">{getMemberDisplayName(member)}</div>
+                                <div className="text-sm text-gray-500">{member.email}</div>
+                                <div className="text-xs text-gray-400">{member.member_id}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">{getMembershipTypeBadge(member.membership_type)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(member.status)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{member.plan_type}</div>
+                            <div className="text-sm text-gray-500">{formatCurrency(member.amount)}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{member.last_visit ? formatDate(member.last_visit) : 'Never'}</div>
+                            <div className="text-xs text-gray-500">{member.total_visits} total visits</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                            <button onClick={() => handleViewMember(member)} className="text-blue-600 hover:text-blue-900">View</button>
+                            <button onClick={() => handleEditMember(member)} className="text-green-600 hover:text-green-900">Edit</button>
+                            <button onClick={() => handleRequestPayment(member)} className="text-purple-600 hover:text-purple-900">Payment</button>
+                            {member.payment_status === 'overdue' && (
+                              <button onClick={() => handleSendReminder(member)} className="text-orange-600 hover:text-orange-900">Remind</button>
+                            )}
+                            {member.status === 'active' ? (
+                              <button onClick={() => handleUpdateMemberStatus(member.id, 'inactive')} className="text-red-600 hover:text-red-900">Suspend</button>
+                            ) : (
+                              <button onClick={() => handleUpdateMemberStatus(member.id, 'active')} className="text-green-600 hover:text-green-900">Activate</button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </main>
       </div>
 
-      {/* Member Details Modal */}
-      <Modal
-        isOpen={showMemberModal}
-        onClose={() => setShowMemberModal(false)}
-        title="Member Details"
-        size="large"
-      >
+      {/* --- MODALS & TOAST --- */}
+      <Toast message={toast.message} type={toast.type} isVisible={toast.show} onClose={hideToast} />
+
+      <Modal isOpen={showMemberModal} onClose={() => setShowMemberModal(false)} title="Member Details" size="large">
         {selectedMember && (
           <div className="space-y-6">
-            {/* Member Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="h-16 w-16 rounded-full bg-gray-300 flex items-center justify-center">
-                  <span className="text-xl font-medium text-gray-700">
-                    {selectedMember.firstName.charAt(0)}{selectedMember.lastName.charAt(0)}
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">
-                    {selectedMember.firstName} {selectedMember.lastName}
-                  </h3>
-                  <p className="text-gray-600">Member ID: {selectedMember.id}</p>
-                </div>
-              </div>
-              <Button
-                variant="primary"
-                onClick={() => handleEditMember(selectedMember)}
-              >
-                Edit
-              </Button>
-            </div>
-
-            {/* Personal Information */}
-            <div>
-              <h4 className="text-lg font-medium text-gray-900 mb-4">Personal Information</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Name</label>
-                    <p className="text-sm text-gray-900">{selectedMember.firstName} {selectedMember.lastName}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Phone</label>
-                    <p className="text-sm text-gray-900">{selectedMember.phone}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Date of Birth</label>
-                    <p className="text-sm text-gray-900">{formatDate(selectedMember.dateOfBirth)}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Join Date</label>
-                    <p className="text-sm text-gray-900">{formatDate(selectedMember.joinDate)}</p>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Email</label>
-                    <p className="text-sm text-gray-900">{selectedMember.email}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Address</label>
-                    <p className="text-sm text-gray-900">{selectedMember.address}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Membership Type</label>
-                    <div className="mt-1">{getMembershipTypeBadge(selectedMember.membershipType)}</div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Status</label>
-                    <div className="mt-1">{getStatusBadge(selectedMember.status)}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Emergency Contact */}
-            <div>
-              <h4 className="text-lg font-medium text-gray-900 mb-4">Emergency Contact</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Contact Name</label>
-                  <p className="text-sm text-gray-900">{selectedMember.emergencyContact}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Contact Phone</label>
-                  <p className="text-sm text-gray-900">{selectedMember.emergencyPhone}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Fitness Goals */}
-            <div>
-              <h4 className="text-lg font-medium text-gray-900 mb-4">Fitness Goals</h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-gray-900">
-                    {selectedMember.height ? `${selectedMember.height} cm` : 'N/A'}
-                  </div>
-                  <div className="text-sm text-gray-600">Weight</div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-gray-900">
-                    {selectedMember.weight ? `${selectedMember.weight} kg` : 'N/A'}
-                  </div>
-                  <div className="text-sm text-gray-600">Short-term Goals</div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-gray-900">
-                    {selectedMember.bmi || 'N/A'}
-                  </div>
-                  <div className="text-sm text-gray-600">BMI</div>
-                  {selectedMember.bmi && (
-                    <div className="mt-1">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getBMICategory(selectedMember.bmi).style}`}>
-                        {getBMICategory(selectedMember.bmi).label}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-gray-900">80%</div>
-                  <div className="text-sm text-gray-600">Progress</div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Short-term Goals</label>
-                  <div className="mt-1 p-3 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-900">
-                      {selectedMember.shortTermGoals || 'No goals set yet'}
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Long-term Goals</label>
-                  <div className="mt-1 p-3 bg-green-50 rounded-lg">
-                    <p className="text-sm text-green-900">
-                      {selectedMember.longTermGoals || 'No goals set yet'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Activity Summary */}
-            <div>
-              <h4 className="text-lg font-medium text-gray-900 mb-4">Activity Summary</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-gray-900">{selectedMember.totalVisits}</div>
-                  <div className="text-sm text-gray-600">Total Visits</div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-gray-900">
-                    {selectedMember.lastVisit ? formatDate(selectedMember.lastVisit) : 'Never'}
-                  </div>
-                  <div className="text-sm text-gray-600">Last Visit</div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-gray-900">
-                    {Math.ceil((new Date(selectedMember.expiryDate) - new Date()) / (1000 * 60 * 60 * 24))}
-                  </div>
-                  <div className="text-sm text-gray-600">Days Remaining</div>
-                </div>
-              </div>
-            </div>
+            <div className="flex items-center justify-between"><div className="flex items-center space-x-4"><div className="h-16 w-16 rounded-full bg-gray-300 flex items-center justify-center"><span className="text-xl font-medium text-gray-700">{getMemberInitials(selectedMember)}</span></div><div><h3 className="text-xl font-bold text-gray-900">{getMemberDisplayName(selectedMember)}</h3><p className="text-gray-600">Member ID: {selectedMember.member_id || selectedMember.id}</p></div></div><Button variant="primary" onClick={() => handleEditMember(selectedMember)}>Edit</Button></div>
+            <div><h4 className="text-lg font-medium text-gray-900 mb-4">Personal Information</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-4"><div><label className="text-sm font-medium text-gray-500">Name</label><p className="text-sm text-gray-900">{getMemberDisplayName(selectedMember)}</p></div><div><label className="text-sm font-medium text-gray-500">Phone</label><p className="text-sm text-gray-900">{selectedMember.phone || 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Date of Birth</label><p className="text-sm text-gray-900">{selectedMember.dateOfBirth ? formatDate(selectedMember.dateOfBirth) : 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Join Date</label><p className="text-sm text-gray-900">{selectedMember.join_date ? formatDate(selectedMember.join_date) : 'Not provided'}</p></div></div><div className="space-y-4"><div><label className="text-sm font-medium text-gray-500">Email</label><p className="text-sm text-gray-900">{selectedMember.email || 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Address</label><p className="text-sm text-gray-900">{selectedMember.address || 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Membership Type</label><div className="mt-1">{getMembershipTypeBadge(selectedMember.membership_type)}</div></div><div><label className="text-sm font-medium text-gray-500">Status</label><div className="mt-1">{getStatusBadge(selectedMember.status)}</div></div></div></div></div>
+            <div><h4 className="text-lg font-medium text-gray-900 mb-4">Emergency Contact</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="text-sm font-medium text-gray-500">Contact Name</label><p className="text-sm text-gray-900">{selectedMember.emergencyContact || 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Contact Phone</label><p className="text-sm text-gray-900">{selectedMember.emergencyPhone || 'Not provided'}</p></div></div></div>
+            <div><h4 className="text-lg font-medium text-gray-900 mb-4">Fitness Information</h4><div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.height ? `${selectedMember.height} cm` : 'N/A'}</div><div className="text-sm text-gray-600">Height</div></div><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.weight ? `${selectedMember.weight} kg` : 'N/A'}</div><div className="text-sm text-gray-600">Weight</div></div><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.bmi || 'N/A'}</div><div className="text-sm text-gray-600">BMI</div>{selectedMember.bmi && (<div className="mt-1"><span className={`px-2 py-1 text-xs font-medium rounded-full ${getBMICategory(selectedMember.bmi).style}`}>{getBMICategory(selectedMember.bmi).label}</span></div>)}</div><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900 capitalize">{selectedMember.fitnessLevel || 'N/A'}</div><div className="text-sm text-gray-600">Fitness Level</div></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-sm font-medium text-gray-500">Short-term Goals</label><div className="mt-1 p-3 bg-blue-50 rounded-lg"><p className="text-sm text-blue-900">{selectedMember.short_term_goals || 'No goals set'}</p></div></div><div><label className="text-sm font-medium text-gray-500">Long-term Goals</label><div className="mt-1 p-3 bg-green-50 rounded-lg"><p className="text-sm text-green-900">{selectedMember.long_term_goals || 'No goals set'}</p></div></div></div></div>
+            <div><h4 className="text-lg font-medium text-gray-900 mb-4">Activity Summary</h4><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.total_visits || 0}</div><div className="text-sm text-gray-600">Total Visits</div></div><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.last_visit ? formatDate(selectedMember.last_visit) : 'Never'}</div><div className="text-sm text-gray-600">Last Visit</div></div><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.expiry_date ? Math.max(0, Math.ceil((new Date(selectedMember.expiry_date) - new Date()) / (1000 * 60 * 60 * 24))) : 'N/A'}</div><div className="text-sm text-gray-600">Days Remaining</div></div></div></div>
           </div>
         )}
       </Modal>
 
-      {/* Register Member Modal */}
-      <Modal
-        isOpen={showRegisterModal}
-        onClose={() => setShowRegisterModal(false)}
-        size="large"
-      >
-        <RegisterMemberForm
-          onSubmit={handleRegisterMember}
-          onCancel={() => setShowRegisterModal(false)}
-        />
+      <Modal isOpen={showRegisterModal} onClose={() => setShowRegisterModal(false)} size="large" title="Register New Member">
+        <RegisterMemberForm onSubmit={handleRegisterMember} onCancel={() => setShowRegisterModal(false)} />
       </Modal>
 
-      {/* Update Member Profile Modal */}
-      <Modal
-        isOpen={showUpdateModal}
-        onClose={() => setShowUpdateModal(false)}
-        title="Update Member Profile"
-        size="full"
-      >
-        <UpdateMemberProfileForm
-          initialData={selectedMember}
-          onSubmit={handleUpdateMemberProfile}
-          onCancel={() => setShowUpdateModal(false)}
-        />
+      <Modal isOpen={showUpdateModal} onClose={() => setShowUpdateModal(false)} title="Update Member Profile" size="full">
+        <UpdateMemberProfileForm initialData={selectedMember} onSubmit={handleUpdateMemberProfile} onCancel={() => setShowUpdateModal(false)} />
       </Modal>
 
-      {/* Payment Modal */}
-      <PaymentForm
-        member={selectedMember}
-        isOpen={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        onPaymentSuccess={handlePaymentSuccess}
-      />
-
-      {/* Receipt Modal */}
-      <Modal
-        isOpen={showReceiptModal}
-        onClose={() => setShowReceiptModal(false)}
-        title="Payment Receipt"
-        size="medium"
-      >
-        <Receipt
-          paymentData={paymentData}
-          member={selectedMember}
-          onClose={() => setShowReceiptModal(false)}
-          onPrint={() => showToast('Receipt printed successfully', 'success')}
-        />
+      <PaymentForm member={selectedMember} isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} onPaymentSuccess={handlePaymentSuccess} />
+      
+      <Modal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} title="Payment Receipt" size="medium">
+        <Receipt paymentData={paymentData} member={selectedMember} onClose={() => setShowReceiptModal(false)} onPrint={() => showToast('Receipt printed successfully', 'success')} />
       </Modal>
 
-      {/* Payment Reminder Modal */}
-      <PaymentReminder
-        member={selectedMember}
-        isOpen={showReminderModal}
-        onClose={() => setShowReminderModal(false)}
-        onReminderSent={handleReminderSent}
-      />
-
-      {/* Toast Notifications */}
-      <Toast
-        message={toast.message}
-        type={toast.type}
-        isVisible={toast.show}
-        onClose={hideToast}
-      />
+      <PaymentReminder member={selectedMember} isOpen={showReminderModal} onClose={() => setShowReminderModal(false)} onReminderSent={handleReminderSent} />
     </div>
   );
 };

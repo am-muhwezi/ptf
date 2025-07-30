@@ -115,6 +115,16 @@ export const memberService = {
       throw new Error(error.response?.data?.message || 'Failed to fetch outdoor memberships');
     }
   },
+  // Update member status
+updateMemberStatus: async (memberId, status) => {
+  try {
+    // A PATCH request is best for updating a single field
+    const response = await apiClient.patch(API_ENDPOINTS.members.update(memberId), { status });
+    return response.data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || 'Failed to update member status');
+  }
+},
 
   // Get indoor memberships
   getIndoorMemberships: async () => {
@@ -134,7 +144,23 @@ export const memberService = {
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Failed to fetch checked-in members');
     }
-  }
+  },
+  /**
+   * Export members data
+   * @param {string} format - Export format (e.g., 'csv', 'excel')
+   * @returns {Promise<Blob>} The file as a Blob
+   */
+  exportMembers: async (format = 'csv') => {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.members.list, {
+        params: { export: format },
+        responseType: 'blob' // Important: tells the client to expect a file
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to export members data');
+    }
+  },
 };
 
 export default memberService;
