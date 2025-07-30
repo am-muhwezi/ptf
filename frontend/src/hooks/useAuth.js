@@ -61,34 +61,26 @@ export const useAuth = () => {
   }, []);
 
   const login = async (credentials) => {
-    try {
-      setIsLoading(true);
-      const response = await authService.login(credentials);
-      
-      // Get the user data that was fetched during login
-      const userData = authService.getCurrentUser();
-      console.log('Login completed, user data:', userData);
-      
-      if (userData) {
-        setUser(userData);
-        setIsAuthenticated(true);
-        
-        // Navigate to dashboard or desired page
-        navigate('/dashboard');
-      } else {
-        throw new Error('Failed to retrieve user data after login');
-      }
-      
-      return response;
-    } catch (error) {
-      console.error('Login error in useAuth:', error);
-      setUser(null);
-      setIsAuthenticated(false);
-      throw error;
-    } finally {
-      setIsLoading(false);
+  try {
+    setIsLoading(true);
+    const userData = await authService.login(credentials); // await login result
+    if (userData) {
+      setUser(userData);  // directly set returned data
+      setIsAuthenticated(true);
+      navigate('/dashboard');
+    } else {
+      throw new Error('Login succeeded but no user data received.');
     }
-  };
+  } catch (error) {
+    console.error('Login error in useAuth:', error);
+    setUser(null);
+    setIsAuthenticated(false);
+    throw error;
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   const logout = async () => {
     try {
