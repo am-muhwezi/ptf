@@ -109,74 +109,95 @@ const login = async (credentials) => {
  */
 const register = async (userData) => {
   try {
+    console.log('Registering user with data:', userData);
+    
     const response = await apiClient.post(API_ENDPOINTS.auth.register, userData);
+    console.log('Registration response:', response.data);
 
+    // Check if backend returned tokens (auto-login enabled)
     if (response.data?.access && response.data?.refresh) {
+      // Store tokens immediately
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
 
-      // ✅ Fetch and set user
+      // Fetch complete user data from backend
       const fetchedUserData = await fetchUserData();
 
-      // 🔥 Here's the fix: update global auth context
-      setUser(fetchedUserData); // You MUST call this
-
-      return {
-        autoLogin: true,
-        userData: fetchedUserData,
-      };
-    }
-
-    return response.data;
-  } catch (error) {
-    console.error('Registration failed:', error)
-
-    // Provide more specific error messages
-    if (error.response?.status === 400) {
-      const errorData = error.response.data;
-      console.error('Registration 400 error details:', errorData); // Debug log
-      
-      if (errorData.email) {
-        if (Array.isArray(errorData.email)) {
-          throw new Error(errorData.email[0]);
-        }
-        throw new Error('This email address is already registered.');
-      } else if (errorData.password) {
-        if (Array.isArray(errorData.password)) {
-          throw new Error(`Password error: ${errorData.password[0]}`);
-        }
-        throw new Error('Password does not meet requirements.');
-      } else if (errorData.phone_number) {
-        if (Array.isArray(errorData.phone_number)) {
-          throw new Error(`Phone number error: ${errorData.phone_number[0]}`);
-        }
-        throw new Error('Please provide a valid phone number.');
-      } else if (errorData.first_name) {
-        if (Array.isArray(errorData.first_name)) {
-          throw new Error(`First name error: ${errorData.first_name[0]}`);
-        }
-        throw new Error('Please provide a valid first name.');
-      } else if (errorData.last_name) {
-        if (Array.isArray(errorData.last_name)) {
-          throw new Error(`Last name error: ${errorData.last_name[0]}`);
-        }
-        throw new Error('Please provide a valid last name.');
-      } else {
-        // Show the actual validation errors
-        const errorMessages = Object.entries(errorData)
-          .map(([field, messages]) => {
-            const messageText = Array.isArray(messages) ? messages.join(', ') : messages;
-            return `${field}: ${messageText}`;
-          })
-          .join('; ');
-        throw new Error(`Validation errors: ${errorMessages}`);
+      if (fetchedUserData) {
+        return {
+          success: true,
+          autoLogin: true,
+          userData: fetchedUserData,
+          message: `Welcome to Paradise, ${fetchedUserData.firstName}! 🏝️`
+        };
       }
-    } else if (!navigator.onLine) {
-      throw new Error('No internet connection. Please check your network and try again.');
-    } else {
-      throw new Error(error.response?.data?.detail || 'Registration failed. Please try again.');
     }
+
+    // If no auto-login, return success without tokens
+    return {
+      success: true,
+      autoLogin: false,
+      message: 'Account created successfully! Please sign in to continue.'
+    };
+
+  } catch (error) {
+    console.error('Registration failed:', error);
+    clearAuthData(); // Clean up any partial data
+    
+    // Transform technical errors into user-friendly messages
+    throw new Error(getUserFriendlyError(error));
   }
+};
+
+// Helper function for user-friendly error messages
+const getUserFriendlyError = (error) => {
+  // Network issues
+  if (!navigator.onLine) {
+    return "🌐 No internet connection. Please check your network and try again.";
+  }
+
+  // Server response errors
+  if (error.response?.status === 400) {
+    const errorData = error.response.data;
+    
+    // Specific field errors with friendly messages
+    if (errorData.email) {
+      const emailError = Array.isArray(errorData.email) ? errorData.email[0] : errorData.email;
+      if (emailError.includes('already exists') || emailError.includes('unique')) {
+        return "📧 This email is already registered. Try signing in instead!";
+      }
+      return "📧 Please enter a valid email address.";
+    }
+    
+    if (errorData.password) {
+      return "🔒 Password must be at least 8 characters with letters and numbers.";
+    }
+    
+    if (errorData.first_name) {
+      return "👤 Please enter your first name.";
+    }
+    
+    if (errorData.last_name) {
+      return "👤 Please enter your last name.";
+    }
+    
+    if (errorData.non_field_errors) {
+      const nonFieldError = Array.isArray(errorData.non_field_errors) 
+        ? errorData.non_field_errors[0] 
+        : errorData.non_field_errors;
+      return nonFieldError;
+    }
+
+    // Generic validation error
+    return "❌ Please check your information and try again.";
+  }
+
+  if (error.response?.status === 500) {
+    return "🔧 Something went wrong on our end. Please try again in a moment.";
+  }
+
+  // Default fallback
+  return "❌ Registration failed. Please try again.";
 };
 
 /**
