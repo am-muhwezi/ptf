@@ -8,37 +8,47 @@ export const useAuth = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const navigate = useNavigate();
 
-  // Initialize auth state on hook mount
   useEffect(() => {
     const initializeAuth = async () => {
       try {
         setIsLoading(true);
-        
-        console.log('Initializing auth...');
-        
-        // Check if session is valid
         const isValidSession = await authService.validateSession();
-        console.log('Session valid:', isValidSession);
         
         if (isValidSession) {
-          // Get user data
-          const userData = authService.getCurrentUser();
-          console.log('Initial user data:', userData);
+          let userData = authService.getCurrentUser();
           
           if (userData && userData.firstName && userData.lastName) {
-            // We have complete user data
             setUser(userData);
             setIsAuthenticated(true);
           } else if (authService.getAccessToken()) {
-            // We have a token but no complete user data, fetch it
-            console.log('Fetching user data...');
-            const fetchedUserData = await authService.fetchUserData();
-            if (fetchedUserData) {
-              setUser(fetchedUserData);
+            try {
+              const fetchedUserData = await authService.fetchUserData();
+              if (fetchedUserData) {
+                setUser(fetchedUserData);
+                setIsAuthenticated(true);
+              } else {
+                const existingData = authService.getCurrentUser();
+                if (existingData) {
+                  setUser(existingData);
+                  setIsAuthenticated(true);
+                } else {
+                  const minimalUser = {
+                    firstName: 'User',
+                    lastName: '',
+                    email: 'user@example.com'
+                  };
+                  setUser(minimalUser);
+                  setIsAuthenticated(true);
+                }
+              }
+            } catch (fetchError) {
+              const existingData = authService.getCurrentUser() || {
+                firstName: 'User',
+                lastName: '',
+                email: 'user@example.com'
+              };
+              setUser(existingData);
               setIsAuthenticated(true);
-            } else {
-              setUser(null);
-              setIsAuthenticated(false);
             }
           } else {
             setUser(null);
@@ -49,7 +59,6 @@ export const useAuth = () => {
           setIsAuthenticated(false);
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
         setUser(null);
         setIsAuthenticated(false);
       } finally {
@@ -61,26 +70,30 @@ export const useAuth = () => {
   }, []);
 
   const login = async (credentials) => {
-  try {
-    setIsLoading(true);
-    const userData = await authService.login(credentials); // await login result
-    if (userData) {
-      setUser(userData);  // directly set returned data
-      setIsAuthenticated(true);
-      navigate('/dashboard');
-    } else {
-      throw new Error('Login succeeded but no user data received.');
+    try {
+      setIsLoading(true);
+      const userData = await authService.login(credentials);
+      
+      if (userData) {
+        setUser(userData);
+        setIsAuthenticated(true);
+        
+        setTimeout(() => {
+          navigate('/');
+        }, 100);
+        
+        return userData;
+      } else {
+        throw new Error('Login succeeded but no user data received.');
+      }
+    } catch (error) {
+      setUser(null);
+      setIsAuthenticated(false);
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error('Login error in useAuth:', error);
-    setUser(null);
-    setIsAuthenticated(false);
-    throw error;
-  } finally {
-    setIsLoading(false);
-  }
-};
-
+  };
 
   const logout = async () => {
     try {
@@ -88,55 +101,68 @@ export const useAuth = () => {
       await authService.logout();
       setUser(null);
       setIsAuthenticated(false);
-      
-      // Navigate to login page
-      navigate('/login');
+      navigate('/landing');
     } catch (error) {
-      console.error('Logout error:', error);
-      // Even if logout fails, clear local state
       setUser(null);
       setIsAuthenticated(false);
-      navigate('/login');
+      navigate('/landing');
     } finally {
       setIsLoading(false);
     }
   };
 
   const register = async (userData) => {
-  try {
-    setIsLoading(true);
+    try {
+      setIsLoading(true);
+      const response = await authService.register(userData);
 
-    const response = await authService.register(userData);
+      if (response.autoLogin && response.userData) {
+        setUser(response.userData);
+        setIsAuthenticated(true);
+        
+        setTimeout(() => {
+          navigate('/');
+        }, 200);
+      }
 
-    if (response.autoLogin && response.userData) {
-      // ✅ Set user & mark authenticated
-      setUser(response.userData);
-      setIsAuthenticated(true);
-
-      console.log('Auto-login after registration, user:', response.userData);
-
-      // ✅ Navigate to dashboard (or home)
-      navigate('/dashboard');
+      return response;
+    } catch (error) {
+      setUser(null);
+      setIsAuthenticated(false);
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    return response;
-  } catch (error) {
-    setUser(null);
-    setIsAuthenticated(false);
-    throw error;
-  } finally {
-    setIsLoading(false);
-  }
-};
+  const refreshUserData = async () => {
+    try {
+      const userData = await authService.fetchUserData();
+      if (userData) {
+        setUser(userData);
+        return userData;
+      }
+    } catch (error) {
+    }
+    return null;
+  };
 
+  const updateUser = (updatedData) => {
+    setUser(prevUser => {
+      const newUser = { ...prevUser, ...updatedData };
+      localStorage.setItem('user_data', JSON.stringify(newUser));
+      return newUser;
+    });
+  };
 
   return {
     user,
-    setUser,
+    setUser: updateUser,
     isLoading,
     isAuthenticated,
     login,
     logout,
     register,
+    refreshUserData,
   };
 };

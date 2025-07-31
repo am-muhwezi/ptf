@@ -1,9 +1,11 @@
 from rest_framework import status, permissions
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth import logout
+from django.db import transaction
+import time
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
@@ -14,50 +16,62 @@ from .models import User
 
 
 class RegisterView(APIView):
-    """User registration view"""
-
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        serializer = UserRegistrationSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            refresh = RefreshToken.for_user(user)
+        try:
+            with transaction.atomic():
+                serializer = UserRegistrationSerializer(data=request.data)
 
+                if serializer.is_valid():
+                    user = serializer.save()
+                    time.sleep(0.1)
+                    refresh = RefreshToken.for_user(user)
+
+                    response_data = {
+                        "message": f"{user.first_name} {user.last_name} registered successfully",
+                        "access": str(refresh.access_token),
+                        "refresh": str(refresh),
+                        "user": {
+                            "id": user.id,
+                            "email": user.email,
+                            "first_name": user.first_name,
+                            "last_name": user.last_name,
+                            "firstName": user.first_name,
+                            "lastName": user.last_name,
+                            "username": user.username,
+                        },
+                    }
+                    return Response(response_data, status=status.HTTP_201_CREATED)
+                else:
+                    return Response(
+                        {"error": "Registration failed", "details": serializer.errors},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+        except Exception as e:
             return Response(
                 {
-                    "message": f"{user.first_name} {user.last_name} registered successfully",
-                    "access": str(refresh.access_token),
-                    "refresh": str(refresh),
-                    "user": {
-                        "id": user.id,
-                        "email": user.email,
-                        "first_name": user.first_name,
-                        "last_name": user.last_name,
-                        "username": user.username,
-                    },
+                    "error": "Registration failed due to server error",
+                    "message": "Please try again later",
                 },
-                status=status.HTTP_201_CREATED,
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class LoginView(APIView):
-    """User login view"""
-
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        serializer = UserLoginSerializer(
-            data=request.data, context={"request": request}
-        )
-        if serializer.is_valid():
-            user = serializer.validated_data["user"]
-            refresh = RefreshToken.for_user(user)
+        try:
+            serializer = UserLoginSerializer(
+                data=request.data, context={"request": request}
+            )
 
-            return Response(
-                {
+            if serializer.is_valid():
+                user = serializer.validated_data["user"]
+                refresh = RefreshToken.for_user(user)
+
+                response_data = {
                     "message": f"{user.first_name} {user.last_name} logged in successfully",
                     "access": str(refresh.access_token),
                     "refresh": str(refresh),
@@ -66,20 +80,64 @@ class LoginView(APIView):
                         "email": user.email,
                         "first_name": user.first_name,
                         "last_name": user.last_name,
+                        "firstName": user.first_name,
+                        "lastName": user.last_name,
                         "username": user.username,
                         "is_staff": user.is_staff,
                         "is_superuser": user.is_superuser,
                     },
+                }
+                return Response(response_data, status=status.HTTP_200_OK)
+            else:
+                return Response(
+                    {
+                        "error": "Login failed",
+                        "message": "Invalid email or password",
+                        "details": serializer.errors,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        except Exception as e:
+            return Response(
+                {
+                    "error": "Login failed due to server error",
+                    "message": "Please try again later",
                 },
-                status=status.HTTP_200_OK,
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def user_info(request):
+    try:
+        user = request.user
+        return Response(
+            {
+                "id": user.id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "firstName": user.first_name,
+                "lastName": user.last_name,
+                "username": user.username,
+                "is_staff": user.is_staff,
+                "is_active": user.is_active,
+                "date_joined": user.date_joined,
+            },
+            status=status.HTTP_200_OK,
+        )
+    except Exception as e:
+        return Response(
+            {
+                "error": "Failed to retrieve user information",
+                "message": "Please try again later",
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 class LogoutView(APIView):
-    """User logout view"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
@@ -91,7 +149,6 @@ class LogoutView(APIView):
 
             logout(request)
             return Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
-
         except Exception as e:
             return Response(
                 {"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST
@@ -99,17 +156,13 @@ class LogoutView(APIView):
 
 
 class ProfileView(APIView):
-    """User profile view"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        """Get user profile"""
         serializer = UserProfileSerializer(request.user)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request):
-        """Update user profile"""
         serializer = UserProfileSerializer(
             request.user, data=request.data, partial=True
         )
@@ -119,13 +172,10 @@ class ProfileView(APIView):
                 {"message": "Profile updated successfully", "user": serializer.data},
                 status=status.HTTP_200_OK,
             )
-
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PasswordChangeView(APIView):
-    """Password change view"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
@@ -137,25 +187,4 @@ class PasswordChangeView(APIView):
             return Response(
                 {"message": "Password changed successfully"}, status=status.HTTP_200_OK
             )
-
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def user_info(request):
-    """Get current user information"""
-    user = request.user
-    return Response(
-        {
-            "id": user.id,
-            "email": user.email,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "username": user.username,
-            "is_staff": user.is_staff,
-            "is_active": user.is_active,
-            "date_joined": user.date_joined,
-        },
-        status=status.HTTP_200_OK,
-    )
