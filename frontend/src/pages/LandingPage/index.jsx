@@ -1,14 +1,22 @@
+/**
+ * @file LandingPage - CRITICAL FIX: Use useAuth hook instead of authService directly
+ */
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../../components/ui/Button';
 import authService from '../../services/authService';
+import { useAuthContext } from '../../contexts/AuthContext'; // ✅ CRITICAL FIX: Import useAuthContext
 
 const LandingPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // ✅ CRITICAL FIX: Use the auth context instead of calling authService directly
+  const { login: contextLogin, register: contextRegister } = useAuthContext();
+  
   const [currentSlide, setCurrentSlide] = useState(0);
   const [showAuth, setShowAuth] = useState(false);
-  const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
+  const [authMode, setAuthMode] = useState('login');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -19,6 +27,7 @@ const LandingPage = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   // Get the return URL from location state (set by ProtectedRoute)
   const returnUrl = location.state?.from || '/';
@@ -69,43 +78,47 @@ const LandingPage = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
-    // Clear error when user starts typing
-    if (error) {
-      setError('');
-    }
+    // Clear messages when user starts typing
+    if (error) setError('');
+    if (success) setSuccess('');
   };
 
   const validateForm = () => {
     const { email, password, confirmPassword, firstName, lastName, phone } = formData;
 
     if (!email || !password) {
-      setError('Email and password are required.');
+      setError('📧 Email and password are required.');
       return false;
     }
 
-    if (!email.includes('@')) {
-      setError('Please enter a valid email address.');
+    if (!email.includes('@') || email.length < 5) {
+      setError('📧 Please enter a valid email address.');
       return false;
     }
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+      setError('🔒 Password must be at least 6 characters long.');
       return false;
     }
 
     if (authMode === 'signup') {
       if (!firstName || !lastName) {
-        setError('First name and last name are required.');
+        setError('👤 First name and last name are required.');
+        return false;
+      }
+
+      if (firstName.length < 2 || lastName.length < 2) {
+        setError('👤 Names must be at least 2 characters long.');
         return false;
       }
 
       if (password !== confirmPassword) {
-        setError('Passwords do not match.');
+        setError('🔒 Passwords do not match.');
         return false;
       }
 
       if (phone && !/^[\+]?[0-9\s\-\(\)]{10,}$/.test(phone)) {
-        setError('Please enter a valid phone number.');
+        setError('📱 Please enter a valid phone number (at least 10 digits).');
         return false;
       }
     }
@@ -113,54 +126,86 @@ const LandingPage = () => {
     return true;
   };
 
+  // ✅ CRITICAL FIX: Use context functions instead of authService directly
   const handleAuth = async (e) => {
     e.preventDefault();
+    
+    // Clear previous messages
+    setError('');
+    setSuccess('');
     
     if (!validateForm()) {
       return;
     }
 
-    setError('');
+    // Prevent double submission
+    if (loading) {
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (authMode === 'login') {
-        await authService.login({
+        // ✅ CRITICAL FIX: Use contextLogin instead of authService.login
+        const userData = await contextLogin({
           email: formData.email,
           password: formData.password
         });
         
-        // Success notification could be added here
-        console.log('Login successful');
-        
-        // Navigate to the intended destination or dashboard
-        navigate(returnUrl, { replace: true });
+        if (userData) {
+          setSuccess(`Welcome back, ${userData.firstName}! 🎉`);
+          // Navigation will be handled by useAuth hook
+        }
       } else {
-        // Register new user
-        const result = authService.register({
+        // ✅ CRITICAL FIX: Use contextRegister instead of authService.register
+        const registrationData = {
           email: formData.email,
           first_name: formData.firstName,
           last_name: formData.lastName,
-          username: formData.firstName.toLowerCase() + formData.lastName.toLowerCase(),
-          phone_number: formData.phone,
+          username: `${formData.firstName.toLowerCase()}${formData.lastName.toLowerCase()}${Date.now()}`,
+          phone_number: formData.phone || '',
           password: formData.password,
           confirm_password: formData.confirmPassword
-        });
+        };
         
-        // After successful registration, log the user in automatically
-        await authService.login({
-          email: formData.email,
-          password: formData.password
-        });
+        const result = await contextRegister(registrationData);
         
-        console.log('Registration and auto-login successful');
-        
-        // Navigate to dashboard
-        navigate(returnUrl, { replace: true });
+        if (result.success) {
+          if (result.autoLogin && result.userData) {
+            setSuccess(`Welcome to Paradise, ${result.userData.firstName}! 🏝️ Logging you in...`);
+            // Navigation will be handled by useAuth hook
+          } else {
+            setSuccess('🎉 Account created successfully! Please sign in to continue.');
+            // Switch to login mode and pre-fill email
+            setTimeout(() => {
+              setAuthMode('login');
+              setFormData(prev => ({
+                ...prev,
+                password: '',
+                confirmPassword: '',
+                firstName: '',
+                lastName: '',
+                phone: ''
+              }));
+            }, 2000);
+          }
+        }
       }
     } catch (err) {
-      console.error('Authentication error:', err);
-      setError(err.message);
+      // Use the error message from the auth functions
+      setError(err.message || 'Something went wrong. Please try again.');
+      
+      // Clear sensitive fields on error
+      if (authMode === 'login') {
+        setFormData(prev => ({ ...prev, password: '' }));
+      } else {
+        setFormData(prev => ({ 
+          ...prev, 
+          password: '', 
+          confirmPassword: '' 
+        }));
+      }
     } finally {
       setLoading(false);
     }
@@ -169,6 +214,22 @@ const LandingPage = () => {
   const switchAuthMode = () => {
     setAuthMode(authMode === 'login' ? 'signup' : 'login');
     setError('');
+    setSuccess('');
+    // Keep email when switching modes, clear other fields
+    setFormData(prev => ({
+      email: prev.email, // Keep email
+      password: '',
+      confirmPassword: '',
+      firstName: '',
+      lastName: '',
+      phone: ''
+    }));
+  };
+
+  const handleBackToHome = () => {
+    setShowAuth(false);
+    setError('');
+    setSuccess('');
     setFormData({
       email: '',
       password: '',
@@ -179,18 +240,19 @@ const LandingPage = () => {
     });
   };
 
-  const handleBackToHome = () => {
-    setShowAuth(false);
-    setError('');
-    setFormData({
-      email: '',
-      password: '',
-      confirmPassword: '',
-      firstName: '',
-      lastName: '',
-      phone: ''
-    });
+  const getButtonText = () => {
+    if (loading) {
+      return authMode === 'login' ? 'Signing In...' : 'Creating Account...';
+    }
+    return authMode === 'login' ? 'Sign In' : 'Create Account';
   };
+
+  const LoadingSpinner = () => (
+    <div className="flex items-center justify-center">
+      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+      {getButtonText()}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-teal-800 to-cyan-900 relative overflow-hidden">
@@ -310,6 +372,7 @@ const LandingPage = () => {
               <button
                 onClick={handleBackToHome}
                 className="mb-6 text-emerald-300 hover:text-emerald-200 transition-colors flex items-center"
+                disabled={loading}
               >
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -330,10 +393,28 @@ const LandingPage = () => {
               </div>
 
               <form onSubmit={handleAuth} className="space-y-6">
-                {/* Error Message Display */}
+                {/* Enhanced message display */}
                 {error && (
-                  <div className="p-3 bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg text-center text-sm animate-shake">
+                  <div className="p-4 bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg text-center text-sm animate-pulse">
+                    <div className="flex items-center justify-center mb-2">
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="font-medium">Oops!</span>
+                    </div>
                     {error}
+                  </div>
+                )}
+
+                {success && (
+                  <div className="p-4 bg-green-500/20 border border-green-500/30 text-green-300 rounded-lg text-center text-sm animate-pulse">
+                    <div className="flex items-center justify-center mb-2">
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="font-medium">Success!</span>
+                    </div>
+                    {success}
                   </div>
                 )}
 
@@ -425,14 +506,7 @@ const LandingPage = () => {
                   disabled={loading}
                   className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-3 rounded-xl font-semibold shadow-lg transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                 >
-                  {loading ? (
-                    <div className="flex items-center justify-center">
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                      {authMode === 'login' ? 'Signing In...' : 'Creating Account...'}
-                    </div>
-                  ) : (
-                    authMode === 'login' ? 'Sign In' : 'Create Account'
-                  )}
+                  {loading ? <LoadingSpinner /> : getButtonText()}
                 </Button>
               </form>
 

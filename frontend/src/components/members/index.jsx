@@ -1,658 +1,509 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import Header from '../../components/common/Header';
-import Sidebar from '../../components/common/Sidebar';
-import Card from '../../components/ui/Card';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../../components/ui/Button';
-import Modal from '../../components/ui/Modal';
-import Toast from '../../components/ui/Toast';
-import PaymentForm from '../../components/forms/PaymentForm';
-import Receipt from '../../components/ui/Receipt';
-import PaymentReminder from '../../components/ui/PaymentReminder';
-import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
-import UpdateMemberProfileForm from '../../components/forms/UpdateMemberProfileForm';
-import { memberService } from '../../services/memberService';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import authService from '../../services/authService';
+import { useAuthContext } from '../../contexts/AuthContext';
 
-const Members = () => {
-  // State management
-  const [members, setMembers] = useState([]);
-  const [filteredMembers, setFilteredMembers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [stats, setStats] = useState({
-    total_members: 0,
-    active_members: 0,
-    inactive_members: 0,
-    indoor_members: 0,
-    outdoor_members: 0
-  });
+const LandingPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { login: contextLogin, register: contextRegister } = useAuthContext();
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    firstName: '',
+    lastName: '',
+    phone: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  // Filter states
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterMembershipType, setFilterMembershipType] = useState('all');
+  const returnUrl = location.state?.from || '/';
 
-  // Modal states
-  const [selectedMember, setSelectedMember] = useState(null);
-  const [showMemberModal, setShowMemberModal] = useState(false);
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [showReminderModal, setShowReminderModal] = useState(false);
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (authService.isAuthenticated()) {
+        const isValid = await authService.validateSession();
+        if (isValid) {
+          navigate(returnUrl, { replace: true });
+        }
+      }
+    };
+    checkAuth();
+  }, [navigate, returnUrl]);
 
-  // Payment data
-  const [paymentData, setPaymentData] = useState(null);
+  const slides = [
+    {
+      title: "Welcome to Paradise",
+      subtitle: "Paul's Tropical Fitness",
+      description: "Where fitness meets the beauty of tropical paradise. Transform your body in our state-of-the-art facilities.",
+      image: "https://images.pexels.com/photos/1552242/pexels-photo-1552242.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1"
+    },
+    {
+      title: "Indoor Excellence",
+      subtitle: "Premium Equipment",
+      description: "Experience world-class indoor training with cutting-edge equipment and personalized coaching.",
+      image: "https://images.pexels.com/photos/1954524/pexels-photo-1954524.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1"
+    },
+    {
+      title: "Outdoor Adventures",
+      subtitle: "Nature's Gym",
+      description: "Train under the tropical sun with our outdoor fitness programs designed for all levels.",
+      image: "https://images.pexels.com/photos/416809/pexels-photo-416809.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1"
+    }
+  ];
 
-  // Toast state
-  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
 
-  // Fetch members data
-  const fetchMembers = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const params = {};
-      if (searchTerm) params.search = searchTerm;
-      if (filterStatus !== 'all') params.status = filterStatus;
-      if (filterMembershipType !== 'all') params.membership_type = filterMembershipType;
+  const handleInputChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+    if (error) setError('');
+    if (success) setSuccess('');
+  };
 
-      const response = await memberService.getMembers(params);
-      setMembers(response.results || response); // Handle paginated or direct response
-    } catch (err) {
-      setError(err.message);
-      console.error('Error fetching members:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [searchTerm, filterStatus, filterMembershipType]);
+  const validateForm = () => {
+    const { email, password, confirmPassword, firstName, lastName, phone } = formData;
 
-  // Fetch member statistics
-  const fetchStats = useCallback(async () => {
-    try {
-      const statsData = await memberService.getMemberStats();
-      setStats(statsData);
-    } catch (err) {
-      console.error('Error fetching stats:', err);
-    }
-  }, []);
+    if (!email || !password) {
+      setError('📧 Email and password are required.');
+      return false;
+    }
 
-  // Initial data fetch
-  useEffect(() => {
-    fetchMembers();
-    fetchStats();
-  }, [fetchMembers, fetchStats]);
+    if (!email.includes('@') || email.length < 5) {
+      setError('📧 Please enter a valid email address.');
+      return false;
+    }
 
-  // Update filtered members when members change
-  useEffect(() => {
-    setFilteredMembers(members);
-  }, [members]);
+    if (password.length < 6) {
+      setError('🔒 Password must be at least 6 characters long.');
+      return false;
+    }
 
-  // Toast helper functions
-  const showToast = (message, type = 'success') => {
-    setToast({ show: true, message, type });
-  };
+    if (authMode === 'signup') {
+      if (!firstName || !lastName) {
+        setError('👤 First name and last name are required.');
+        return false;
+      }
 
-  const hideToast = () => {
-    setToast({ show: false, message: '', type: 'success' });
-  };
+      if (firstName.length < 2 || lastName.length < 2) {
+        setError('👤 Names must be at least 2 characters long.');
+        return false;
+      }
 
-  // Member action handlers
-  const handleViewMember = (member) => {
-    setSelectedMember(member);
-    setShowMemberModal(true);
-  };
+      if (password !== confirmPassword) {
+        setError('🔒 Passwords do not match.');
+        return false;
+      }
 
-  const handleEditMember = (member) => {
-    setSelectedMember(member);
-    setShowUpdateModal(true);
-  };
+      if (phone && !/^[\+]?[0-9\s\-\(\)]{10,}$/.test(phone)) {
+        setError('📱 Please enter a valid phone number (at least 10 digits).');
+        return false;
+      }
+    }
 
-  const handleUpdateMemberStatus = async (memberId, newStatus) => {
-    try {
-      await memberService.updateMemberStatus(memberId, newStatus);
-      showToast(`Member status updated to ${newStatus}`, 'success');
-      fetchMembers(); // Refresh the list
-      fetchStats(); // Refresh stats
-    } catch (error) {
-      showToast(error.message, 'error');
-    }
-  };
+    return true;
+  };
 
-  const handleRegisterMember = async (memberData) => {
-    try {
-      const response = await memberService.createMember(memberData);
-      showToast(response.message || 'Member registered successfully!', 'success');
-      setShowRegisterModal(false);
-      fetchMembers(); // Refresh the list
-      fetchStats(); // Refresh stats
-    } catch (error) {
-      showToast(error.message, 'error');
-    }
-  };
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    
+    if (!validateForm()) {
+      return;
+    }
 
-  const handleUpdateMemberProfile = async (updatedData) => {
-    try {
-      const response = await memberService.updateMemberProfile(selectedMember.id, updatedData);
-      showToast(response.message || 'Profile updated successfully', 'success');
-      setShowUpdateModal(false);
-      fetchMembers(); // Refresh the list
-      
-      // Update selected member for modal display
-      const updatedMember = { ...selectedMember, ...updatedData };
-      setSelectedMember(updatedMember);
-    } catch (error) {
-      showToast(error.message, 'error');
-    }
-  };
+    if (loading) {
+      return;
+    }
 
-  const handleRequestPayment = (member) => {
-    setSelectedMember(member);
-    setShowPaymentModal(true);
-  };
+    setLoading(true);
 
-  const handlePaymentSuccess = async (paymentFormData) => {
-    try {
-      const response = await memberService.processPayment(selectedMember.id, paymentFormData);
-      setPaymentData(response.payment);
-      setShowPaymentModal(false);
-      setShowReceiptModal(true);
-      
-      showToast(response.message || 'Payment processed successfully', 'success');
-      fetchMembers(); // Refresh the list
-    } catch (error) {
-      showToast(error.message, 'error');
-    }
-  };
+    try {
+      if (authMode === 'login') {
+        const userData = await contextLogin({
+          email: formData.email,
+          password: formData.password
+        });
+        
+        if (userData) {
+          setSuccess(`Welcome back, ${userData.firstName}! 🎉`);
+        }
+      } else {
+        const registrationData = {
+          email: formData.email,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          username: `${formData.firstName.toLowerCase()}${formData.lastName.toLowerCase()}${Date.now()}`,
+          phone_number: formData.phone || '',
+          password: formData.password,
+          confirm_password: formData.confirmPassword
+        };
+        
+        const result = await contextRegister(registrationData);
+        
+        if (result.success) {
+          if (result.autoLogin && result.userData) {
+            setSuccess(`Welcome to Paradise, ${result.userData.firstName}! 🏝️ Logging you in...`);
+          } else {
+            setSuccess('🎉 Account created successfully! Please sign in to continue.');
+            setTimeout(() => {
+              setAuthMode('login');
+              setFormData(prev => ({
+                ...prev,
+                password: '',
+                confirmPassword: '',
+                firstName: '',
+                lastName: '',
+                phone: ''
+              }));
+            }, 2000);
+          }
+        }
+      }
+    } catch (err) {
+      setError(err.message || 'Something went wrong. Please try again.');
+      if (authMode === 'login') {
+        setFormData(prev => ({ ...prev, password: '' }));
+      } else {
+        setFormData(prev => ({ 
+          ...prev, 
+          password: '', 
+          confirmPassword: '' 
+        }));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleSendReminder = (member) => {
-    setSelectedMember(member);
-    setShowReminderModal(true);
-  };
+  const switchAuthMode = () => {
+    setAuthMode(authMode === 'login' ? 'signup' : 'login');
+    setError('');
+    setSuccess('');
+    setFormData(prev => ({
+      email: prev.email,
+      password: '',
+      confirmPassword: '',
+      firstName: '',
+      lastName: '',
+      phone: ''
+    }));
+  };
 
-  const handleReminderSent = async (reminderData) => {
-    try {
-      await memberService.sendPaymentReminder(selectedMember.id, reminderData);
-      showToast('Payment reminder sent successfully', 'success');
-      setShowReminderModal(false);
-    } catch (error) {
-      showToast(error.message, 'error');
-    }
-  };
+  const handleBackToHome = () => {
+    setShowAuth(false);
+    setError('');
+    setSuccess('');
+    setFormData({
+      email: '',
+      password: '',
+      confirmPassword: '',
+      firstName: '',
+      lastName: '',
+      phone: ''
+    });
+  };
 
-  const handleExportMembers = async () => {
-    try {
-      const blob = await memberService.exportMembers('csv');
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `members_${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      showToast('Members data exported successfully', 'success');
-    } catch (error) {
-      showToast('Failed to export members data', 'error');
-    }
-  };
+  const getButtonText = () => {
+    if (loading) {
+      return authMode === 'login' ? 'Signing In...' : 'Creating Account...';
+    }
+    return authMode === 'login' ? 'Sign In' : 'Create Account';
+  };
 
-  // Badge helper functions
-  const getStatusBadge = (status) => {
-    const statusStyles = {
-      active: 'bg-green-100 text-green-800',
-      inactive: 'bg-red-100 text-red-800',
-      suspended: 'bg-yellow-100 text-yellow-800'
-    };
-    
-    return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusStyles[status] || 'bg-gray-100 text-gray-800'}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    );
-  };
+  const LoadingSpinner = () => (
+    <div className="flex items-center justify-center">
+      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+      {getButtonText()}
+    </div>
+  );
 
-  const getMembershipTypeBadge = (type) => {
-    const typeStyles = {
-      indoor: 'bg-blue-100 text-blue-800',
-      outdoor: 'bg-green-100 text-green-800',
-      both: 'bg-purple-100 text-purple-800'
-    };
-    
-    return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${typeStyles[type] || 'bg-gray-100 text-gray-800'}`}>
-        {type === 'both' ? 'Indoor + Outdoor' : type.charAt(0).toUpperCase() + type.slice(1)}
-      </span>
-    );
-  };
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-teal-800 to-cyan-900 relative overflow-hidden">
+      <div className="absolute inset-0">
+        {slides.map((slide, index) => (
+          <div
+            key={index}
+            className={`absolute inset-0 transition-opacity duration-1000 ${
+              index === currentSlide ? 'opacity-30' : 'opacity-0'
+            }`}
+          >
+            <img
+              src={slide.image}
+              alt={slide.title}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/80 via-teal-800/80 to-cyan-900/80"></div>
+          </div>
+        ))}
+      </div>
 
-  const getPaymentStatusBadge = (status) => {
-    const statusStyles = {
-      paid: 'bg-green-100 text-green-800',
-      overdue: 'bg-red-100 text-red-800',
-      pending: 'bg-yellow-100 text-yellow-800'
-    };
-    
-    return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusStyles[status] || 'bg-gray-100 text-gray-800'}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    );
-  };
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-10 left-10 w-32 h-32 rounded-full bg-yellow-400 blur-xl"></div>
+        <div className="absolute top-32 right-20 w-24 h-24 rounded-full bg-pink-400 blur-lg"></div>
+        <div className="absolute bottom-20 left-32 w-40 h-40 rounded-full bg-orange-400 blur-2xl"></div>
+        <div className="absolute bottom-32 right-10 w-28 h-28 rounded-full bg-purple-400 blur-lg"></div>
+      </div>
 
-  const getBMICategory = (bmi) => {
-    if (!bmi) return { label: 'Not Available', style: 'bg-gray-100 text-gray-800' };
-    const bmiValue = parseFloat(bmi);
-    if (bmiValue < 18.5) return { label: 'Underweight', style: 'bg-yellow-100 text-yellow-800' };
-    if (bmiValue < 25) return { label: 'Normal', style: 'bg-green-100 text-green-800' };
-    if (bmiValue < 30) return { label: 'Overweight', style: 'bg-orange-100 text-orange-800' };
-    return { label: 'Obese', style: 'bg-red-100 text-red-800' };
-  };
+      <div className="relative z-10 min-h-screen flex">
+        <div className={`flex-1 flex items-center justify-center p-8 transition-transform duration-700 ${
+          showAuth ? '-translate-x-full' : 'translate-x-0'
+        }`}>
+          <div className="max-w-2xl text-center text-white">
+            <div className="mb-8">
+              <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full mb-4 shadow-2xl">
+                <span className="text-3xl font-bold text-white">🏝️</span>
+              </div>
+              <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 bg-clip-text text-transparent mb-2">
+                Paul's
+              </h1>
+              <h2 className="text-3xl md:text-4xl font-light text-emerald-200">
+                Tropical Fitness
+              </h2>
+            </div>
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="flex h-screen bg-gray-50">
-        <Sidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-7xl mx-auto">
-              <div className="animate-pulse space-y-6">
-                <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="h-24 bg-gray-200 rounded"></div>
-                  ))}
-                </div>
-                <div className="h-96 bg-gray-200 rounded"></div>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
+            {location.state?.from && (
+              <div className="mb-6 p-4 bg-emerald-600/30 backdrop-blur-sm rounded-lg border border-emerald-500/30">
+                <p className="text-emerald-100 text-sm">
+                  Please sign in to continue to your destination
+                </p>
+              </div>
+            )}
 
-  // Error state
-  if (error) {
-    return (
-      <div className="flex h-screen bg-gray-50">
-        <Sidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-7xl mx-auto">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-                <h3 className="text-lg font-medium text-red-800 mb-2">Error Loading Members</h3>
-                <p className="text-red-600">{error}</p>
-                <Button 
-                  variant="primary" 
-                  onClick={fetchMembers}
-                  className="mt-4"
-                >
-                  Retry
-                </Button>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
+            <div className="mb-12">
+              <h3 className="text-2xl md:text-3xl font-bold mb-4 text-emerald-100">
+                {slides[currentSlide].title}
+              </h3>
+              <p className="text-lg md:text-xl text-emerald-200 mb-6 leading-relaxed">
+                {slides[currentSlide].description}
+              </p>
+            </div>
 
-  return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar />
-      
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
-        
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-7xl mx-auto space-y-6">
-            {/* Page Header */}
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">All Members</h1>
-                <p className="text-gray-600 mt-1">Manage all gym members and their information</p>
-              </div>
-              <div className="flex space-x-3">
-                <Button variant="outline" onClick={handleExportMembers}>
-                  Export Members
-                </Button>
-                <Button 
-                  variant="primary"
-                  onClick={() => setShowRegisterModal(true)}
-                >
-                  Add New Member
-                </Button>
-              </div>
-            </div>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button
+                onClick={() => {
+                  setAuthMode('signup');
+                  setShowAuth(true);
+                }}
+                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-8 py-4 text-lg font-semibold rounded-full shadow-2xl transform hover:scale-105 transition-all duration-300"
+              >
+                Start Your Journey 🌴
+              </Button>
+              <Button
+                onClick={() => {
+                  setAuthMode('login');
+                  setShowAuth(true);
+                }}
+                variant="outline"
+                className="border-2 border-emerald-300 text-emerald-300 hover:bg-emerald-300 hover:text-emerald-900 px-8 py-4 text-lg font-semibold rounded-full transition-all duration-300"
+              >
+                Member Login
+              </Button>
+            </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-              <Card
-                title="Total Members"
-                value={stats.total_members}
-                subtitle="All registered"
-              />
-              <Card
-                title="Active Members"
-                value={stats.active_members}
-                subtitle="Currently active"
-                className="border-green-200"
-              />
-              <Card
-                title="Inactive Members"
-                value={stats.inactive_members}
-                subtitle="Need attention"
-                className="border-red-200"
-              />
-              <Card
-                title="Indoor Members"
-                value={stats.indoor_members}
-                subtitle="Indoor access"
-                className="border-blue-200"
-              />
-              <Card
-                title="Outdoor Members"
-                value={stats.outdoor_members}
-                subtitle="Outdoor access"
-                className="border-green-200"
-              />
-            </div>
+            <div className="flex justify-center mt-12 space-x-2">
+              {slides.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentSlide(index)}
+                  className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                    index === currentSlide 
+                      ? 'bg-emerald-400 w-8' 
+                      : 'bg-emerald-600 hover:bg-emerald-500'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
 
-            {/* Filters and Search */}
-            <div className="bg-white rounded-xl p-6 shadow-sm">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-                <div className="flex-1 max-w-md">
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Search members..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-                <div className="flex space-x-4">
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => setFilterStatus('all')}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        filterStatus === 'all'
-                          ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                          : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      All
-                    </button>
-                    <button
-                      onClick={() => setFilterStatus('active')}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        filterStatus === 'active'
-                          ? 'bg-green-100 text-green-800 border border-green-200'
-                          : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      Active
-                    </button>
-                    <button
-                      onClick={() => setFilterStatus('inactive')}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-          _filteredMembers.map((member) => (
-                        <tr key={member.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="flex-shrink-0 h-10 w-10">
-                                <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                                  <span className="text-sm font-medium text-gray-700">
-                                    {member.first_name?.charAt(0) || ''}{member.last_name?.charAt(0) || ''}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {member.full_name || `${member.first_name} ${member.last_name}`}
-                                </div>
-                                <div className="text-sm text-gray-500">{member.email}</div>
-                                <div className="text-xs text-gray-400">{member.member_id}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {getMembershipTypeBadge(member.membership_type)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {getStatusBadge(member.status)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{member.plan_type}</div>
-                            <div className="text-sm text-gray-500">{formatCurrency(member.amount)}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              {member.last_visit ? formatDate(member.last_visit) : 'Never'}
-                            </div>
-                            <div className="text-xs text-gray-500">{member.total_visits} total visits</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                            <button
-                              onClick={() => handleViewMember(member)}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              View
-                            </button>
-                            <button
-                              onClick={() => handleEditMember(member)}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleRequestPayment(member)}
-                              className="text-purple-600 hover:text-purple-900"
-                            >
-                              Payment
-                            </button>
-                            {member.payment_status === 'overdue' && (
-                              <button
-                                onClick={() => handleSendReminder(member)}
-                                className="text-orange-600 hover:text-orange-900"
-                              >
-                                Remind
-                              </button>
-                            )}
-                            {member.status === 'active' ? (
-                              <button
-                                onClick={() => handleUpdateMemberStatus(member.id, 'inactive')}
-                                className="text-red-600 hover:text-red-900"
-                              >
-                                Suspend
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleUpdateMemberStatus(member.id, 'active')}
-                                className="text-green-600 hover:text-green-900"
-                              >
-                                Activate
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    }
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </main>
-      </div>
+        <div className={`flex-1 flex items-center justify-center p-8 transition-transform duration-700 ${
+          showAuth ? 'translate-x-0' : 'translate-x-full'
+        }`}>
+          <div className="max-w-md w-full">
+            <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-white/20">
+              <button
+                onClick={handleBackToHome}
+                className="mb-6 text-emerald-300 hover:text-emerald-200 transition-colors flex items-center"
+                disabled={loading}
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Back to Home
+              </button>
 
-      {/* ================================================================================
-        MODALS & TOAST
-        ================================================================================
-      */}
-      
-      {/* Toast Notification */}
-      <Toast
-        message={toast.message}
-        type={toast.type}
-        show={toast.show}
-        onClose={hideToast}
-      />
+              <div className="text-center mb-8">
+                <h3 className="text-3xl font-bold text-white mb-2">
+                  {authMode === 'login' ? 'Welcome Back' : 'Join Paradise'}
+                </h3>
+                <p className="text-emerald-200">
+                  {authMode === 'login' 
+                    ? 'Sign in to continue your fitness journey' 
+                    : 'Create your account and start transforming'
+                  }
+                </p>
+              </div>
 
-      {/* Member Details Modal */}
-      <Modal
-        isOpen={showMemberModal}
-        onClose={() => setShowMemberModal(false)}
-        title="Member Details"
-        size="large"
-      >
-        {selectedMember && (
-          <div className="space-y-6">
-            {/* Member Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-gray-200">
-              <div className="flex items-center space-x-4">
-                <div className="h-16 w-16 rounded-full bg-gray-300 flex items-center justify-center">
-                  <span className="text-xl font-medium text-gray-700">
-                    {selectedMember.first_name?.charAt(0) || ''}{selectedMember.last_name?.charAt(0) || ''}
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">
-                    {selectedMember.full_name || `${selectedMember.first_name} ${selectedMember.last_name}`}
-                  </h3>
-                  <p className="text-sm text-gray-500">{selectedMember.member_id}</p>
-                </div>
-              </div>
-                <div className="flex flex-col items-end">
-                  {getStatusBadge(selectedMember.status)}
-                  <span className="mt-2">{getPaymentStatusBadge(selectedMember.payment_status)}</span>
+              <form onSubmit={handleAuth} className="space-y-6">
+                {error && (
+                  <div className="p-4 bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg text-center text-sm animate-pulse">
+                    <div className="flex items-center justify-center mb-2">
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="font-medium">Oops!</span>
+                    </div>
+                    {error}
+                  </div>
+                )}
+
+                {success && (
+                  <div className="p-4 bg-green-500/20 border border-green-500/30 text-green-300 rounded-lg text-center text-sm animate-pulse">
+                    <div className="flex items-center justify-center mb-2">
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="font-medium">Success!</span>
+                    </div>
+                    {success}
+                  </div>
+                )}
+
+                {authMode === 'signup' && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <input
+                          type="text"
+                          name="firstName"
+                          placeholder="First Name"
+                          value={formData.firstName}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
+                          required
+                          disabled={loading}
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          name="lastName"
+                          placeholder="Last Name"
+                          value={formData.lastName}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
+                          required
+                          disabled={loading}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <input
+                        type="tel"
+                        name="phone"
+                        placeholder="Phone Number (Optional)"
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
+                        disabled={loading}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="Email Address"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
+                    required
+                    disabled={loading}
+                  />
                 </div>
-            </div>
 
-            {/* Member Information Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-              <div className="text-sm">
-                <dt className="font-medium text-gray-500">Email Address</dt>
-                <dd className="mt-1 text-gray-900">{selectedMember.email}</dd>
+                <div>
+                  <input
+                    type="password"
+                    name="password"
+                    placeholder="Password"
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
+                    required
+                    disabled={loading}
+                  />
+                </div>
+
+                {authMode === 'signup' && (
+                  <div>
+                    <input
+                      type="password"
+                      name="confirmPassword"
+                      placeholder="Confirm Password"
+                      value={formData.confirmPassword}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-3 rounded-xl font-semibold shadow-lg transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                >
+                  {loading ? <LoadingSpinner /> : getButtonText()}
+                </Button>
+              </form>
+
+              <div className="mt-6 text-center">
+                <button
+                  onClick={switchAuthMode}
+                  className="text-emerald-300 hover:text-emerald-200 transition-colors disabled:opacity-50"
+                  disabled={loading}
+                >
+                  {authMode === 'login' 
+                    ? "Don't have an account? Sign up" 
+                    : "Already have an account? Sign in"
+                  }
+                </button>
               </div>
-              <div className="text-sm">
-                <dt className="font-medium text-gray-500">Phone Number</dt>
-                <dd className="mt-1 text-gray-900">{selectedMember.phone_number || 'N/A'}</dd>
-              </div>
-              <div className="text-sm">
-                <dt className="font-medium text-gray-500">Membership</dt>
-                <dd className="mt-1 text-gray-900 flex items-center">{getMembershipTypeBadge(selectedMember.membership_type)}</dd>
-              </div>
-              <div className="text-sm">
-                <dt className="font-medium text-gray-500">Plan & Amount</dt>
-                <dd className="mt-1 text-gray-900">{selectedMember.plan_type} - {formatCurrency(selectedMember.amount)}</dd>
-              </div>
-              <div className="text-sm">
-                <dt className="font-medium text-gray-500">Join Date</dt>
-                <dd className="mt-1 text-gray-900">{formatDate(selectedMember.join_date)}</dd>
-              </div>
-              <div className="text-sm">
-                <dt className="font-medium text-gray-500">Next Payment Due</dt>
-                <dd className="mt-1 text-gray-900">{formatDate(selectedMember.next_payment_date)}</dd>
-              </div>
-              <div className="text-sm">
-                <dt className="font-medium text-gray-500">Physical Stats (Height / Weight)</dt>
-                <dd className="mt-1 text-gray-900">{selectedMember.height_cm ? `${selectedMember.height_cm} cm` : 'N/A'} / {selectedMember.weight_kg ? `${selectedMember.weight_kg} kg` : 'N/A'}</dd>
-              </div>
-              <div className="text-sm">
-                <dt className="font-medium text-gray-500">BMI Category</dt>
-                <dd className="mt-1 text-gray-900">
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getBMICategory(selectedMember.bmi).style}`}>
-                    {getBMICategory(selectedMember.bmi).label}
-                  </span>
-                </dd>
+
+              <div className="mt-4 text-center">
+                <p className="text-emerald-200/70 text-xs">
+                  By {authMode === 'signup' ? 'creating an account' : 'signing in'}, you agree to our Terms of Service
+                </p>
               </div>
             </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Register Member Modal */}
-      <Modal
-        isOpen={showRegisterModal}
-        onClose={() => setShowRegisterModal(false)}
-        title="Register New Member"
-      >
-        <RegisterMemberForm 
-          onSubmit={handleRegisterMember}
-          onCancel={() => setShowRegisterModal(false)}
-        />
-      </Modal>
-
-      {/* Update Member Modal */}
-      <Modal
-        isOpen={showUpdateModal}
-        onClose={() => setShowUpdateModal(false)}
-        title="Update Member Profile"
-      >
-        <UpdateMemberProfileForm 
-          initialData={selectedMember}
-          onSubmit={handleUpdateMemberProfile}
-          onCancel={() => setShowUpdateModal(false)}
-        />
-      </Modal>
-
-      {/* Process Payment Modal */}
-      <Modal
-        isOpen={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        title={`Process Payment for ${selectedMember?.full_name || ''}`}
-      >
-        <PaymentForm
-          member={selectedMember}
-          onSubmit={handlePaymentSuccess}
-          onCancel={() => setShowPaymentModal(false)}
-        />
-      </Modal>
-
-      {/* Receipt Modal */}
-      <Modal
-        isOpen={showReceiptModal}
-        onClose={() => setShowReceiptModal(false)}
-        title="Payment Receipt"
-      >
-        <Receipt 
-          member={selectedMember}
-          payment={paymentData}
-        />
-        <div className="mt-6 flex justify-end space-x-3">
-            <Button variant="outline" onClick={() => window.print()}>Print</Button>
-            <Button variant="primary" onClick={() => setShowReceiptModal(false)}>Close</Button>
+          </div>
         </div>
-      </Modal>
+      </div>
 
-      {/* Send Reminder Modal */}
-      <Modal
-        isOpen={showReminderModal}
-        onClose={() => setShowReminderModal(false)}
-        title="Send Payment Reminder"
-      >
-        <PaymentReminder 
-          member={selectedMember}
-          onConfirm={handleReminderSent}
-          onCancel={() => setShowReminderModal(false)}
-        />
-      </Modal>
-
-    </div>
-  );
+      <div className="absolute bottom-8 left-8 text-emerald-300 text-sm opacity-70">
+        © 2024 Paul's Tropical Fitness. All rights reserved.
+      </div>
+    </div>
+  );
 };
 
-export default Members;
+export default LandingPage;
