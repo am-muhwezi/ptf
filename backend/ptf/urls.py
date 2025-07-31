@@ -32,13 +32,13 @@ urlpatterns = [
     # Admin
     path("admin/", admin.site.urls),
     # App URLs
-    path("api/", include("accounts.urls")),
-    path("api/", include("members.urls")),
-    path("api/", include("bookings.urls")),
+    path("", include("accounts.urls")),
+    path("", include("members.urls")),
+    path("", include("bookings.urls")),
     # Dashboard
-    path("api/dashboard/stats/", DashboardStatsView.as_view(), name="dashboard-stats"),
+    path("dashboard/stats/", DashboardStatsView.as_view(), name="dashboard-stats"),
     path(
-        "api/dashboard/notifications/",
+        "dashboard/notifications/",
         DashboardNotificationsView.as_view(),
         name="dashboard-notifications",
     ),
