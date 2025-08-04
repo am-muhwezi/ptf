@@ -17,7 +17,30 @@ export const memberService = {
       const response = await apiClient.post(API_ENDPOINTS.members.create, memberData);
       return response.data;
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to create member');
+      console.error('Member creation error:', error.response?.data);
+      
+      // Enhanced error handling for detailed backend responses
+      const errorData = error.response?.data;
+      console.log('Error data received:', errorData);
+      
+      if (errorData) {
+        // Create an error with the backend message
+        const message = errorData.message || errorData.error || 'Failed to create member';
+        console.log('Creating error with message:', message);
+        
+        const customError = new Error(message);
+        
+        // Attach field errors for form field highlighting
+        if (errorData.field_errors || errorData.details) {
+          customError.fieldErrors = errorData.field_errors || errorData.details;
+          console.log('Attached field errors:', customError.fieldErrors);
+        }
+        
+        throw customError;
+      }
+      
+      // Fallback error
+      throw new Error('Failed to create member - unknown error');
     }
   },
 
@@ -47,7 +70,9 @@ export const memberService = {
       const response = await apiClient.delete(API_ENDPOINTS.members.delete(memberId));
       return response.data;
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to delete member');
+      const errorData = error.response?.data;
+      const message = errorData?.message || errorData?.error || 'Failed to delete member';
+      throw new Error(message);
     }
   },
 

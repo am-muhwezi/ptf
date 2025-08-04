@@ -11,10 +11,10 @@ class Member(models.Model):
     ]
 
     PLAN_TYPES = [
-        ("Monthly", "Monthly"),
-        ("Quarterly", "Quarterly"),
-        ("Bi-Annual", "Bi-Annual"),
-        ("Yearly", "Yearly"),
+        ("daily", "Daily"),
+        ("monthly", "Monthly"),
+        ("bi-annual", "Bi-Annual"),
+        ("annual", "Annual"),
     ]
 
     BLOOD_GROUPS = [
@@ -51,7 +51,7 @@ class Member(models.Model):
     # Basic Information
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    email = models.EmailField(unique=True, blank=True)
+    email = models.EmailField(unique=True, blank=True, null=True)
     phone = models.CharField(max_length=15, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
     dateOfBirth = models.DateField(blank=True, null=True)
@@ -61,6 +61,7 @@ class Member(models.Model):
         max_length=10, choices=MEMBERSHIP_TYPES, default="indoor"
     )
     plan_type = models.CharField(max_length=10, choices=PLAN_TYPES, default="basic")
+    location = models.CharField(max_length=50, blank=True, null=True, help_text="Location for outdoor memberships")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="active")
     payment_status = models.CharField(
         max_length=10, choices=PAYMENT_STATUS_CHOICES, default="pending"

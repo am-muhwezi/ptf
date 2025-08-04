@@ -22,6 +22,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState('');
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -36,6 +37,11 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
         ...prev,
         [name]: ''
       }));
+    }
+    
+    // Clear server error when user starts typing
+    if (serverError) {
+      setServerError('');
     }
   };
 
@@ -87,28 +93,91 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
     }
 
     setIsSubmitting(true);
+    setServerError('');
     
     try {
+      // Map frontend field names to backend field names  
       const memberData = {
-        ...formData,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email,
+        phone: formData.phone,
+        idPassport: formData.idPassport,
+        bloodGroup: formData.bloodGroup,
+        membership_type: formData.membershipType,
+        plan_type: formData.planType,
+        location: formData.location,
+        emergencyContact: formData.emergencyContact,
+        emergencyPhone: formData.emergencyPhone,
+        medicalConditions: formData.medicalConditions,
+        dateOfBirth: formData.dateOfBirth,
+        address: formData.address,
         registrationDate: new Date().toISOString(),
         status: 'active'
       };
-
+      
+      console.log('Sending member data:', memberData);
       await onSubmit(memberData);
     } catch (error) {
       console.error('Error registering member:', error);
+      console.error('Error object keys:', Object.keys(error));
+      console.error('Error message:', error.message);
+      console.error('Error fieldErrors:', error.fieldErrors);
+      
+      // Handle field-level errors from backend
+      if (error.fieldErrors) {
+        console.log('Field errors received:', error.fieldErrors);
+        // Map backend field names to frontend field names
+        const mappedErrors = {};
+        Object.keys(error.fieldErrors).forEach(field => {
+          // Map backend field names to frontend form field names
+          let frontendField = field;
+          if (field === 'membership_type') frontendField = 'membershipType';
+          if (field === 'plan_type') frontendField = 'planType';
+          
+          mappedErrors[frontendField] = Array.isArray(error.fieldErrors[field]) 
+            ? error.fieldErrors[field][0] 
+            : error.fieldErrors[field];
+        });
+        
+        console.log('Mapped errors:', mappedErrors);
+        setErrors(mappedErrors);
+      }
+      
+      // Always show the error message, even if we have field errors
+      const errorMessage = error.message || 'Failed to register member. Please check the form and try again.';
+      console.log('Setting server error:', errorMessage);
+      setServerError(errorMessage);
+      
+      // Scroll to top to show error
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto bg-white p-4 sm:p-6 lg:p-8 rounded-xl shadow-lg max-h-[90vh] overflow-y-auto">
+    <div className="w-full max-w-2xl mx-auto bg-white p-4 sm:p-6 lg:p-8 rounded-xl shadow-lg max-h-[90vh] overflow-y-auto">
       <div className="mb-4 sm:mb-6">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Register New Member</h2>
         <p className="text-sm sm:text-base text-gray-600">Fill in the member's information to create their account</p>
       </div>
+
+      {/* Server Error Display */}
+      {serverError && (
+        <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-6">
+          <div className="flex items-start">
+            <svg className="w-6 h-6 text-red-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="flex-1">
+              <h4 className="text-red-800 font-medium mb-1">Registration Failed</h4>
+              <p className="text-sm text-red-700">{serverError}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
 
       <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         {/* Personal Information */}
@@ -265,26 +334,6 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
             </select>
           </div>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="paymentStatus" className="block text-sm font-medium text-gray-700 mb-1">
-              Payment Status
-            </label>
-            <select
-              id="paymentStatus"
-              name="paymentStatus"
-              value={formData.paymentStatus}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="pending">Pending</option>
-              <option value="paid">Paid</option>
-              <option value="overdue">Overdue</option>
-            </select>
-          </div>
-        </div>
-
         {/* Conditional Fields Based on Membership Type */}
         {formData.membershipType === 'indoor' && (
           <div>

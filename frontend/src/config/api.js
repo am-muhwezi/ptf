@@ -210,8 +210,13 @@ apiClient.interceptors.response.use(
 
       switch (status) {
         case 400:
-          if (data && typeof data === 'object') {
-            // Extract validation errors
+          // For validation errors, preserve the original error structure
+          // Don't transform these - let the individual services handle them
+          if (data && (data.field_errors || data.details || data.message)) {
+            // This is likely a validation error, pass it through unchanged
+            return Promise.reject(error);
+          } else if (data && typeof data === 'object') {
+            // Extract validation errors for other 400 formats
             const errors = [];
             Object.keys(data).forEach(key => {
               if (Array.isArray(data[key])) {
