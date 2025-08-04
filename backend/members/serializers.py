@@ -9,6 +9,20 @@ class MemberSerializer(serializers.ModelSerializer):
     bmi = serializers.ReadOnlyField()
     days_until_expiry = serializers.ReadOnlyField()
     is_expiring_soon = serializers.ReadOnlyField()
+    
+    # Make required fields explicit
+    first_name = serializers.CharField(max_length=100, required=True, error_messages={
+        'required': 'First name is required.',
+        'blank': 'First name cannot be blank.'
+    })
+    last_name = serializers.CharField(max_length=100, required=True, error_messages={
+        'required': 'Last name is required.',
+        'blank': 'Last name cannot be blank.'
+    })
+    phone = serializers.CharField(max_length=15, required=True, error_messages={
+        'required': 'Phone number is required.',
+        'blank': 'Phone number cannot be blank.'
+    })
 
     class Meta:
         model = Member
@@ -22,6 +36,7 @@ class MemberSerializer(serializers.ModelSerializer):
             "phone",
             "membership_type",
             "plan_type",
+            "location",
             "status",
             "payment_status",
             "address",
@@ -56,6 +71,9 @@ class MemberSerializer(serializers.ModelSerializer):
 
     def validate_email(self, value):
         """Ensure email is unique during updates"""
+        if not value:  # Convert empty string to None for unique constraint
+            return None
+            
         if self.instance and self.instance.email == value:
             return value
 
@@ -98,9 +116,83 @@ class MemberSerializer(serializers.ModelSerializer):
             )
         return value
 
+    def validate_phone(self, value):
+        """Validate phone number format and uniqueness"""
+        if not value:
+            raise serializers.ValidationError("Phone number is required.")
+        
+        # Check for uniqueness (excluding current instance during updates)
+        query = Member.objects.filter(phone=value)
+        if self.instance:
+            query = query.exclude(pk=self.instance.pk)
+        
+        if query.exists():
+            raise serializers.ValidationError(
+                "A member with this phone number already exists."
+            )
+        return value
+
+    def validate_idPassport(self, value):
+        """Validate idPassport uniqueness only for non-empty values"""
+        if not value:  # Convert empty string to None for unique constraint
+            return None
+            
+        # Check for uniqueness (excluding current instance during updates)
+        query = Member.objects.filter(idPassport=value)
+        if self.instance:
+            query = query.exclude(pk=self.instance.pk)
+        
+        if query.exists():
+            raise serializers.ValidationError(
+                "A member with this idPassport already exists."
+            )
+        return value
+
+    def validate_plan_type(self, value):
+        """Validate plan type based on membership type"""
+        membership_type = self.initial_data.get('membershipType') or self.initial_data.get('membership_type')
+        
+        if membership_type == 'indoor' and not value:
+            raise serializers.ValidationError(
+                "Plan type is required for indoor membership."
+            )
+        elif membership_type == 'outdoor' and not value:
+            raise serializers.ValidationError(
+                "Plan type is required for outdoor membership."
+            )
+        
+        return value
+
+    def validate_location(self, value):
+        """Validate location for outdoor memberships"""
+        membership_type = self.initial_data.get('membershipType') or self.initial_data.get('membership_type')
+        
+        if membership_type == 'outdoor' and not value:
+            raise serializers.ValidationError(
+                "Location is required for outdoor membership."
+            )
+        
+        return value
+
     def validate(self, data):
         """Custom validation for the entire object"""
         data = self.validate_membership_dates(data)
+        
+        # Cross-field validation for membership type requirements
+        membership_type = data.get('membership_type') or data.get('membershipType')
+        plan_type = data.get('plan_type') or data.get('planType')
+        location = data.get('location')
+        
+        if membership_type == 'indoor' and not plan_type:
+            raise serializers.ValidationError({
+                'plan_type': 'Plan type is required for indoor membership.'
+            })
+            
+        if membership_type == 'outdoor' and not location:
+            raise serializers.ValidationError({
+                'location': 'Location is required for outdoor membership.'
+            })
+        
         return data
 
 

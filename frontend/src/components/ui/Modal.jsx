@@ -33,7 +33,7 @@ const Modal = ({
         <div className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" />
 
         {/* Modal panel */}
-        <div className={`inline-block w-full ${sizeClasses[size]} my-4 sm:my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-t-2xl sm:rounded-2xl max-h-[95vh] flex flex-col`}>
+        <div className={`inline-block w-full ${sizeClasses[size]} my-4 sm:my-8 mx-auto overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-t-2xl sm:rounded-2xl max-h-[95vh] flex flex-col`}>
           {/* Header */}
           {(title || showCloseButton) && (
             <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-200 flex-shrink-0">
@@ -56,7 +56,7 @@ const Modal = ({
           )}
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
             {children}
           </div>
         </div>

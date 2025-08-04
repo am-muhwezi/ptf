@@ -3,12 +3,14 @@ from rest_framework.response import Response
 from rest_framework import status, viewsets
 from rest_framework.decorators import api_view, action
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.exceptions import ValidationError
 from .models import Member
 from .serializers import MemberSerializer
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from django.conf import settings
 from django.utils import timezone
+from django.db import IntegrityError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,95 @@ class MemberViewset(viewsets.ModelViewSet):
     queryset = Member.objects.all().order_by("id")
     serializer_class = MemberSerializer
     pagination_class = MemberPagination
+
+    def create(self, request, *args, **kwargs):
+        """
+        Create a new member with detailed error handling
+        """
+        try:
+            serializer = self.get_serializer(data=request.data)
+            
+            if not serializer.is_valid():
+                # Return detailed field-level errors
+                errors = serializer.errors
+                logger.error(f"Validation failed with errors: {errors}")
+                error_messages = []
+                
+                for field, field_errors in errors.items():
+                    if isinstance(field_errors, list):
+                        for error in field_errors:
+                            if field == 'non_field_errors':
+                                error_messages.append(str(error))
+                            else:
+                                field_name = field.replace('_', ' ').title()
+                                error_messages.append(f"{field_name}: {error}")
+                    else:
+                        field_name = field.replace('_', ' ').title()
+                        error_messages.append(f"{field_name}: {field_errors}")
+                
+                return Response({
+                    'error': 'Validation failed',
+                    'message': '; '.join(error_messages) if error_messages else 'Please check the form and correct any errors.',
+                    'field_errors': errors,
+                    'details': errors  # Also include raw errors for debugging
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Try to save the member
+            member = serializer.save()
+            
+            logger.info(f"Member created successfully: {member.id}")
+            return Response({
+                'message': f'Member {member.first_name} {member.last_name} registered successfully!',
+                'member': serializer.data
+            }, status=status.HTTP_201_CREATED)
+            
+        except IntegrityError as e:
+            error_message = "A member with this information already exists"
+            if 'email' in str(e).lower():
+                error_message = "A member with this email address already exists"
+            elif 'phone' in str(e).lower():
+                error_message = "A member with this phone number already exists"
+            
+            logger.error(f"IntegrityError creating member: {e}")
+            return Response({
+                'error': 'Duplicate member',
+                'message': error_message
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except ValidationError as e:
+            logger.error(f"ValidationError creating member: {e}")
+            return Response({
+                'error': 'Validation error',
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            logger.error(f"Unexpected error creating member: {e}")
+            return Response({
+                'error': 'Internal server error',
+                'message': 'An unexpected error occurred while creating the member. Please try again.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Delete a member with proper error handling
+        """
+        try:
+            member = self.get_object()
+            member_name = f"{member.first_name} {member.last_name}"
+            member.delete()
+            
+            logger.info(f"Member deleted successfully: {member_name}")
+            return Response({
+                'message': f'Member {member_name} has been deleted successfully.'
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error deleting member: {e}")
+            return Response({
+                'error': 'Delete failed',
+                'message': 'Failed to delete member. Please try again.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get_queryset(self):
         """
