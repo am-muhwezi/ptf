@@ -195,6 +195,15 @@ const handleCheckInSubmit = async (memberData) => {
                 >
                   Check-in Member
                 </Button>
+                {user?.is_superuser && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => navigate('/admin/users')}
+                    className="w-full sm:w-auto px-4 py-3 border-emerald-500 text-emerald-700 hover:bg-emerald-50"
+                  >
+                    Admin Management
+                  </Button>
+                )}
               </div>
             </section>
 

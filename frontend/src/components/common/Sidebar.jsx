@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuthContext } from '../../contexts/AuthContext';
 
 const Sidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [activeItem, setActiveItem] = useState(location.pathname);
+  const { user } = useAuthContext();
 
   const menuItems = [
     { name: 'Dashboard', icon: '/images/img_vector_0.svg', path: '/' },
@@ -26,6 +28,13 @@ const Sidebar = ({ isOpen, onClose }) => {
     { name: 'Communication', icon: '/images/img_vector_0_2.svg', path: '/communication' },
     { name: 'Inventory', icon: '/images/img_vector_0_3.svg', path: '/inventory' },
   ];
+
+  // Add admin menu items for superusers
+  const adminMenuItems = user?.is_superuser ? [
+    { name: 'Admin Management', icon: '/images/img_vector_0_1.svg', path: '/admin/users' },
+  ] : [];
+
+  const allMenuItems = [...menuItems, ...adminMenuItems];
 
   const handleItemClick = (item) => {
     if (item.subItems) {
@@ -91,7 +100,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         </div>
       
       <nav className="space-y-2">
-        {menuItems.map((item) => (
+        {allMenuItems.map((item) => (
           <div key={item.name}>
             <div
               onClick={() => handleItemClick(item)}
