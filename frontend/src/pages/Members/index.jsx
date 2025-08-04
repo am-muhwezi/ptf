@@ -28,6 +28,12 @@ const Members = () => {
     outdoor_members: 0
   });
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+
   // Filter and search states
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -60,18 +66,32 @@ const Members = () => {
   };
 
   // Fetch members data
-  const fetchMembers = useCallback(async () => {
+  const fetchMembers = useCallback(async (page = currentPage) => {
     try {
       setLoading(true);
       setError(null);
       
-      const params = {};
+      const params = { 
+        page: page,
+        limit: pageSize
+      };
       if (searchTerm) params.search = searchTerm;
       if (filterStatus !== 'all') params.status = filterStatus;
       if (filterMembershipType !== 'all') params.membership_type = filterMembershipType;
 
       const response = await memberService.getMembers(params);
-      setMembers(response.results || response);
+      
+      // Handle Django REST framework pagination response
+      if (response.results) {
+        setMembers(response.results);
+        setTotalCount(response.count);
+        setTotalPages(Math.ceil(response.count / pageSize));
+      } else {
+        // Fallback for non-paginated response
+        setMembers(response);
+        setTotalCount(response.length);
+        setTotalPages(1);
+      }
 
     } catch (err) {
       setError(err.message);
@@ -80,7 +100,7 @@ const Members = () => {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, filterStatus, filterMembershipType]);
+  }, [currentPage, pageSize, searchTerm, filterStatus, filterMembershipType]);
 
 
   // Initial data fetch
@@ -88,18 +108,36 @@ const Members = () => {
     fetchMembers();
   }, [fetchMembers]);
 
-  // Add this new block to calculate stats automatically
+  // Reset to page 1 when filters change
   useEffect(() => {
-    if (members && members.length > 0) {
-      setStats({
-        total_members: members.length,
-        active_members: members.filter(m => m.status === 'active').length,
-        inactive_members: members.filter(m => m.status === 'inactive').length,
-        indoor_members: members.filter(m => m.membership_type === 'indoor' || m.membership_type === 'both').length,
-        outdoor_members: members.filter(m => m.membership_type === 'outdoor' || m.membership_type === 'both').length,
-      });
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    } else {
+      fetchMembers(1);
     }
-}, [members]);
+  }, [searchTerm, filterStatus, filterMembershipType]);
+
+  // Fetch stats separately since we're using pagination
+  const fetchStats = useCallback(async () => {
+    try {
+      // For now, calculate stats from total count and current filters
+      // In a real app, you'd have a separate stats endpoint
+      const params = {};
+      if (filterStatus !== 'all') params.status = filterStatus;
+      if (filterMembershipType !== 'all') params.membership_type = filterMembershipType;
+      
+      setStats(prevStats => ({
+        ...prevStats,
+        total_members: totalCount
+      }));
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    }
+  }, [totalCount, filterStatus, filterMembershipType]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   // Update filtered members when members change
   useEffect(() => {
@@ -120,6 +158,18 @@ const Members = () => {
           fetchMembers(),
           fetchStats()
       ]);
+  };
+
+  // Pagination handlers
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    fetchMembers(newPage);
+  };
+
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    fetchMembers(1);
   };
 
   // Member action handlers
@@ -479,6 +529,7 @@ const Members = () => {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Member</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Membership Type</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Status</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan & Amount</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activity</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -505,6 +556,7 @@ const Members = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">{getMembershipTypeBadge(member.membership_type)}</td>
                           <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(member.status)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">{getPaymentStatusBadge(member.payment_status)}</td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{member.plan_type}</div>
                             <div className="text-sm text-gray-500">{formatCurrency(member.amount)}</div>
@@ -530,6 +582,63 @@ const Members = () => {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                  <div className="flex items-center text-sm text-gray-700">
+                    <span>
+                      Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} members
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    
+                    <div className="flex space-x-1">
+                      {[...Array(Math.min(5, totalPages))].map((_, index) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = index + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = index + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + index;
+                        } else {
+                          pageNum = currentPage - 2 + index;
+                        }
+                        
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => handlePageChange(pageNum)}
+                            className={`px-3 py-1 text-sm border rounded-md ${
+                              currentPage === pageNum
+                                ? 'bg-blue-500 text-white border-blue-500'
+                                : 'border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    
+                    <button
+                      onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

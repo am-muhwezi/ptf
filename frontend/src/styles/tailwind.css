@@ -80,4 +80,23 @@
   .border-secondary-custom {
     border-color: var(--border-secondary);
   }
+
+  /* Mobile-specific utilities */
+  .touch-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Prevent horizontal scroll on mobile */
+  .prevent-horizontal-scroll {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
 }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [activeItem, setActiveItem] = useState(location.pathname);
@@ -34,12 +34,16 @@ const Sidebar = () => {
     } else {
       setActiveItem(item.path);
       navigate(item.path);
+      // Close mobile sidebar after navigation
+      if (onClose) onClose();
     }
   };
 
   const handleSubItemClick = (subItem) => {
     setActiveItem(subItem.path);
     navigate(subItem.path);
+    // Close mobile sidebar after navigation
+    if (onClose) onClose();
   };
 
   const isActive = (path) => {
@@ -54,11 +58,37 @@ const Sidebar = () => {
   };
 
   return (
-    <aside className="w-80 bg-gray-50 h-screen p-6 overflow-y-auto">
-      <div className="mb-8">
-        <h2 className="text-base font-medium text-gray-900">Paul's Tropical Fitness</h2>
-        <p className="text-sm text-gray-600">The fitness journey starts here</p>
-      </div>
+    <>
+      {/* Mobile backdrop */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+      
+      {/* Sidebar */}
+      <aside className={`
+        fixed lg:static inset-y-0 left-0 z-50
+        w-80 bg-gray-50 h-screen p-6 overflow-y-auto
+        transform ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        lg:translate-x-0 transition-transform duration-300 ease-in-out
+      `}>
+        {/* Mobile close button */}
+        <div className="flex items-center justify-between mb-8 lg:block">
+          <div>
+            <h2 className="text-base font-medium text-gray-900">Paul's Tropical Fitness</h2>
+            <p className="text-sm text-gray-600">The fitness journey starts here</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-md text-gray-400 hover:text-gray-600 lg:hidden"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       
       <nav className="space-y-2">
         {menuItems.map((item) => (
@@ -112,7 +142,8 @@ const Sidebar = () => {
           </div>
         ))}
       </nav>
-    </aside>
+      </aside>
+    </>
   );
 };
 

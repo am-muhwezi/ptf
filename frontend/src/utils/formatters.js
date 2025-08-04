@@ -1,6 +1,6 @@
 // Currency formatter
-export const formatCurrency = (amount, currency = 'UGX') => {
-  return new Intl.NumberFormat('en-UG', {
+export const formatCurrency = (amount, currency = 'KES') => {
+  return new Intl.NumberFormat('en-KE', {
     style: 'currency',
     currency: currency,
     minimumFractionDigits: 0
@@ -53,8 +53,8 @@ export const formatPhoneNumber = (phone) => {
   // Remove all non-digit characters
   const cleaned = phone.replace(/\D/g, '');
   
-  // Format as +256 XXX XXX XXX
-  if (cleaned.length === 12 && cleaned.startsWith('256')) {
+  // Format as +254 XXX XXX XXX (Kenya)
+  if (cleaned.length === 12 && cleaned.startsWith('254')) {
     return `+${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6, 9)} ${cleaned.slice(9)}`;
   }
   

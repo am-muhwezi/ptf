@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 class MemberPagination(PageNumberPagination):
     """Custom pagination for member searches."""
 
-    page_size = 10
+    page_size = 20  # Reduce page size for better UX
     page_size_query_param = "limit"
-    max_page_size = 50
+    max_page_size = 100
 
 
 @api_view(http_method_names=["GET", "POST"])
