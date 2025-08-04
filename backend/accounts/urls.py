@@ -1,6 +1,12 @@
-from django.urls import path
+from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework.routers import DefaultRouter
 from . import views
+from .admin_views import AdminManagementViewSet
+
+# Router for admin management
+admin_router = DefaultRouter()
+admin_router.register(r'admin-users', AdminManagementViewSet, basename='admin-users')
 
 urlpatterns = [
     # Authentication endpoints
@@ -17,4 +23,6 @@ urlpatterns = [
         views.PasswordChangeView.as_view(),
         name="password_change",
     ),
+    # Admin management endpoints
+    path("admin/", include(admin_router.urls)),
 ]
