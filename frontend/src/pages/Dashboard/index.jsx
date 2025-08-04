@@ -28,6 +28,9 @@ const Dashboard = () => {
 
   const notifications = Array.isArray(notificationsData) ? notificationsData : [];
 
+  // Mobile sidebar state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   // Modal and Toast states
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
@@ -113,19 +116,19 @@ const handleCheckInSubmit = async (memberData) => {
   if (statsLoading) {
     return (
       <div className="flex h-screen bg-gray-50">
-        <Sidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-y-auto p-6">
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <div className="flex-1 flex flex-col overflow-hidden lg:ml-0">
+          <Header onMenuClick={() => setSidebarOpen(true)} />
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6">
             <div className="max-w-7xl mx-auto">
               <div className="animate-pulse space-y-8">
                 <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                   {[...Array(4)].map((_, i) => (
                     <div key={i} className="h-24 bg-gray-200 rounded"></div>
                   ))}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                   {[...Array(4)].map((_, i) => (
                     <div key={i} className="h-24 bg-gray-200 rounded"></div>
                   ))}
@@ -142,10 +145,10 @@ const handleCheckInSubmit = async (memberData) => {
   if (statsError) {
     return (
       <div className="flex h-screen bg-gray-50">
-        <Sidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-y-auto p-6">
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <div className="flex-1 flex flex-col overflow-hidden lg:ml-0">
+          <Header onMenuClick={() => setSidebarOpen(true)} />
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6">
             <div className="max-w-7xl mx-auto">
               <div className="bg-red-50 border border-red-200 rounded-lg p-6">
                 <h3 className="text-lg font-medium text-red-800 mb-2">Error Loading Dashboard</h3>
@@ -167,28 +170,28 @@ const handleCheckInSubmit = async (memberData) => {
 
   return (
     <div className="flex h-screen bg-emerald-50">
-      <Sidebar />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
+      <div className="flex-1 flex flex-col overflow-hidden lg:ml-0">
+        <Header onMenuClick={() => setSidebarOpen(true)} />
         
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-7xl mx-auto space-y-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
             {/* Quick Actions */}
             <section>
-              <h2 className="text-xl font-bold text-emerald-900 mb-4">Quick Actions</h2>
-              <div className="flex space-x-4">
+              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4">Quick Actions</h2>
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <Button 
                   variant="primary" 
                   onClick={handleRegisterMember}
-                  className="px-4 py-3 bg-emerald-500 hover:bg-emerald-600"
+                  className="w-full sm:w-auto px-4 py-3 bg-emerald-500 hover:bg-emerald-600"
                 >
                   Register New Member
                 </Button>
                 <Button 
                   variant="secondary" 
                   onClick={handleCheckInMember}
-                  className="px-4 py-3"
+                  className="w-full sm:w-auto px-4 py-3"
                 >
                   Check-in Member
                 </Button>
@@ -197,8 +200,8 @@ const handleCheckInSubmit = async (memberData) => {
 
             {/* Membership Management */}
             <section>
-              <h2 className="text-xl font-bold text-emerald-900 mb-6">Membership Management</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Membership Management</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 <Card
                   title="Indoor Memberships"
                   value={stats.membershipData?.indoor ?? 0}
@@ -224,8 +227,8 @@ const handleCheckInSubmit = async (memberData) => {
 
             {/* Bookings */}
             <section>
-              <h2 className="text-xl font-bold text-emerald-900 mb-6">Bookings</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Bookings</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 <Card
                   title="Group Sessions Today"
                   value={stats.bookingData.groupSessions}
@@ -251,8 +254,8 @@ const handleCheckInSubmit = async (memberData) => {
 
             {/* Attendance Logs */}
             <section>
-              <h2 className="text-xl font-bold text-emerald-900 mb-6">Attendance Logs</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Attendance Logs</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <Card
                   title="Indoor Visits Today"
                   value={stats?.attendanceData?.indoorVisits || 0}
@@ -268,8 +271,8 @@ const handleCheckInSubmit = async (memberData) => {
 
             {/* Complaints & Feedback */}
             <section>
-              <h2 className="text-xl font-bold text-emerald-900 mb-6">Complaints & Feedback</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Complaints & Feedback</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <Card
                   title="Open Tickets"
                   value={stats?.feedbackData?.openTickets || 0}
@@ -285,7 +288,7 @@ const handleCheckInSubmit = async (memberData) => {
 
             {/* Communication & Alerts */}
             <section>
-              <h2 className="text-xl font-bold text-emerald-900 mb-6">Communication & Alerts</h2>
+              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Communication & Alerts</h2>
               {notificationsLoading ? (
                 <div className="animate-pulse space-y-4">
                   {[...Array(3)].map((_, i) => (
@@ -299,8 +302,8 @@ const handleCheckInSubmit = async (memberData) => {
 
             {/* Inventory & Merchandise */}
             <section>
-              <h2 className="text-xl font-bold text-emerald-900 mb-6">Inventory & Merchandise</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Inventory & Merchandise</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <Card
                   title="Available Stock Levels"
                   value={stats?.inventoryData?.availableStock || 0}

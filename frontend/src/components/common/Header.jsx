@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuthContext } from '../../contexts/AuthContext';
 
-const Header = () => {
+const Header = ({ onMenuClick }) => {
   const { user, logout, isLoading } = useAuthContext();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef(null);
@@ -45,18 +45,28 @@ const Header = () => {
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
-      <div className="flex justify-between items-center px-6 py-4">
-        {/* Left side - could include breadcrumbs or page title */}
+      <div className="flex justify-between items-center px-4 sm:px-6 py-4">
+        {/* Left side - Mobile menu button and title */}
         <div className="flex items-center space-x-4">
-          <h1 className="text-xl font-semibold text-gray-800">
+          {/* Mobile menu button */}
+          <button
+            onClick={onMenuClick}
+            className="p-2 rounded-md text-gray-400 hover:text-gray-600 lg:hidden"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          
+          <h1 className="text-lg sm:text-xl font-semibold text-gray-800 truncate">
             Paul's Tropical Fitness
           </h1>
         </div>
 
         {/* Right side - user menu */}
-        <div className="flex items-center space-x-4">
-          {/* Notifications (placeholder) */}
-          <button className="relative p-2 text-gray-600 hover:text-gray-800 transition-colors">
+        <div className="flex items-center space-x-2 sm:space-x-4">
+          {/* Notifications (placeholder) - Hidden on very small screens */}
+          <button className="relative p-2 text-gray-600 hover:text-gray-800 transition-colors hidden sm:block">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-3.5-3.5a50.8 50.8 0 00-.001-.001L12 9l-4.5 4.5-.001.001L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
@@ -78,14 +88,13 @@ const Header = () => {
                 {getUserInitials()}
               </div>
               
-              {/* User Info */}
-              <div className="text-left">
+              {/* User Info - Hidden on very small screens */}
+              <div className="text-left hidden sm:block">
                 <div className="text-sm font-medium text-gray-800">
                   {getUserDisplayName()}
                 </div>
                 <div className="text-xs text-gray-500">
                   {user?.email || ''}
-                  
                 </div>
               </div>
 
@@ -104,7 +113,7 @@ const Header = () => {
 
             {/* Dropdown Menu */}
             {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+              <div className="absolute right-0 mt-2 w-64 sm:w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                 {/* User Info Header */}
                 <div className="px-4 py-3 border-b border-gray-100">
                   <div className="flex items-center space-x-3">

@@ -51,7 +51,7 @@ class Member(models.Model):
     # Basic Information
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    email = models.EmailField(unique=True)
+    email = models.EmailField(unique=True, blank=True)
     phone = models.CharField(max_length=15, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
     dateOfBirth = models.DateField(blank=True, null=True)

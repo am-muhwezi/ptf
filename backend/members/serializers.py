@@ -152,5 +152,6 @@ class MemberSearchSerializer(serializers.ModelSerializer):
             "email",
             "membership_type",
             "status",
+            "payment_status",
             "is_checked_in",    
         ]

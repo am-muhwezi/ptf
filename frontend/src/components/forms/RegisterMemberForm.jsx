@@ -10,6 +10,9 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
     idPassport: '',
     bloodGroup: '',
     membershipType: 'indoor',
+    planType: '',
+    paymentStatus: 'pending',
+    location: '',
     emergencyContact: '',
     emergencyPhone: '',
     medicalConditions: '',
@@ -47,9 +50,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
       newErrors.last_name = 'Last name is required';
     }
 
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+    if (formData.email.trim() && !/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Email is invalid';
     }
 
@@ -57,9 +58,6 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
       newErrors.phone = 'Phone number is required';
     }
 
-    if (!formData.idPassport.trim()) {
-      newErrors.idPassport = 'ID/Passport number is required';
-    }
 
     if (!formData.emergencyContact.trim()) {
       newErrors.emergencyContact = 'Emergency contact is required';
@@ -69,8 +67,12 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
       newErrors.emergencyPhone = 'Emergency phone is required';
     }
 
-    if (!formData.dateOfBirth) {
-      newErrors.dateOfBirth = 'Date of birth is required';
+    if (formData.membershipType === 'indoor' && !formData.planType) {
+      newErrors.planType = 'Plan type is required for indoor membership';
+    }
+
+    if (formData.membershipType === 'outdoor' && !formData.location) {
+      newErrors.location = 'Location is required for outdoor membership';
     }
 
     setErrors(newErrors);
@@ -102,15 +104,15 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-lg">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Register New Member</h2>
-        <p className="text-gray-600">Fill in the member's information to create their account</p>
+    <div className="max-w-2xl mx-auto bg-white p-4 sm:p-6 lg:p-8 rounded-xl shadow-lg max-h-[90vh] overflow-y-auto">
+      <div className="mb-4 sm:mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Register New Member</h2>
+        <p className="text-sm sm:text-base text-gray-600">Fill in the member's information to create their account</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         {/* Personal Information */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label htmlFor="first_name" className="block text-sm font-medium text-gray-700 mb-1">
               First Name *
@@ -148,10 +150,10 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Email Address *
+              Email Address
             </label>
             <input
               type="email"
@@ -186,10 +188,10 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label htmlFor="idPassport" className="block text-sm font-medium text-gray-700 mb-1">
-              ID/Passport No *
+              ID/Passport No
             </label>
             <input
               type="text"
@@ -229,10 +231,10 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700 mb-1">
-              Date of Birth *
+              Date of Birth
             </label>
             <input
               type="date"
@@ -249,7 +251,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
 
           <div>
             <label htmlFor="membershipType" className="block text-sm font-medium text-gray-700 mb-1">
-              Membership Type
+              Membership Type *
             </label>
             <select
               id="membershipType"
@@ -263,6 +265,88 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
             </select>
           </div>
         </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="paymentStatus" className="block text-sm font-medium text-gray-700 mb-1">
+              Payment Status
+            </label>
+            <select
+              id="paymentStatus"
+              name="paymentStatus"
+              value={formData.paymentStatus}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="pending">Pending</option>
+              <option value="paid">Paid</option>
+              <option value="overdue">Overdue</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Conditional Fields Based on Membership Type */}
+        {formData.membershipType === 'indoor' && (
+          <div>
+            <label htmlFor="planType" className="block text-sm font-medium text-gray-700 mb-1">
+              Plan Type *
+            </label>
+            <select
+              id="planType"
+              name="planType"
+              value={formData.planType}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select a plan</option>
+              <option value="daily">Daily - KES 500</option>
+              <option value="monthly">Monthly - KES 8,000</option>
+              <option value="bi-annual">Bi-Annual - KES 40,000</option>
+              <option value="annual">Annual - KES 70,000</option>
+            </select>
+            {errors.planType && <p className="text-red-500 text-xs mt-1">{errors.planType}</p>}
+          </div>
+        )}
+
+        {formData.membershipType === 'outdoor' && (
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
+                Dance Class Location *
+              </label>
+              <select
+                id="location"
+                name="location"
+                value={formData.location}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select a location</option>
+                <option value="arboretum">Arboretum</option>
+                <option value="boxwood">Boxwood</option>
+                <option value="karura">Karura</option>
+              </select>
+              {errors.location && <p className="text-red-500 text-xs mt-1">{errors.location}</p>}
+            </div>
+            
+            <div>
+              <label htmlFor="planType" className="block text-sm font-medium text-gray-700 mb-1">
+                Plan Type *
+              </label>
+              <select
+                id="planType"
+                name="planType"
+                value={formData.planType}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select a plan</option>
+                <option value="daily">Daily - KES 1,000</option>
+              </select>
+              {errors.planType && <p className="text-red-500 text-xs mt-1">{errors.planType}</p>}
+            </div>
+          </div>
+        )}
 
         <div>
           <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
@@ -283,7 +367,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
         <div className="border-t pt-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Emergency Contact Information</h3>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="emergencyContact" className="block text-sm font-medium text-gray-700 mb-1">
                 Emergency Contact Name *
@@ -343,12 +427,13 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
         </div>
 
         {/* Form Actions */}
-        <div className="flex justify-end space-x-4 pt-6 border-t">
+        <div className="flex flex-col sm:flex-row justify-end gap-3 sm:gap-4 pt-6 border-t">
           <Button
             type="button"
             variant="outline"
             onClick={onCancel}
             disabled={isSubmitting}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
@@ -356,7 +441,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
             type="submit"
             variant="primary"
             disabled={isSubmitting}
-            className="min-w-32"
+            className="w-full sm:w-auto min-w-32"
           >
             {isSubmitting ? 'Registering...' : 'Register Member'}
           </Button>
