@@ -266,6 +266,21 @@ const Members = () => {
     }
   };
 
+  const handleDeleteMember = async (member) => {
+    if (!window.confirm(`Are you sure you want to delete ${getMemberDisplayName(member)}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await memberService.deleteMember(member.id);
+      showToast(response.message || 'Member deleted successfully', 'success');
+      setShowMemberModal(false);
+      await refreshData();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  };
+
   // Badge helper functions
   const getStatusBadge = (status) => {
     const statusStyles = {
@@ -652,7 +667,7 @@ const Members = () => {
       <Modal isOpen={showMemberModal} onClose={() => setShowMemberModal(false)} title="Member Details" size="large">
         {selectedMember && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between"><div className="flex items-center space-x-4"><div className="h-16 w-16 rounded-full bg-gray-300 flex items-center justify-center"><span className="text-xl font-medium text-gray-700">{getMemberInitials(selectedMember)}</span></div><div><h3 className="text-xl font-bold text-gray-900">{getMemberDisplayName(selectedMember)}</h3><p className="text-gray-600">Member ID: {selectedMember.member_id || selectedMember.id}</p></div></div><Button variant="primary" onClick={() => handleEditMember(selectedMember)}>Edit</Button></div>
+            <div className="flex items-center justify-between"><div className="flex items-center space-x-4"><div className="h-16 w-16 rounded-full bg-gray-300 flex items-center justify-center"><span className="text-xl font-medium text-gray-700">{getMemberInitials(selectedMember)}</span></div><div><h3 className="text-xl font-bold text-gray-900">{getMemberDisplayName(selectedMember)}</h3><p className="text-gray-600">Member ID: {selectedMember.member_id || selectedMember.id}</p></div></div><div className="flex space-x-2"><Button variant="primary" onClick={() => handleEditMember(selectedMember)}>Edit</Button><Button variant="outline" onClick={() => handleDeleteMember(selectedMember)} className="border-red-300 text-red-700 hover:bg-red-50">Delete</Button></div></div>
             <div><h4 className="text-lg font-medium text-gray-900 mb-4">Personal Information</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-4"><div><label className="text-sm font-medium text-gray-500">Name</label><p className="text-sm text-gray-900">{getMemberDisplayName(selectedMember)}</p></div><div><label className="text-sm font-medium text-gray-500">Phone</label><p className="text-sm text-gray-900">{selectedMember.phone || 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Date of Birth</label><p className="text-sm text-gray-900">{selectedMember.dateOfBirth ? formatDate(selectedMember.dateOfBirth) : 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Join Date</label><p className="text-sm text-gray-900">{selectedMember.join_date ? formatDate(selectedMember.join_date) : 'Not provided'}</p></div></div><div className="space-y-4"><div><label className="text-sm font-medium text-gray-500">Email</label><p className="text-sm text-gray-900">{selectedMember.email || 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Address</label><p className="text-sm text-gray-900">{selectedMember.address || 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Membership Type</label><div className="mt-1">{getMembershipTypeBadge(selectedMember.membership_type)}</div></div><div><label className="text-sm font-medium text-gray-500">Status</label><div className="mt-1">{getStatusBadge(selectedMember.status)}</div></div></div></div></div>
             <div><h4 className="text-lg font-medium text-gray-900 mb-4">Emergency Contact</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="text-sm font-medium text-gray-500">Contact Name</label><p className="text-sm text-gray-900">{selectedMember.emergencyContact || 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Contact Phone</label><p className="text-sm text-gray-900">{selectedMember.emergencyPhone || 'Not provided'}</p></div></div></div>
             <div><h4 className="text-lg font-medium text-gray-900 mb-4">Fitness Information</h4><div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.height ? `${selectedMember.height} cm` : 'N/A'}</div><div className="text-sm text-gray-600">Height</div></div><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.weight ? `${selectedMember.weight} kg` : 'N/A'}</div><div className="text-sm text-gray-600">Weight</div></div><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.bmi || 'N/A'}</div><div className="text-sm text-gray-600">BMI</div>{selectedMember.bmi && (<div className="mt-1"><span className={`px-2 py-1 text-xs font-medium rounded-full ${getBMICategory(selectedMember.bmi).style}`}>{getBMICategory(selectedMember.bmi).label}</span></div>)}</div><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900 capitalize">{selectedMember.fitnessLevel || 'N/A'}</div><div className="text-sm text-gray-600">Fitness Level</div></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-sm font-medium text-gray-500">Short-term Goals</label><div className="mt-1 p-3 bg-blue-50 rounded-lg"><p className="text-sm text-blue-900">{selectedMember.short_term_goals || 'No goals set'}</p></div></div><div><label className="text-sm font-medium text-gray-500">Long-term Goals</label><div className="mt-1 p-3 bg-green-50 rounded-lg"><p className="text-sm text-green-900">{selectedMember.long_term_goals || 'No goals set'}</p></div></div></div></div>
