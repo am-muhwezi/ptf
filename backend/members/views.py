@@ -228,3 +228,24 @@ class MemberViewset(viewsets.ModelViewSet):
             {"message": f"{member.first_name} checked out successfully."},
             status=status.HTTP_200_OK,
         )
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Delete a member with proper error handling
+        """
+        try:
+            member = self.get_object()
+            member_name = f"{member.first_name} {member.last_name}"
+            member.delete()
+            
+            logger.info(f"Member deleted successfully: {member_name}")
+            return Response({
+                'message': f'Member {member_name} has been deleted successfully.'
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error deleting member: {e}")
+            return Response({
+                'error': 'Delete failed',
+                'message': 'Failed to delete member. Please try again.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

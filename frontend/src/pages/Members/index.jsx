@@ -283,6 +283,21 @@ const Members = () => {
     }
   };
 
+  const handleDeleteMember = async (member) => {
+    if (!window.confirm(`Are you sure you want to delete ${getMemberDisplayName(member)}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await memberService.deleteMember(member.id);
+      showToast(response.message || 'Member deleted successfully', 'success');
+      setShowMemberModal(false);
+      await refreshData();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  };
+
   // Badge helper functions
   const getStatusBadge = (status) => {
     const statusStyles = {
