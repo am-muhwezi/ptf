@@ -1,9 +1,10 @@
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework import status, viewsets
-from rest_framework.decorators import api_view, action
+from rest_framework.decorators import api_view, action, permission_classes
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.exceptions import ValidationError
+from rest_framework import permissions
 from .models import Member
 from .serializers import MemberSerializer
 from django.shortcuts import get_object_or_404
@@ -11,6 +12,7 @@ from django.db.models import Q
 from django.conf import settings
 from django.utils import timezone
 from django.db import IntegrityError
+from accounts.permissions import IsAdminPermission, IsSuperAdminPermission
 import logging
 
 logger = logging.getLogger(__name__)
@@ -120,14 +122,21 @@ class MemberViewset(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         """
-        Delete a member with proper error handling
+        Delete a member with proper error handling - Admin only
         """
+        # Check if user has admin permissions for deletion
+        if not (request.user.is_authenticated and (request.user.is_staff or request.user.is_superuser)):
+            return Response({
+                'error': 'Permission denied',
+                'message': 'Only admin users can delete members.'
+            }, status=status.HTTP_403_FORBIDDEN)
+            
         try:
             member = self.get_object()
             member_name = f"{member.first_name} {member.last_name}"
             member.delete()
             
-            logger.info(f"Member deleted successfully: {member_name}")
+            logger.info(f"Member deleted successfully by {request.user.email}: {member_name}")
             return Response({
                 'message': f'Member {member_name} has been deleted successfully.'
             }, status=status.HTTP_200_OK)
@@ -228,24 +237,3 @@ class MemberViewset(viewsets.ModelViewSet):
             {"message": f"{member.first_name} checked out successfully."},
             status=status.HTTP_200_OK,
         )
-
-    def destroy(self, request, *args, **kwargs):
-        """
-        Delete a member with proper error handling
-        """
-        try:
-            member = self.get_object()
-            member_name = f"{member.first_name} {member.last_name}"
-            member.delete()
-            
-            logger.info(f"Member deleted successfully: {member_name}")
-            return Response({
-                'message': f'Member {member_name} has been deleted successfully.'
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            logger.error(f"Error deleting member: {e}")
-            return Response({
-                'error': 'Delete failed',
-                'message': 'Failed to delete member. Please try again.'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

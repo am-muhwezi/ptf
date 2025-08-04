@@ -122,6 +122,7 @@ def user_info(request):
                 "lastName": user.last_name,
                 "username": user.username,
                 "is_staff": user.is_staff,
+                "is_superuser": user.is_superuser,
                 "is_active": user.is_active,
                 "date_joined": user.date_joined,
             },

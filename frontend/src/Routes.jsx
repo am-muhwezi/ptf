@@ -19,6 +19,11 @@ import OutdoorMemberships from './pages/Memberships/OutdoorMemberships';
 import RenewalsDue from './pages/Memberships/RenewalsDue';
 import PaymentsDue from './pages/Memberships/PaymentsDue';
 import DesignShowcase from './pages/DesignShowcase';
+import AdminManagement from './pages/AdminManagement';
+import Unauthorized from './pages/Unauthorized';
+
+// Import permission components
+import { SuperuserRoute, AdminRoute } from './components/common/PermissionRoute';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
@@ -69,6 +74,7 @@ const AppRoutes = () => {
       <Route path="/landing" element={<LandingPage />} />
       <Route path="/design-showcase" element={<DesignShowcase />} />
       <Route path="/designs" element={<DesignShowcase />} />
+      <Route path="/unauthorized" element={<Unauthorized />} />
 
       {/* --- Protected Routes --- */}
       {/* The ProtectedRoute component will check for authentication */}
@@ -86,6 +92,16 @@ const AppRoutes = () => {
         <Route path="/feedback" element={<ComingSoon />} />
         <Route path="/communication" element={<ComingSoon />} />
         <Route path="/inventory" element={<ComingSoon />} />
+        
+        {/* Admin-only routes */}
+        <Route 
+          path="/admin/users" 
+          element={
+            <SuperuserRoute>
+              <AdminManagement />
+            </SuperuserRoute>
+          } 
+        />
       </Route>
 
       {/* A catch-all route for any other path */}

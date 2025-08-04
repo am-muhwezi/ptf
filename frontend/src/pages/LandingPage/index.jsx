@@ -29,8 +29,9 @@ const LandingPage = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Get the return URL from location state (set by ProtectedRoute)
-  const returnUrl = location.state?.from || '/';
+  // Get the return URL from query params or location state (set by ProtectedRoute)
+  const searchParams = new URLSearchParams(location.search);
+  const returnUrl = searchParams.get('from') || location.state?.from || '/';
 
   // Redirect to dashboard if user is already logged in
   useEffect(() => {
@@ -255,7 +256,7 @@ const LandingPage = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-teal-800 to-cyan-900 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-teal-800 to-cyan-900 relative overflow-hidden flex flex-col">
       {/* Background Slides */}
       <div className="absolute inset-0">
         {slides.map((slide, index) => (
@@ -277,265 +278,250 @@ const LandingPage = () => {
 
       {/* Tropical Pattern Overlay */}
       <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-10 left-10 w-32 h-32 rounded-full bg-yellow-400 blur-xl"></div>
-        <div className="absolute top-32 right-20 w-24 h-24 rounded-full bg-pink-400 blur-lg"></div>
-        <div className="absolute bottom-20 left-32 w-40 h-40 rounded-full bg-orange-400 blur-2xl"></div>
-        <div className="absolute bottom-32 right-10 w-28 h-28 rounded-full bg-purple-400 blur-lg"></div>
+        <div className="absolute top-4 left-4 lg:top-10 lg:left-10 w-16 h-16 lg:w-32 lg:h-32 rounded-full bg-yellow-400 blur-xl"></div>
+        <div className="absolute top-16 right-8 lg:top-32 lg:right-20 w-12 h-12 lg:w-24 lg:h-24 rounded-full bg-pink-400 blur-lg"></div>
+        <div className="absolute bottom-8 left-16 lg:bottom-20 lg:left-32 w-20 h-20 lg:w-40 lg:h-40 rounded-full bg-orange-400 blur-2xl"></div>
+        <div className="absolute bottom-16 right-4 lg:bottom-32 lg:right-10 w-14 h-14 lg:w-28 lg:h-28 rounded-full bg-purple-400 blur-lg"></div>
       </div>
 
       {/* Main Content */}
-      <div className="relative z-10 min-h-screen flex">
-        {/* Left Side - Hero Content */}
-        <div className={`flex-1 flex items-center justify-center p-8 transition-transform duration-700 ${
-          showAuth ? '-translate-x-full' : 'translate-x-0'
-        }`}>
-          <div className="max-w-2xl text-center text-white">
-            {/* Logo */}
-            <div className="mb-8">
-              <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full mb-4 shadow-2xl">
-                <span className="text-3xl font-bold text-white">🏝️</span>
-              </div>
-              <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 bg-clip-text text-transparent mb-2">
-                Paul's
-              </h1>
-              <h2 className="text-3xl md:text-4xl font-light text-emerald-200">
-                Tropical Fitness
-              </h2>
-            </div>
-
-            {/* Show return URL message if redirected from protected route */}
-            {location.state?.from && (
-              <div className="mb-6 p-4 bg-emerald-600/30 backdrop-blur-sm rounded-lg border border-emerald-500/30">
-                <p className="text-emerald-100 text-sm">
-                  Please sign in to continue to your destination
-                </p>
-              </div>
-            )}
-
-            {/* Slide Content */}
-            <div className="mb-12">
-              <h3 className="text-2xl md:text-3xl font-bold mb-4 text-emerald-100">
-                {slides[currentSlide].title}
-              </h3>
-              <p className="text-lg md:text-xl text-emerald-200 mb-6 leading-relaxed">
-                {slides[currentSlide].description}
-              </p>
-            </div>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button
-                onClick={() => {
-                  setAuthMode('signup');
-                  setShowAuth(true);
-                }}
-                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-8 py-4 text-lg font-semibold rounded-full shadow-2xl transform hover:scale-105 transition-all duration-300"
-              >
-                Start Your Journey 🌴
-              </Button>
-              <Button
-                onClick={() => {
-                  setAuthMode('login');
-                  setShowAuth(true);
-                }}
-                variant="outline"
-                className="border-2 border-emerald-300 text-emerald-300 hover:bg-emerald-300 hover:text-emerald-900 px-8 py-4 text-lg font-semibold rounded-full transition-all duration-300"
-              >
-                Member Login
-              </Button>
-            </div>
-
-            {/* Slide Indicators */}
-            <div className="flex justify-center mt-12 space-x-2">
-              {slides.map((_, index) => (
+      <div className="relative z-10 flex-1 flex">
+        {showAuth ? (
+          /* Auth Form - Takes full screen when shown */
+          <div className="w-full flex items-center justify-center p-4">
+            <div className="max-w-md w-full">
+              <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border border-white/20">
+                {/* Back Button */}
                 <button
-                  key={index}
-                  onClick={() => setCurrentSlide(index)}
-                  className={`w-3 h-3 rounded-full transition-all duration-300 ${
-                    index === currentSlide 
-                      ? 'bg-emerald-400 w-8' 
-                      : 'bg-emerald-600 hover:bg-emerald-500'
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
+                  onClick={handleBackToHome}
+                  className="mb-6 text-emerald-300 hover:text-emerald-200 transition-colors flex items-center"
+                  disabled={loading}
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back to Home
+                </button>
 
-        {/* Right Side - Auth Forms */}
-        <div className={`flex-1 flex items-center justify-center p-8 transition-transform duration-700 ${
-          showAuth ? 'translate-x-0' : 'translate-x-full'
-        }`}>
-          <div className="max-w-md w-full">
-            <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-white/20">
-              {/* Back Button */}
-              <button
-                onClick={handleBackToHome}
-                className="mb-6 text-emerald-300 hover:text-emerald-200 transition-colors flex items-center"
-                disabled={loading}
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                Back to Home
-              </button>
+                <div className="text-center mb-6">
+                  <h3 className="text-2xl font-bold text-white mb-2">
+                    {authMode === 'login' ? 'Welcome Back' : 'Join Paradise'}
+                  </h3>
+                  <p className="text-emerald-200 text-sm">
+                    {authMode === 'login' 
+                      ? 'Sign in to continue your fitness journey' 
+                      : 'Create your account and start transforming'
+                    }
+                  </p>
+                </div>
 
-              <div className="text-center mb-8">
-                <h3 className="text-3xl font-bold text-white mb-2">
-                  {authMode === 'login' ? 'Welcome Back' : 'Join Paradise'}
-                </h3>
-                <p className="text-emerald-200">
-                  {authMode === 'login' 
-                    ? 'Sign in to continue your fitness journey' 
-                    : 'Create your account and start transforming'
-                  }
-                </p>
-              </div>
-
-              <form onSubmit={handleAuth} className="space-y-6">
-                {/* Enhanced message display */}
-                {error && (
-                  <div className="p-4 bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg text-center text-sm animate-pulse">
-                    <div className="flex items-center justify-center mb-2">
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="font-medium">Oops!</span>
+                <form onSubmit={handleAuth} className="space-y-4">
+                  {/* Enhanced message display */}
+                  {error && (
+                    <div className="p-3 bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg text-center text-sm animate-pulse">
+                      <div className="flex items-center justify-center mb-1">
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="font-medium">Oops!</span>
+                      </div>
+                      {error}
                     </div>
-                    {error}
-                  </div>
-                )}
+                  )}
 
-                {success && (
-                  <div className="p-4 bg-green-500/20 border border-green-500/30 text-green-300 rounded-lg text-center text-sm animate-pulse">
-                    <div className="flex items-center justify-center mb-2">
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span className="font-medium">Success!</span>
+                  {success && (
+                    <div className="p-3 bg-green-500/20 border border-green-500/30 text-green-300 rounded-lg text-center text-sm animate-pulse">
+                      <div className="flex items-center justify-center mb-1">
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="font-medium">Success!</span>
+                      </div>
+                      {success}
                     </div>
-                    {success}
-                  </div>
-                )}
+                  )}
 
-                {authMode === 'signup' && (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
+                  {authMode === 'signup' && (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
                         <input
                           type="text"
                           name="firstName"
                           placeholder="First Name"
                           value={formData.firstName}
                           onChange={handleInputChange}
-                          className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
+                          className="w-full px-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-emerald-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
                           required
                           disabled={loading}
                         />
-                      </div>
-                      <div>
                         <input
                           type="text"
                           name="lastName"
                           placeholder="Last Name"
                           value={formData.lastName}
                           onChange={handleInputChange}
-                          className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
+                          className="w-full px-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-emerald-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
                           required
                           disabled={loading}
                         />
                       </div>
-                    </div>
-                    <div>
                       <input
                         type="tel"
                         name="phone"
                         placeholder="Phone Number (Optional)"
                         value={formData.phone}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
+                        className="w-full px-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-emerald-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
                         disabled={loading}
                       />
-                    </div>
-                  </>
-                )}
+                    </>
+                  )}
 
-                <div>
                   <input
                     type="email"
                     name="email"
                     placeholder="Email Address"
                     value={formData.email}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
+                    className="w-full px-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-emerald-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
                     required
                     disabled={loading}
                   />
-                </div>
 
-                <div>
                   <input
                     type="password"
                     name="password"
                     placeholder="Password"
                     value={formData.password}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
+                    className="w-full px-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-emerald-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
                     required
                     disabled={loading}
                   />
-                </div>
 
-                {authMode === 'signup' && (
-                  <div>
+                  {authMode === 'signup' && (
                     <input
                       type="password"
                       name="confirmPassword"
                       placeholder="Confirm Password"
                       value={formData.confirmPassword}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
+                      className="w-full px-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-emerald-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent backdrop-blur-sm"
                       required
                       disabled={loading}
                     />
-                  </div>
-                )}
+                  )}
 
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-3 rounded-xl font-semibold shadow-lg transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                >
-                  {loading ? <LoadingSpinner /> : getButtonText()}
-                </Button>
-              </form>
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-2.5 rounded-lg font-semibold shadow-lg transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-sm"
+                  >
+                    {loading ? <LoadingSpinner /> : getButtonText()}
+                  </Button>
+                </form>
 
-              <div className="mt-6 text-center">
-                <button
-                  onClick={switchAuthMode}
-                  className="text-emerald-300 hover:text-emerald-200 transition-colors disabled:opacity-50"
-                  disabled={loading}
-                >
-                  {authMode === 'login' 
-                    ? "Don't have an account? Sign up" 
-                    : "Already have an account? Sign in"
-                  }
-                </button>
-              </div>
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={switchAuthMode}
+                    className="text-emerald-300 hover:text-emerald-200 transition-colors disabled:opacity-50 text-sm"
+                    disabled={loading}
+                  >
+                    {authMode === 'login' 
+                      ? "Don't have an account? Sign up" 
+                      : "Already have an account? Sign in"
+                    }
+                  </button>
+                </div>
 
-              {/* Additional Help Text */}
-              <div className="mt-4 text-center">
-                <p className="text-emerald-200/70 text-xs">
-                  By {authMode === 'signup' ? 'creating an account' : 'signing in'}, you agree to our Terms of Service
-                </p>
+                <div className="mt-3 text-center">
+                  <p className="text-emerald-200/70 text-xs">
+                    By {authMode === 'signup' ? 'creating an account' : 'signing in'}, you agree to our Terms of Service
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        ) : (
+          /* Hero Content - Show when auth is not visible */
+          <div className="w-full flex items-center justify-center p-4 sm:p-6">
+            <div className="max-w-2xl text-center text-white w-full">
+              {/* Logo */}
+              <div className="mb-6 lg:mb-8">
+                <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full mb-3 lg:mb-4 shadow-2xl">
+                  <span className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">🏝️</span>
+                </div>
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-7xl font-bold bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 bg-clip-text text-transparent mb-2">
+                  Paul's
+                </h1>
+                <h2 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-light text-emerald-200">
+                  Tropical Fitness
+                </h2>
+              </div>
+
+              {/* Show return URL message if redirected from protected route */}
+              {(searchParams.get('from') || location.state?.from) && (
+                <div className="mb-4 lg:mb-6 p-3 lg:p-4 bg-emerald-600/30 backdrop-blur-sm rounded-lg border border-emerald-500/30 mx-4 sm:mx-0">
+                  <p className="text-emerald-100 text-xs sm:text-sm">
+                    Please sign in to continue to your destination
+                  </p>
+                </div>
+              )}
+
+              {/* Slide Content */}
+              <div className="mb-8 lg:mb-12 px-4 sm:px-0">
+                <h3 className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold mb-3 lg:mb-4 text-emerald-100">
+                  {slides[currentSlide].title}
+                </h3>
+                <p className="text-sm sm:text-base lg:text-lg xl:text-xl text-emerald-200 mb-4 lg:mb-6 leading-relaxed">
+                  {slides[currentSlide].description}
+                </p>
+              </div>
+
+              {/* CTA Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 lg:gap-4 justify-center px-4 sm:px-0">
+                <Button
+                  onClick={() => {
+                    setAuthMode('signup');
+                    setShowAuth(true);
+                  }}
+                  className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-6 py-3 lg:px-8 lg:py-4 text-base lg:text-lg font-semibold rounded-full shadow-2xl transform hover:scale-105 transition-all duration-300"
+                >
+                  Start Your Journey 🌴
+                </Button>
+                <Button
+                  onClick={() => {
+                    setAuthMode('login');
+                    setShowAuth(true);
+                  }}
+                  variant="outline"
+                  className="border-2 border-emerald-300 text-emerald-300 hover:bg-emerald-300 hover:text-emerald-900 px-6 py-3 lg:px-8 lg:py-4 text-base lg:text-lg font-semibold rounded-full transition-all duration-300"
+                >
+                  Member Login
+                </Button>
+              </div>
+
+              {/* Slide Indicators */}
+              <div className="flex justify-center mt-8 lg:mt-12 space-x-2">
+                {slides.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentSlide(index)}
+                    className={`w-2 h-2 lg:w-3 lg:h-3 rounded-full transition-all duration-300 ${
+                      index === currentSlide 
+                        ? 'bg-emerald-400 w-6 lg:w-8' 
+                        : 'bg-emerald-600 hover:bg-emerald-500'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Floating Elements */}
-      <div className="absolute bottom-8 left-8 text-emerald-300 text-sm opacity-70">
+      <div className={`absolute bottom-4 left-4 lg:bottom-8 lg:left-8 text-emerald-300 text-xs lg:text-sm opacity-70 ${showAuth ? 'hidden lg:block' : ''}`}>
         © 2024 Paul's Tropical Fitness. All rights reserved.
       </div>
     </div>

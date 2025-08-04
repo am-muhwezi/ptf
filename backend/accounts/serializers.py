@@ -120,3 +120,74 @@ class PasswordChangeSerializer(serializers.Serializer):
         user.set_password(self.validated_data["new_password"])
         user.save()
         return user
+
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    """Serializer for admin user management"""
+    
+    password = serializers.CharField(write_only=True, min_length=6, required=False)
+    role = serializers.SerializerMethodField()
+    last_login_formatted = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = [
+            'id', 'email', 'username', 'first_name', 'last_name',
+            'is_staff', 'is_superuser', 'is_active', 'date_joined',
+            'last_login', 'password', 'role', 'last_login_formatted'
+        ]
+        read_only_fields = ['id', 'date_joined', 'last_login']
+        
+    def get_role(self, obj):
+        """Get user role based on permissions"""
+        if obj.is_superuser:
+            return 'Super Admin'
+        elif obj.is_staff:
+            return 'Admin'
+        else:
+            return 'User'
+    
+    def get_last_login_formatted(self, obj):
+        """Get formatted last login date"""
+        if obj.last_login:
+            return obj.last_login.strftime('%Y-%m-%d %H:%M:%S')
+        return 'Never'
+    
+    def validate_email(self, value):
+        """Check if email already exists (except for current user)"""
+        if self.instance:
+            # Update case - exclude current user from uniqueness check
+            if User.objects.filter(email=value).exclude(id=self.instance.id).exists():
+                raise serializers.ValidationError("User with this email already exists")
+        else:
+            # Create case - check if email exists
+            if User.objects.filter(email=value).exists():
+                raise serializers.ValidationError("User with this email already exists")
+        return value
+    
+    def create(self, validated_data):
+        """Create new admin user"""
+        password = validated_data.pop('password', None)
+        user = User(**validated_data)
+        
+        if password:
+            user.set_password(password)
+        else:
+            # Set a temporary password if none provided
+            user.set_password('TempPass123!')
+            
+        user.save()
+        return user
+    
+    def update(self, instance, validated_data):
+        """Update admin user"""
+        password = validated_data.pop('password', None)
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        if password:
+            instance.set_password(password)
+            
+        instance.save()
+        return instance
