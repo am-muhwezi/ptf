@@ -34,9 +34,12 @@ const fetchUserData = async () => {
         email: response.data.email,
         firstName: response.data.first_name,
         lastName: response.data.last_name,
+        first_name: response.data.first_name,
+        last_name: response.data.last_name,
         username: response.data.username,
-        isStaff: response.data.is_staff,
-        isActive: response.data.is_active,
+        is_staff: response.data.is_staff,
+        is_superuser: response.data.is_superuser,
+        is_active: response.data.is_active,
         dateJoined: response.data.date_joined
       };
       

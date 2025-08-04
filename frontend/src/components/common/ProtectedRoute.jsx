@@ -86,13 +86,9 @@ const ProtectedRoute = ({ requiredRole = null, children }) => {
   if (!isAuthenticated) {
     // Store the attempted location for post-login redirect
     const returnUrl = location.pathname + location.search;
-    return (
-      <Navigate 
-        to="/landing" 
-        state={{ from: returnUrl }}
-        replace 
-      />
-    );
+    // Use window.location for more reliable navigation
+    window.location.href = `/landing?from=${encodeURIComponent(returnUrl)}`;
+    return null;
   }
 
   // If authenticated, render the protected content
