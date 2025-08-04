@@ -26,6 +26,13 @@ const isTokenExpired = (token) => {
 
 const fetchUserData = async () => {
   try {
+    // Ensure we have a token before making the request
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      console.warn('No access token available for user-info request');
+      return null;
+    }
+
     const response = await apiClient.get('/auth/user-info/');
     
     if (response.data) {
@@ -49,6 +56,7 @@ const fetchUserData = async () => {
     
     throw new Error('No user data received from server');
   } catch (error) {
+    console.error('Failed to fetch user data:', error);
     return null;
   }
 };
@@ -61,6 +69,9 @@ const login = async (credentials) => {
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
 
+      // Small delay to ensure tokens are saved before making the user-info request
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       const userData = await Promise.race([
         fetchUserData(),
         new Promise(resolve => setTimeout(() => resolve(null), 5000))
@@ -69,6 +80,25 @@ const login = async (credentials) => {
       if (userData) {
         return userData;
       } else {
+        // Use the user data from the login response if available
+        if (response.data.user) {
+          const userFromLogin = {
+            id: response.data.user.id,
+            email: response.data.user.email,
+            firstName: response.data.user.firstName || response.data.user.first_name,
+            lastName: response.data.user.lastName || response.data.user.last_name,
+            first_name: response.data.user.first_name,
+            last_name: response.data.user.last_name,
+            username: response.data.user.username,
+            is_staff: response.data.user.is_staff,
+            is_superuser: response.data.user.is_superuser
+          };
+          
+          localStorage.setItem('user_data', JSON.stringify(userFromLogin));
+          return userFromLogin;
+        }
+        
+        // Fallback to token data
         const tokenData = decodeToken(response.data.access);
         const minimalUser = {
           id: tokenData?.user_id,
