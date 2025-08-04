@@ -12,7 +12,7 @@ const Unauthorized = () => {
   };
 
   const handleGoHome = () => {
-    navigate('/');
+    navigate('/dashboard');
   };
 
   const handleLogout = async () => {

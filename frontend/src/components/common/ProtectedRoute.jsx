@@ -82,12 +82,12 @@ const ProtectedRoute = ({ requiredRole = null, children }) => {
     return <AuthLoadingSpinner />;
   }
 
-  // If not authenticated, redirect to landing with return URL
+  // If not authenticated, redirect to root with return URL
   if (!isAuthenticated) {
     // Store the attempted location for post-login redirect
     const returnUrl = location.pathname + location.search;
     // Use window.location for more reliable navigation
-    window.location.href = `/landing?from=${encodeURIComponent(returnUrl)}`;
+    window.location.href = `/?from=${encodeURIComponent(returnUrl)}`;
     return null;
   }
 

@@ -31,7 +31,7 @@ const LandingPage = () => {
 
   // Get the return URL from query params or location state (set by ProtectedRoute)
   const searchParams = new URLSearchParams(location.search);
-  const returnUrl = searchParams.get('from') || location.state?.from || '/';
+  const returnUrl = searchParams.get('from') || location.state?.from || '/dashboard';
 
   // Redirect to dashboard if user is already logged in
   useEffect(() => {

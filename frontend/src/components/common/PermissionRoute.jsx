@@ -15,7 +15,7 @@ const PermissionRoute = ({
   // Check authentication
   if (requireAuth && !isAuthenticated) {
     // Use window.location for more reliable navigation
-    window.location.href = '/landing';
+    window.location.href = '/';
     return null;
   }
 
@@ -51,7 +51,7 @@ export const AdminRoute = ({ children, fallbackPath = '/unauthorized' }) => {
 
   if (!isAuthenticated) {
     // Use window.location for more reliable navigation
-    window.location.href = '/landing';
+    window.location.href = '/';
     return null;
   }
 

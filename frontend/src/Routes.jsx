@@ -71,6 +71,7 @@ const AppRoutes = () => {
   return (
     <Routes>
       {/* Public routes that anyone can access */}
+      <Route path="/" element={<LandingPage />} />
       <Route path="/landing" element={<LandingPage />} />
       <Route path="/design-showcase" element={<DesignShowcase />} />
       <Route path="/designs" element={<DesignShowcase />} />
@@ -79,9 +80,9 @@ const AppRoutes = () => {
       {/* --- Protected Routes --- */}
       {/* The ProtectedRoute component will check for authentication */}
       {/* If authenticated, it renders the child route. */}
-      {/* If not, it redirects to /landing. */}
+      {/* If not, it redirects to root. */}
       <Route element={<ProtectedRoute />}>
-        <Route path="/" element={<DashboardPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/members" element={<Members />} />
         <Route path="/memberships/indoor" element={<IndoorMemberships />} />
         <Route path="/memberships/outdoor" element={<OutdoorMemberships />} />
