@@ -69,47 +69,36 @@ const login = async (credentials) => {
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
 
-      // Small delay to ensure tokens are saved before making the user-info request
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const userData = await Promise.race([
-        fetchUserData(),
-        new Promise(resolve => setTimeout(() => resolve(null), 5000))
-      ]);
-
-      if (userData) {
-        return userData;
-      } else {
-        // Use the user data from the login response if available
-        if (response.data.user) {
-          const userFromLogin = {
-            id: response.data.user.id,
-            email: response.data.user.email,
-            firstName: response.data.user.firstName || response.data.user.first_name,
-            lastName: response.data.user.lastName || response.data.user.last_name,
-            first_name: response.data.user.first_name,
-            last_name: response.data.user.last_name,
-            username: response.data.user.username,
-            is_staff: response.data.user.is_staff,
-            is_superuser: response.data.user.is_superuser
-          };
-          
-          localStorage.setItem('user_data', JSON.stringify(userFromLogin));
-          return userFromLogin;
-        }
-        
-        // Fallback to token data
-        const tokenData = decodeToken(response.data.access);
-        const minimalUser = {
-          id: tokenData?.user_id,
-          email: credentials.email,
-          firstName: 'User',
-          lastName: '',
+      // Use the user data from the login response directly - no need for additional API call
+      if (response.data.user) {
+        const userFromLogin = {
+          id: response.data.user.id,
+          email: response.data.user.email,
+          firstName: response.data.user.firstName || response.data.user.first_name,
+          lastName: response.data.user.lastName || response.data.user.last_name,
+          first_name: response.data.user.first_name,
+          last_name: response.data.user.last_name,
+          username: response.data.user.username,
+          is_staff: response.data.user.is_staff,
+          is_superuser: response.data.user.is_superuser,
+          is_active: response.data.user.is_active
         };
         
-        localStorage.setItem('user_data', JSON.stringify(minimalUser));
-        return minimalUser;
+        localStorage.setItem('user_data', JSON.stringify(userFromLogin));
+        return userFromLogin;
       }
+      
+      // Fallback to token data
+      const tokenData = decodeToken(response.data.access);
+      const minimalUser = {
+        id: tokenData?.user_id,
+        email: credentials.email,
+        firstName: 'User',
+        lastName: '',
+      };
+      
+      localStorage.setItem('user_data', JSON.stringify(minimalUser));
+      return minimalUser;
     }
 
     throw new Error('Invalid login response from server');
@@ -129,31 +118,37 @@ const register = async (userData) => {
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
 
-      let fetchedUserData = null;
-      let retries = 3;
-      
-      while (retries > 0 && !fetchedUserData) {
-        fetchedUserData = await fetchUserData();
-        if (!fetchedUserData) {
-          retries--;
-          if (retries > 0) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-        }
-      }
-
-      if (fetchedUserData) {
+      // Use the user data from the registration response directly - no need for additional API call
+      if (response.data.user) {
+        const userFromRegister = {
+          id: response.data.user.id,
+          email: response.data.user.email,
+          firstName: response.data.user.firstName || response.data.user.first_name,
+          lastName: response.data.user.lastName || response.data.user.last_name,
+          first_name: response.data.user.first_name,
+          last_name: response.data.user.last_name,
+          username: response.data.user.username,
+          is_staff: response.data.user.is_staff,
+          is_superuser: response.data.user.is_superuser,
+          is_active: response.data.user.is_active
+        };
+        
+        localStorage.setItem('user_data', JSON.stringify(userFromRegister));
+        
         return {
           success: true,
           autoLogin: true,
-          userData: fetchedUserData,
-          message: `Welcome to Paradise, ${fetchedUserData.firstName}! 🏝️`
+          userData: userFromRegister,
+          message: `Welcome to Paradise, ${userFromRegister.firstName}! 🏝️`
         };
       } else {
+        // Fallback to the input data
         const fallbackUser = {
           email: userData.email,
           firstName: userData.first_name,
           lastName: userData.last_name,
+          first_name: userData.first_name,
+          last_name: userData.last_name,
           username: userData.username || `${userData.first_name.toLowerCase()}${userData.last_name.toLowerCase()}`
         };
         
@@ -391,6 +386,226 @@ const validateSession = async () => {
   }
 };
 
+const forgotPassword = async (email) => {
+  try {
+    const response = await apiClient.post('/auth/password/forgot/', { email });
+    
+    if (response.data) {
+      return {
+        success: true,
+        message: response.data.message,
+        email: response.data.email
+      };
+    }
+    
+    throw new Error('No response data received');
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.error || 
+      error.message || 
+      'Failed to send password reset email. Please try again.'
+    );
+  }
+};
+
+const resetPassword = async (resetData) => {
+  try {
+    const response = await apiClient.post('/auth/password/reset/', resetData);
+    
+    if (response.data) {
+      return {
+        success: true,
+        message: response.data.message,
+        user: response.data.user
+      };
+    }
+    
+    throw new Error('No response data received');
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.error || 
+      error.message || 
+      'Failed to reset password. Please try again.'
+    );
+  }
+};
+
+// Membership API functions
+const getOutdoorMembers = async (params = {}) => {
+  try {
+    const queryParams = new URLSearchParams();
+    
+    // Add optional search query
+    if (params.search) {
+      queryParams.append('q', params.search);
+    }
+    
+    // Add pagination
+    if (params.page) {
+      queryParams.append('page', params.page);
+    }
+    
+    if (params.limit) {
+      queryParams.append('limit', params.limit);
+    }
+
+    // Add status filter
+    if (params.status) {
+      queryParams.append('status', params.status);
+    }
+
+    const url = queryParams.toString() 
+      ? `${API_ENDPOINTS.memberships.outdoor}?${queryParams.toString()}`
+      : API_ENDPOINTS.memberships.outdoor;
+
+    const response = await apiClient.get(url);
+    
+    return {
+      success: true,
+      data: response.data.results || response.data.data || response.data,
+      count: response.data.count || (response.data.results ? response.data.results.length : 0),
+      next: response.data.next,
+      previous: response.data.previous
+    };
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to fetch outdoor memberships. Please try again.'
+    );
+  }
+};
+
+const createOutdoorMember = async (memberData) => {
+  try {
+    // Ensure membership_type is set to outdoor
+    const outdoorMemberData = {
+      ...memberData,
+      membership_type: 'outdoor'
+    };
+
+    const response = await apiClient.post(API_ENDPOINTS.members.create, outdoorMemberData);
+    
+    return {
+      success: true,
+      data: response.data.member || response.data,
+      message: response.data.message || 'Outdoor member created successfully!'
+    };
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to create outdoor member. Please try again.'
+    );
+  }
+};
+
+const updateOutdoorMember = async (memberId, memberData) => {
+  try {
+    const response = await apiClient.put(API_ENDPOINTS.members.update(memberId), memberData);
+    
+    return {
+      success: true,
+      data: response.data.member || response.data,
+      message: response.data.message || 'Outdoor member updated successfully!'
+    };
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to update outdoor member. Please try again.'
+    );
+  }
+};
+
+const deleteOutdoorMember = async (memberId) => {
+  try {
+    const response = await apiClient.delete(API_ENDPOINTS.members.delete(memberId));
+    
+    return {
+      success: true,
+      message: response.data.message || 'Outdoor member deleted successfully!'
+    };
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to delete outdoor member. Please try again.'
+    );
+  }
+};
+
+const checkinOutdoorMember = async (memberId) => {
+  try {
+    const response = await apiClient.post(API_ENDPOINTS.members.checkin(memberId));
+    
+    return {
+      success: true,
+      message: response.data.message || 'Member checked in successfully!'
+    };
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.error || 
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to check-in member. Please try again.'
+    );
+  }
+};
+
+const getOutdoorMembershipStats = async () => {
+  try {
+    const response = await apiClient.get(API_ENDPOINTS.memberships.outdoor_stats);
+    
+    return {
+      success: true,
+      data: response.data.data || response.data
+    };
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to fetch outdoor membership statistics. Please try again.'
+    );
+  }
+};
+
+const useSession = async (membershipId, sessionData = {}) => {
+  try {
+    const response = await apiClient.post(API_ENDPOINTS.memberships.use_session(membershipId), sessionData);
+    
+    return {
+      success: true,
+      message: response.data.message || 'Session used successfully!',
+      sessions_remaining: response.data.sessions_remaining
+    };
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.error || 
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to use session. Please try again.'
+    );
+  }
+};
+
+const getOutdoorRateCards = async () => {
+  try {
+    const response = await apiClient.get(API_ENDPOINTS.memberships.rate_cards);
+    
+    return {
+      success: true,
+      data: response.data.data || response.data
+    };
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to fetch rate cards. Please try again.'
+    );
+  }
+};
+
 const authService = {
   login,
   register,
@@ -402,7 +617,18 @@ const authService = {
   hasRole,
   validateSession,
   clearAuthData,
-  fetchUserData
+  fetchUserData,
+  forgotPassword,
+  resetPassword,
+  // Outdoor membership functions
+  getOutdoorMembers,
+  createOutdoorMember,
+  updateOutdoorMember,
+  deleteOutdoorMember,
+  checkinOutdoorMember,
+  getOutdoorMembershipStats,
+  useSession,
+  getOutdoorRateCards
 };
 
 export default authService;
