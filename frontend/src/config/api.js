@@ -17,59 +17,68 @@ export const API_ENDPOINTS = {
   
   // Members
   members: {
-    list: '/members/',
-    create: '/members/',
-    detail: (id) => `/members/${id}/`,
-    update: (id) => `/members/${id}/`,
-    delete: (id) => `/members/${id}/`,
-    checkin: (id) => `/members/${id}/checkin/`,
-    search: '/members/',
+    list: 'members/',
+    create: 'members/',
+    detail: (id) => `members/${id}/`,
+    update: (id) => `members/${id}/`,
+    delete: (id) => `members/${id}/`,
+    checkin: (id) => `members/${id}/checkin/`,
+    search: 'members/',
   },
   
   // Memberships
   memberships: {
-    indoor: '/memberships/indoor/',
-    outdoor: '/memberships/outdoor/',
-    renewals: '/memberships/renewals/',
-    payments: '/memberships/payments/',
-    renew: (id) => `/memberships/${id}/renew/`,
-    suspend: (id) => `/memberships/${id}/suspend/`,
+    list: 'memberships/memberships/',
+    create: 'memberships/memberships/',
+    detail: (id) => `memberships/${id}/`,
+    update: (id) => `memberships/${id}/`,
+    delete: (id) => `memberships/${id}/`,
+    indoor: 'memberships/indoor/',
+    indoor_stats: 'memberships/indoor_stats/',
+    outdoor: 'memberships/outdoor/',
+    outdoor_stats: 'memberships/outdoor_stats/',
+    use_session: (id) => `memberships/${id}/use_session/`,
+    suspend: (id) => `memberships/${id}/suspend/`,
+    reactivate: (id) => `memberships/${id}/reactivate/`,
+    renew: (id) => `memberships/${id}/renew/`,
+    // Membership Plans
+    plans: 'memberships/plans/',
   },
   
   // Dashboard
   dashboard: {
-    stats: '/dashboard/stats/',
-    notifications: '/dashboard/notifications/',
+    stats: 'dashboard/stats/',
+    notifications: 'dashboard/notifications/',
   },
   
   // Bookings
   bookings: {
-    list: '/bookings/',
-    create: '/bookings/',
-    update: (id) => `/bookings/${id}/`,
-    delete: (id) => `/bookings/${id}/`,
+    list: 'bookings/',
+    create: 'bookings/',
+    update: (id) => `bookings/${id}/`,
+    delete: (id) => `bookings/${id}/`,
   },
   
   // Attendance
   attendance: {
-    list: '/attendance/',
-    create: '/attendance/',
-    today: '/attendance/today/',
+    list: 'attendance/',
+    create: 'attendance/',
+    today: 'attendance/today/',
   },
   
   // Feedback
   feedback: {
-    list: '/feedback/',
-    create: '/feedback/',
-    update: (id) => `/feedback/${id}/`,
+    list: 'feedback/',
+    create: 'feedback/',
+    update: (id) => `feedback/${id}/`,
   },
   
   // Inventory
   inventory: {
-    list: '/inventory/',
-    create: '/inventory/',
-    update: (id) => `/inventory/${id}/`,
-    lowStock: '/inventory/low-stock/',
+    list: 'inventory/',
+    create: 'inventory/',
+    update: (id) => `inventory/${id}/`,
+    lowStock: 'inventory/low-stock/',
   },
 };
 

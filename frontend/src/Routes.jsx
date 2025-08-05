@@ -7,6 +7,7 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 
 // Import landing page
 import LandingPage from './pages/LandingPage';
+import PasswordReset from './pages/PasswordReset';
 
 // Import page components
 import DashboardPage from './pages/Dashboard';
@@ -73,6 +74,7 @@ const AppRoutes = () => {
       {/* Public routes that anyone can access */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/landing" element={<LandingPage />} />
+      <Route path="/password-reset" element={<PasswordReset />} />
       <Route path="/design-showcase" element={<DesignShowcase />} />
       <Route path="/designs" element={<DesignShowcase />} />
       <Route path="/unauthorized" element={<Unauthorized />} />

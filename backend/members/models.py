@@ -7,14 +7,6 @@ class Member(models.Model):
     MEMBERSHIP_TYPES = [
         ("indoor", "Indoor"),
         ("outdoor", "Outdoor"),
-        ("both", "Both"),
-    ]
-
-    PLAN_TYPES = [
-        ("daily", "Daily"),
-        ("monthly", "Monthly"),
-        ("bi-annual", "Bi-Annual"),
-        ("annual", "Annual"),
     ]
 
     BLOOD_GROUPS = [
@@ -60,7 +52,6 @@ class Member(models.Model):
     membership_type = models.CharField(
         max_length=10, choices=MEMBERSHIP_TYPES, default="indoor"
     )
-    plan_type = models.CharField(max_length=10, choices=PLAN_TYPES, default="basic")
     location = models.CharField(max_length=50, blank=True, null=True, help_text="Location for outdoor memberships")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="active")
     payment_status = models.CharField(

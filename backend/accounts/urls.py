@@ -23,6 +23,16 @@ urlpatterns = [
         views.PasswordChangeView.as_view(),
         name="password_change",
     ),
+    path(
+        "auth/password/forgot/",
+        views.ForgotPasswordView.as_view(),
+        name="forgot_password",
+    ),
+    path(
+        "auth/password/reset/",
+        views.PasswordResetView.as_view(),
+        name="password_reset",
+    ),
     # Admin management endpoints
     path("admin/", include(admin_router.urls)),
 ]

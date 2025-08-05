@@ -87,6 +87,54 @@ class MemberViewset(viewsets.ModelViewSet):
             # Try to save the member
             member = serializer.save()
             
+            # Create membership based on form data
+            plan_type = request.data.get('plan_type')
+            if plan_type:
+                from memberships.models import MembershipPlan, Membership
+                from datetime import datetime, timedelta
+                from decimal import Decimal
+                
+                try:
+                    # Find the appropriate membership plan
+                    plan = MembershipPlan.objects.get(
+                        membership_type=member.membership_type,
+                        plan_type=plan_type
+                    )
+                    
+                    # Calculate membership duration (1 month)
+                    start_date = datetime.now().date()
+                    end_date = start_date + timedelta(days=30)  # 1 month
+                    
+                    # Calculate total sessions for the period
+                    if plan.plan_type == 'daily':
+                        # For daily plans, allow unlimited sessions (or set a high number)
+                        total_sessions = 30  # 1 session per day for a month
+                    else:
+                        # For weekly plans, calculate based on sessions per week
+                        total_sessions = plan.sessions_per_week * 4  # 4 weeks in a month
+                    
+                    # Create the membership
+                    membership = Membership.objects.create(
+                        member=member,
+                        plan=plan,
+                        status='active',
+                        payment_status='pending',  # Default to pending
+                        total_sessions_allowed=total_sessions,
+                        sessions_used=0,
+                        sessions_remaining=total_sessions,
+                        start_date=start_date,
+                        end_date=end_date,
+                        amount_paid=plan.monthly_fee,
+                        location=member.location or '',
+                    )
+                    
+                    logger.info(f"Membership created for member {member.id}: Plan {plan.plan_name}")
+                    
+                except MembershipPlan.DoesNotExist:
+                    logger.warning(f"No membership plan found for {member.membership_type}/{plan_type}")
+                except Exception as e:
+                    logger.error(f"Failed to create membership for member {member.id}: {e}")
+            
             logger.info(f"Member created successfully: {member.id}")
             return Response({
                 'message': f'Member {member.first_name} {member.last_name} registered successfully!',

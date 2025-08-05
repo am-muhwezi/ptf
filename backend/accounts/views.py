@@ -11,6 +11,8 @@ from .serializers import (
     UserLoginSerializer,
     UserProfileSerializer,
     PasswordChangeSerializer,
+    ForgotPasswordSerializer,
+    PasswordResetSerializer,
 )
 from .models import User
 
@@ -189,3 +191,84 @@ class PasswordChangeView(APIView):
                 {"message": "Password changed successfully"}, status=status.HTTP_200_OK
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ForgotPasswordView(APIView):
+    """View for handling forgot password requests"""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        try:
+            serializer = ForgotPasswordSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                email_sent = serializer.save()
+                
+                # Always return success for security reasons
+                # Don't reveal if email exists or not
+                return Response(
+                    {
+                        "message": "If an account with this email exists, password reset instructions have been sent.",
+                        "email": request.data.get('email')
+                    },
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {
+                        "error": "Invalid email format",
+                        "details": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+        except Exception as e:
+            return Response(
+                {
+                    "error": "Failed to process password reset request",
+                    "message": "Please try again later"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class PasswordResetView(APIView):
+    """View for handling password reset confirmation"""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        try:
+            serializer = PasswordResetSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                user = serializer.save()
+                
+                return Response(
+                    {
+                        "message": f"Password reset successful for {user.email}",
+                        "user": {
+                            "id": user.id,
+                            "email": user.email,
+                            "first_name": user.first_name,
+                            "last_name": user.last_name
+                        }
+                    },
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {
+                        "error": "Password reset failed",
+                        "details": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+        except Exception as e:
+            return Response(
+                {
+                    "error": "Failed to reset password",
+                    "message": "Please try again or request a new reset link"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

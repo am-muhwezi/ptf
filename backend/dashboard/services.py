@@ -74,13 +74,15 @@ def get_dashboard_statistics():
     # Membership type breakdown
     indoor_members = Member.objects.filter(membership_type="indoor").count()
     outdoor_members = Member.objects.filter(membership_type="outdoor").count()
-    both_members = Member.objects.filter(membership_type="both").count()
 
-    # Plan type breakdown
-    basic_plan = Member.objects.filter(plan_type="basic").count()
-    standard_plan = Member.objects.filter(plan_type="standard").count()
-    premium_plan = Member.objects.filter(plan_type="premium").count()
-    vip_plan = Member.objects.filter(plan_type="vip").count()
+    # Plan type breakdown - now using Membership model
+    from memberships.models import Membership
+    daily_memberships = Membership.objects.filter(plan__plan_type="daily").count()
+    monthly_memberships = Membership.objects.filter(plan__plan_type="monthly").count()
+    session_based_memberships = Membership.objects.filter(
+        plan__plan_type__in=["1_session_week", "2_sessions_week", "3_sessions_week", "4_sessions_week", "5_sessions_week"]
+    ).count()
+    annual_memberships = Membership.objects.filter(plan__plan_type__in=["bi-annual", "annual"]).count()
 
     # Calculate attendance data (this was missing!)
     # Assuming outdoor members who checked in today = outdoor visits
@@ -160,7 +162,6 @@ def get_dashboard_statistics():
             "membershipTypes": {
                 "indoor": indoor_members,
                 "outdoor": outdoor_members,
-                "both": both_members,
             },
         },
         # REVENUE DATA
@@ -205,13 +206,12 @@ def get_dashboard_statistics():
             "membershipTypes": {
                 "indoor": indoor_members,
                 "outdoor": outdoor_members,
-                "both": both_members,
             },
             "planTypes": {
-                "basic": basic_plan,
-                "standard": standard_plan,
-                "premium": premium_plan,
-                "vip": vip_plan,
+                "daily": daily_memberships,
+                "monthly": monthly_memberships,
+                "sessionBased": session_based_memberships,
+                "annual": annual_memberships,
             },
         },
         "bookingData": {

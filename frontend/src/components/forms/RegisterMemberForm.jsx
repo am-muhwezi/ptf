@@ -348,10 +348,11 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select a plan</option>
-              <option value="daily">Daily - KES 500</option>
-              <option value="monthly">Monthly - KES 8,000</option>
-              <option value="bi-annual">Bi-Annual - KES 40,000</option>
-              <option value="annual">Annual - KES 70,000</option>
+              <option value="daily">Daily</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="bi-annual">Bi-Annual</option>
+              <option value="annual">Annual</option>
             </select>
             {errors.planType && <p className="text-red-500 text-xs mt-1">{errors.planType}</p>}
           </div>
@@ -373,7 +374,11 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
                 <option value="">Select a location</option>
                 <option value="arboretum">Arboretum</option>
                 <option value="boxwood">Boxwood</option>
+                <option value="botanical">Botanical</option>
                 <option value="karura">Karura</option>
+                <option value="sagret">Sagret</option>
+                <option value="mushroom">Mushroom</option>
+                <option value="loreto">PCEA Loreto</option>
               </select>
               {errors.location && <p className="text-red-500 text-xs mt-1">{errors.location}</p>}
             </div>
@@ -390,7 +395,12 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select a plan</option>
-                <option value="daily">Daily - KES 1,000</option>
+                <option value="daily">Daily Drop-in - KES 1,000</option>
+                <option value="1_session_week">1 Session/Week (4 classes/month) - KES 3,000</option>
+                <option value="2_sessions_week">2 Sessions/Week (8 classes/month) - KES 4,000</option>
+                <option value="3_sessions_week">3 Sessions/Week (12 classes/month) - KES 5,000</option>
+                <option value="4_sessions_week">4 Sessions/Week (16 classes/month) - KES 6,000</option>
+                <option value="5_sessions_week">5 Sessions/Week (20 classes/month) - KES 7,000</option>
               </select>
               {errors.planType && <p className="text-red-500 text-xs mt-1">{errors.planType}</p>}
             </div>
@@ -399,7 +409,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
 
         <div>
           <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-            Address
+            Physical Address
           </label>
           <textarea
             id="address"

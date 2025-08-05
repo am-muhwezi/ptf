@@ -35,7 +35,6 @@ class MemberSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "membership_type",
-            "plan_type",
             "location",
             "status",
             "payment_status",
@@ -148,20 +147,6 @@ class MemberSerializer(serializers.ModelSerializer):
             )
         return value
 
-    def validate_plan_type(self, value):
-        """Validate plan type based on membership type"""
-        membership_type = self.initial_data.get('membershipType') or self.initial_data.get('membership_type')
-        
-        if membership_type == 'indoor' and not value:
-            raise serializers.ValidationError(
-                "Plan type is required for indoor membership."
-            )
-        elif membership_type == 'outdoor' and not value:
-            raise serializers.ValidationError(
-                "Plan type is required for outdoor membership."
-            )
-        
-        return value
 
     def validate_location(self, value):
         """Validate location for outdoor memberships"""
@@ -180,14 +165,8 @@ class MemberSerializer(serializers.ModelSerializer):
         
         # Cross-field validation for membership type requirements
         membership_type = data.get('membership_type') or data.get('membershipType')
-        plan_type = data.get('plan_type') or data.get('planType')
         location = data.get('location')
         
-        if membership_type == 'indoor' and not plan_type:
-            raise serializers.ValidationError({
-                'plan_type': 'Plan type is required for indoor membership.'
-            })
-            
         if membership_type == 'outdoor' and not location:
             raise serializers.ValidationError({
                 'location': 'Location is required for outdoor membership.'
@@ -214,7 +193,6 @@ class MemberListSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "membership_type",
-            "plan_type",
             "status",
             "payment_status",
             "registrationDate",

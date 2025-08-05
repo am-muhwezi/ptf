@@ -35,6 +35,7 @@ urlpatterns = [
     path("", include("accounts.urls")),
     path("", include("members.urls")),
     path("", include("bookings.urls")),
+    path("", include("memberships.urls")),
     # Dashboard
     path("dashboard/stats/", DashboardStatsView.as_view(), name="dashboard-stats"),
     path(
