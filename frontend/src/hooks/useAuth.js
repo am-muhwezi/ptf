@@ -79,8 +79,8 @@ export const useAuth = () => {
         setIsAuthenticated(true);
         
         setTimeout(() => {
-          navigate('/');
-        }, 100);
+          navigate('/dashboard');
+        }, 500);
         
         return userData;
       } else {
@@ -121,8 +121,8 @@ export const useAuth = () => {
         setIsAuthenticated(true);
         
         setTimeout(() => {
-          navigate('/');
-        }, 200);
+          navigate('/dashboard');
+        }, 1000);
       }
 
       return response;
