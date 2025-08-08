@@ -41,7 +41,10 @@ const OutdoorMemberships = () => {
       });
       
       if (response.success) {
-        const transformedMembers = response.data.map(transformMemberData);
+        // const transformedMembers = response.data.map(transformMemberData);
+        const transformedMembers = response.data
+        console.log('Transformed Members:', transformedMembers);
+        
         setAllMembers(transformedMembers);
       }
     } catch (err) {
@@ -63,7 +66,8 @@ const OutdoorMemberships = () => {
       });
       
       if (response.success) {
-        const transformedMembers = response.data.map(transformMemberData);
+        // const transformedMembers = response.data.map(transformMemberData);
+        const transformedMembers = response.data;
         setMembers(transformedMembers);
         setFilteredMembers(transformedMembers);
         
@@ -232,7 +236,7 @@ const OutdoorMemberships = () => {
     
     return (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusStyles[status] || 'bg-gray-100 text-gray-800'}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {status?.charAt(0).toUpperCase() + status?.slice(1)}
       </span>
     );
   };

@@ -17,6 +17,7 @@ import { formatCurrency, formatDate } from '../../utils/formatters';
 const Members = () => {
   // State management
   const [members, setMembers] = useState([]);
+  const [outMembers, setOutMembers] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -80,12 +81,15 @@ const Members = () => {
       if (filterMembershipType !== 'all') params.membership_type = filterMembershipType;
 
       const response = await memberService.getMembers(params);
+      const outdoorMembers = response.results.filter(m => m.membership_type === 'outdoor');
       
       // Handle Django REST framework pagination response
       if (response.results) {
         setMembers(response.results);
         setTotalCount(response.count);
         setTotalPages(Math.ceil(response.count / pageSize));
+        setOutMembers(outdoorMembers)
+
       } else {
         // Fallback for non-paginated response
         setMembers(response);
@@ -128,7 +132,11 @@ const Members = () => {
       
       setStats(prevStats => ({
         ...prevStats,
-        total_members: totalCount
+        total_members: totalCount,
+        outdoor_members: members.filter(m => m.membership_type === 'outdoor').length,
+        indoor_members: members.filter(m => m.membership_type === 'indoor').length,
+        active_members: members.filter(m => m.status === 'active').length,
+        inactive_members: members.filter(m => m.status === 'inactive').length,
       }));
     } catch (error) {
       console.error('Error fetching stats:', error);

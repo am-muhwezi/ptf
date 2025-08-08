@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
@@ -65,7 +65,46 @@ const Dashboard = () => {
   };
 
   const stats = dashboardStats || defaultStats;
+  console.log(dashboardStats, 'Dashboard stats:', stats);
+  
 
+// Fetch members data
+  // const fetchMembers = async () => {
+  //   try {
+  //     setLoading(true);
+  //     setError(null);
+
+  //     const response = await memberService.getMembers();
+  //     const memberList = response.results || response;
+  //     console.log("memberList", memberList);
+      
+  //     // // Handle Django REST framework pagination response
+  //     // if (response.results) {
+  //     //   setMembers(response.results);
+  //     //   setTotalCount(response.count);
+  //     //   setTotalPages(Math.ceil(response.count / pageSize));
+  //     //   setOutMembers(outdoorMembers)
+
+  //     // } else {
+  //     //   // Fallback for non-paginated response
+  //     //   setMembers(response);
+  //     //   setTotalCount(response.length);
+  //     //   setTotalPages(1);
+  //     // }
+
+  //   } catch (err) {
+  //     setError(err.message);
+  //     showToast(err.message, 'error');
+  //     console.error('Error fetching members:', err);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+  // // Initial data fetch
+  //   useEffect(() => {
+  //     fetchMembers();
+  //   }, [fetchMembers]);
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -111,6 +150,8 @@ const handleCheckInSubmit = async (memberData) => {
       showToast(`${cardType}: ${value} - Detailed view would be implemented here`, 'info');
     }
   };
+  //console.log(stats.membershipStats.membershipTypes.outdoor, 'Outdoor Memberships Count:', stats.membershipStats?.membershipTypes?.outdoor);
+   
 
   // Loading state
   if (statsLoading) {
@@ -213,13 +254,13 @@ const handleCheckInSubmit = async (memberData) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 <Card
                   title="Indoor Memberships"
-                  value={stats.membershipData?.indoor ?? 0}
-                  onClick={() => handleCardClick('Indoor Memberships', stats.membershipData?.indoor ?? 0, '/memberships/indoor')}
+                  value={stats.memberData?.membershipTypes?.indoor ?? 0}
+                  onClick={() => handleCardClick('Indoor Memberships', stats.memberData?.membershipTypes?.indoor ?? 0, '/memberships/indoor')}
                 />
                 <Card
                   title="Outdoor Memberships"
-                  value={stats.membershipData?.outdoor ?? 0}
-                  onClick={() => handleCardClick('Outdoor Memberships', stats.membershipData?.outdoor ?? 0, '/memberships/outdoor')}
+                  value={stats.memberData?.membershipTypes?.outdoor ?? 0}
+                  onClick={() => handleCardClick('Outdoor Memberships', stats.memberData?.membershipTypes?.outdoor ?? 0, '/memberships/outdoor')}
                 />
                 <Card
                   title="Renewals Due"
@@ -240,18 +281,18 @@ const handleCheckInSubmit = async (memberData) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 <Card
                   title="Group Sessions Today"
-                  value={stats.bookingData.groupSessions}
-                  onClick={() => handleCardClick('Group Sessions Today', stats.bookingData.groupSessions)}
+                  value={stats.bookingData?.groupSessions}
+                  onClick={() => handleCardClick('Group Sessions Today', stats.bookingData?.groupSessions)}
                 />
                 <Card
                   title="One-on-One Sessions Today"
-                  value={stats.bookingData.oneOnOneSessions}
-                  onClick={() => handleCardClick('One-on-One Sessions Today', stats.bookingData.oneOnOneSessions)}
+                  value={stats.bookingData?.oneOnOneSessions}
+                  onClick={() => handleCardClick('One-on-One Sessions Today', stats.bookingData?.oneOnOneSessions)}
                 />
                 <Card
                   title="Trainers Available"
-                  value={stats.bookingData.trainersAvailable}
-                  onClick={() => handleCardClick('Trainers Available', stats.bookingData.trainersAvailable)}
+                  value={stats.bookingData?.trainersAvailable}
+                  onClick={() => handleCardClick('Trainers Available', stats.bookingData?.trainersAvailable)}
                 />
                 <Card
                   title="Waitlist Requests"

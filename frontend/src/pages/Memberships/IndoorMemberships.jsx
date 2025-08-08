@@ -65,7 +65,9 @@ const IndoorMemberships = () => {
       });
       
       if (response.success) {
-        const transformedMembers = response.data.map(transformMemberData);
+        // const transformedMembers = response.data.map(transformMemberData);
+        const transformedMembers = response.data;
+
         setMembers(transformedMembers);
         
         // Handle pagination
@@ -244,7 +246,7 @@ const IndoorMemberships = () => {
     
     return (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusStyles[status] || 'bg-gray-100 text-gray-800'}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {status?.charAt(0).toUpperCase() + status?.slice(1)}
       </span>
     );
   };
@@ -258,7 +260,7 @@ const IndoorMemberships = () => {
     
     return (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusStyles[status] || 'bg-gray-100 text-gray-800'}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {status?.charAt(0).toUpperCase() + status?.slice(1)}
       </span>
     );
   };
@@ -453,7 +455,7 @@ const IndoorMemberships = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
                             <div className="text-sm font-medium text-gray-900">
-                              {member.firstName} {member.lastName}
+                              {member.first_name} {member.lastName}
                             </div>
                             <div className="text-sm text-gray-500">{member.email}</div>
                             <div className="text-xs text-gray-400">{member.id}</div>

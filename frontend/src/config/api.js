@@ -24,6 +24,9 @@ export const API_ENDPOINTS = {
     delete: (id) => `members/${id}/`,
     checkin: (id) => `members/${id}/checkin/`,
     search: 'members/',
+    outdoor: 'members/outdoor/',
+    indoor: 'members/indoor/',
+
   },
   
   // Memberships
@@ -33,9 +36,9 @@ export const API_ENDPOINTS = {
     detail: (id) => `memberships/${id}/`,
     update: (id) => `memberships/${id}/`,
     delete: (id) => `memberships/${id}/`,
-    indoor: 'memberships/indoor/',
+    // indoor: 'memberships/indoor/',
     indoor_stats: 'memberships/indoor_stats/',
-    outdoor: 'memberships/outdoor/',
+    //outdoor: 'memberships/outdoor/',
     outdoor_stats: 'memberships/outdoor_stats/',
     use_session: (id) => `memberships/${id}/use_session/`,
     suspend: (id) => `memberships/${id}/suspend/`,

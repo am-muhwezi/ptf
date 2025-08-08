@@ -455,8 +455,8 @@ const getIndoorMembers = async (params = {}) => {
     }
     
     const url = queryParams.toString() 
-      ? `${API_ENDPOINTS.memberships.indoor}?${queryParams.toString()}`
-      : API_ENDPOINTS.memberships.indoor;
+      ? `${API_ENDPOINTS.members.indoor}?${queryParams.toString()}`
+      : API_ENDPOINTS.members.indoor;
     
     const response = await apiClient.get(url);
     
@@ -497,44 +497,52 @@ const getIndoorMembershipStats = async () => {
 const getOutdoorMembers = async (params = {}) => {
   try {
     const queryParams = new URLSearchParams();
-    
-    // Add optional search query
-    if (params.search) {
-      queryParams.append('q', params.search);
-    }
-    
-    // Add pagination
-    if (params.page) {
-      queryParams.append('page', params.page);
-    }
-    
-    if (params.limit) {
-      queryParams.append('limit', params.limit);
-    }
-
-    // Add status filter
-    if (params.status) {
-      queryParams.append('status', params.status);
-    }
+    // Change 'search' to 'q' to match backend expectation
+    if (params.search) queryParams.append('q', params.search);
+    if (params.page) queryParams.append('page', params.page);
+    if (params.limit) queryParams.append('limit', params.limit);
+    if (params.status && params.status !== 'all') queryParams.append('status', params.status);
 
     const url = queryParams.toString() 
-      ? `${API_ENDPOINTS.memberships.outdoor}?${queryParams.toString()}`
-      : API_ENDPOINTS.memberships.outdoor;
+      ? `${API_ENDPOINTS.members.outdoor}?${queryParams.toString()}`
+      : API_ENDPOINTS.members.outdoor;
 
     const response = await apiClient.get(url);
     
-    return {
-      success: true,
-      data: response.data.results || response.data.data || response.data,
-      count: response.data.count || (response.data.results ? response.data.results.length : 0),
-      next: response.data.next,
-      previous: response.data.previous
-    };
+    // Handle both response formats
+    if (response.data.results !== undefined) {
+      // Django paginated format
+      return {
+        success: true,
+        data: response.data.results || [],
+        count: response.data.count || 0,
+        next: response.data.next || null,
+        previous: response.data.previous || null
+      };
+    } else if (response.data.success !== undefined) {
+      // Custom format
+      return {
+        success: true,
+        data: response.data.data || [],
+        count: response.data.count || 0,
+        next: null,
+        previous: null
+      };
+    } else {
+      // Fallback
+      return {
+        success: true,
+        data: response.data || [],
+        count: Array.isArray(response.data) ? response.data.length : 0,
+        next: null,
+        previous: null
+      };
+    }
   } catch (error) {
     throw new Error(
       error.response?.data?.message || 
       error.message || 
-      'Failed to fetch outdoor memberships. Please try again.'
+      'Failed to fetch outdoor memberships'
     );
   }
 };
