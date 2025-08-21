@@ -7,11 +7,11 @@ import { formatCurrency } from '../../utils/formatters';
 
 const PaymentForm = ({ member, isOpen, onClose, onPaymentSuccess }) => {
   const [paymentData, setPaymentData] = useState({
-    amount: member?.amount || 0,
-    phoneNumber: member?.phone || '',
+    amount: member?.amount_due || member?.total_outstanding || 0,
+    phoneNumber: member?.member_details?.phone || member?.phone || '',
     paymentMethod: 'mpesa',
-    description: `Membership payment for ${member?.firstName} ${member?.lastName}`,
-    membershipType: member?.membershipType || 'indoor'
+    description: `Membership payment for ${member?.member_details?.firstName || member?.firstName} ${member?.member_details?.lastName || member?.lastName}`,
+    membershipType: member?.plan_details?.membershipType || member?.membershipType || 'indoor'
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -112,22 +112,20 @@ const PaymentForm = ({ member, isOpen, onClose, onPaymentSuccess }) => {
 
     try {
       const manualPaymentData = {
-        memberId: member.id,
+        payment_method: 'cash',
         amount: paymentData.amount,
-        paymentMethod: 'cash',
         description: paymentData.description,
-        membershipType: paymentData.membershipType,
-        recordedBy: 'Admin', // In real app, get from auth context
-        timestamp: new Date().toISOString()
+        recorded_by: 'Admin' // In real app, get from auth context
       };
 
-      const response = await paymentService.recordManualPayment(manualPaymentData);
+      // Use the new membership payment recording endpoint
+      const response = await paymentService.recordMembershipPayment(member.id, manualPaymentData);
       
       setPaymentStatus('completed');
       showToast('Manual payment recorded successfully!', 'success');
       
       if (onPaymentSuccess) {
-        onPaymentSuccess(response);
+        onPaymentSuccess(response.payment);
       }
     } catch (error) {
       showToast(error.message, 'error');

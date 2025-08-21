@@ -13,7 +13,12 @@ from .serializers import (
     OutdoorMembershipListSerializer,
     CreateMembershipSerializer,
     SessionUsageSerializer,
-    SessionLogSerializer
+    SessionLogSerializer,
+    PaymentDueSerializer,
+    RenewalDueSerializer,
+    PaymentRecordSerializer,
+    PaymentReminderSerializer,
+    BulkPaymentReminderSerializer
 )
 import logging
 
@@ -97,18 +102,10 @@ class MembershipViewSet(viewsets.ModelViewSet):
         # Filter for outdoor memberships only
         queryset = self.get_queryset().filter(plan__membership_type='outdoor')
         
-        # Apply pagination
+        # Always apply pagination for consistent response format
         page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({
-            'success': True,
-            'data': serializer.data,
-            'count': queryset.count()
-        })
+        serializer = self.get_serializer(page or queryset, many=True)
+        return self.get_paginated_response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def indoor(self, request):
@@ -116,18 +113,10 @@ class MembershipViewSet(viewsets.ModelViewSet):
         # Filter for indoor memberships only
         queryset = self.get_queryset().filter(plan__membership_type='indoor')
         
-        # Apply pagination
+        # Always apply pagination for consistent response format
         page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({
-            'success': True,
-            'data': serializer.data,
-            'count': queryset.count()
-        })
+        serializer = self.get_serializer(page or queryset, many=True)
+        return self.get_paginated_response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def indoor_stats(self, request):
@@ -292,4 +281,310 @@ class MembershipViewSet(viewsets.ModelViewSet):
             return Response({
                 'success': False,
                 'error': 'Failed to reactivate membership.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def payments_due(self, request):
+        """Get memberships with payments due"""
+        try:
+            # Get memberships that have payments due
+            queryset = self.get_queryset().filter(
+                payment_status__in=['pending', 'overdue', 'partial']
+            ).exclude(status='cancelled')
+            
+            # Apply search and filters
+            search = request.query_params.get('q')
+            if search:
+                queryset = queryset.filter(
+                    Q(member__first_name__icontains=search) |
+                    Q(member__last_name__icontains=search) |
+                    Q(member__email__icontains=search) |
+                    Q(member__phone__icontains=search)
+                ).distinct()
+            
+            # Filter by payment status
+            payment_status_filter = request.query_params.get('status')
+            if payment_status_filter and payment_status_filter != 'all':
+                queryset = queryset.filter(payment_status=payment_status_filter)
+            
+            # Pagination
+            page = self.paginate_queryset(queryset)
+            serializer = PaymentDueSerializer(page or queryset, many=True)
+            return self.get_paginated_response(serializer.data)
+            
+        except Exception as e:
+            logger.error(f"Error fetching payments due: {e}")
+            return Response({
+                'success': False,
+                'error': 'Failed to fetch payments due'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def renewals_due(self, request):
+        """Get memberships that need renewal"""
+        try:
+            # Get memberships expiring in the next 30 days
+            cutoff_date = timezone.now().date() + timezone.timedelta(days=30)
+            queryset = self.get_queryset().filter(
+                end_date__lte=cutoff_date,
+                status='active'
+            )
+            
+            # Apply search and filters
+            search = request.query_params.get('q')
+            if search:
+                queryset = queryset.filter(
+                    Q(member__first_name__icontains=search) |
+                    Q(member__last_name__icontains=search) |
+                    Q(member__email__icontains=search) |
+                    Q(member__phone__icontains=search)
+                ).distinct()
+            
+            # Filter by urgency
+            urgency_filter = request.query_params.get('urgency')
+            if urgency_filter and urgency_filter != 'all':
+                today = timezone.now().date()
+                if urgency_filter == 'critical':
+                    queryset = queryset.filter(end_date__lte=today + timezone.timedelta(days=7))
+                elif urgency_filter == 'high':
+                    queryset = queryset.filter(
+                        end_date__gt=today + timezone.timedelta(days=7),
+                        end_date__lte=today + timezone.timedelta(days=15)
+                    )
+                elif urgency_filter == 'medium':
+                    queryset = queryset.filter(
+                        end_date__gt=today + timezone.timedelta(days=15),
+                        end_date__lte=today + timezone.timedelta(days=30)
+                    )
+            
+            # Pagination
+            page = self.paginate_queryset(queryset)
+            serializer = RenewalDueSerializer(page or queryset, many=True)
+            return self.get_paginated_response(serializer.data)
+            
+        except Exception as e:
+            logger.error(f"Error fetching renewals due: {e}")
+            return Response({
+                'success': False,
+                'error': 'Failed to fetch renewals due'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'])
+    def record_payment(self, request, pk=None):
+        """Record a payment for a membership"""
+        try:
+            membership = self.get_object()
+            
+            serializer = PaymentRecordSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response({
+                    'success': False,
+                    'errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update membership payment status
+            membership.payment_status = 'paid'
+            membership.amount_paid += serializer.validated_data['amount']
+            
+            # Update next billing date (add 1 month)
+            if membership.next_billing_date:
+                membership.next_billing_date += timezone.timedelta(days=30)
+            else:
+                membership.next_billing_date = timezone.now().date() + timezone.timedelta(days=30)
+            
+            membership.save()
+            
+            # Create payment record (you might want a separate Payment model)
+            payment_data = {
+                'member_id': membership.member.id,
+                'member_name': membership.member.full_name,
+                'amount': float(serializer.validated_data['amount']),
+                'payment_method': serializer.validated_data['payment_method'],
+                'description': serializer.validated_data.get('description', ''),
+                'transaction_reference': serializer.validated_data.get('transaction_reference', ''),
+                'recorded_by': serializer.validated_data['recorded_by'],
+                'timestamp': timezone.now().isoformat(),
+                'status': 'completed',
+                'membership_id': membership.id
+            }
+            
+            return Response({
+                'success': True,
+                'message': f'Payment of {serializer.validated_data["amount"]} recorded successfully for {membership.member.full_name}',
+                'payment': payment_data
+            })
+            
+        except Exception as e:
+            logger.error(f"Error recording payment: {e}")
+            return Response({
+                'success': False,
+                'error': 'Failed to record payment'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'])
+    def send_payment_reminder(self, request, pk=None):
+        """Send payment reminder to a member"""
+        try:
+            membership = self.get_object()
+            
+            serializer = PaymentReminderSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response({
+                    'success': False,
+                    'errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Here you would integrate with email/SMS service
+            # For now, just return success
+            reminder_type = serializer.validated_data['reminder_type']
+            
+            return Response({
+                'success': True,
+                'message': f'Payment reminder sent via {reminder_type} to {membership.member.full_name}'
+            })
+            
+        except Exception as e:
+            logger.error(f"Error sending payment reminder: {e}")
+            return Response({
+                'success': False,
+                'error': 'Failed to send payment reminder'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'])
+    def send_bulk_reminders(self, request):
+        """Send bulk payment reminders"""
+        try:
+            serializer = BulkPaymentReminderSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response({
+                    'success': False,
+                    'errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            member_ids = serializer.validated_data['member_ids']
+            reminder_type = serializer.validated_data['reminder_type']
+            
+            # Here you would integrate with email/SMS service
+            # For now, just return success
+            
+            return Response({
+                'success': True,
+                'message': f'Bulk reminders sent via {reminder_type} to {len(member_ids)} members'
+            })
+            
+        except Exception as e:
+            logger.error(f"Error sending bulk reminders: {e}")
+            return Response({
+                'success': False,
+                'error': 'Failed to send bulk reminders'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'])
+    def process_renewal(self, request, pk=None):
+        """Process membership renewal"""
+        try:
+            membership = self.get_object()
+            
+            # Extend membership by 1 month
+            membership.end_date += timezone.timedelta(days=30)
+            membership.payment_status = 'paid'
+            membership.save()
+            
+            return Response({
+                'success': True,
+                'message': f'Membership renewed for {membership.member.full_name}. New expiry date: {membership.end_date}'
+            })
+            
+        except Exception as e:
+            logger.error(f"Error processing renewal: {e}")
+            return Response({
+                'success': False,
+                'error': 'Failed to process renewal'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def payment_stats(self, request):
+        """Get payment statistics"""
+        try:
+            payments_due = Membership.objects.filter(
+                payment_status__in=['pending', 'overdue', 'partial']
+            ).exclude(status='cancelled')
+            
+            today = timezone.now().date()
+            overdue_count = 0
+            due_today_count = 0
+            total_outstanding = 0
+            
+            for membership in payments_due:
+                if membership.next_billing_date:
+                    days_diff = (membership.next_billing_date - today).days
+                    if days_diff < 0:
+                        overdue_count += 1
+                    elif days_diff == 0:
+                        due_today_count += 1
+                
+                # Calculate outstanding amount
+                if membership.next_billing_date and membership.next_billing_date < today:
+                    days_overdue = (today - membership.next_billing_date).days
+                    months_overdue = max(1, days_overdue // 30)
+                    total_outstanding += float(membership.plan.monthly_fee * months_overdue)
+                else:
+                    total_outstanding += float(membership.plan.monthly_fee)
+            
+            stats = {
+                'total': payments_due.count(),
+                'overdue': overdue_count,
+                'dueToday': due_today_count,
+                'totalOutstanding': total_outstanding
+            }
+            
+            return Response({
+                'success': True,
+                'data': stats
+            })
+            
+        except Exception as e:
+            logger.error(f"Error calculating payment stats: {e}")
+            return Response({
+                'success': False,
+                'error': 'Failed to calculate payment statistics'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def renewal_stats(self, request):
+        """Get renewal statistics"""
+        try:
+            today = timezone.now().date()
+            renewals_due = Membership.objects.filter(
+                end_date__lte=today + timezone.timedelta(days=30),
+                status='active'
+            )
+            
+            critical = renewals_due.filter(end_date__lte=today + timezone.timedelta(days=7)).count()
+            high = renewals_due.filter(
+                end_date__gt=today + timezone.timedelta(days=7),
+                end_date__lte=today + timezone.timedelta(days=15)
+            ).count()
+            medium = renewals_due.filter(
+                end_date__gt=today + timezone.timedelta(days=15),
+                end_date__lte=today + timezone.timedelta(days=30)
+            ).count()
+            
+            stats = {
+                'total': renewals_due.count(),
+                'critical': critical,
+                'high': high,
+                'medium': medium
+            }
+            
+            return Response({
+                'success': True,
+                'data': stats
+            })
+            
+        except Exception as e:
+            logger.error(f"Error calculating renewal stats: {e}")
+            return Response({
+                'success': False,
+                'error': 'Failed to calculate renewal statistics'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

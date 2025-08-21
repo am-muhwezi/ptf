@@ -5,6 +5,7 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
+import { paymentService } from '../../services/paymentService';
 
 const RenewalsDue = () => {
   const [renewals, setRenewals] = useState([]);
@@ -14,79 +15,62 @@ const RenewalsDue = () => {
   const [selectedRenewal, setSelectedRenewal] = useState(null);
   const [showRenewalModal, setShowRenewalModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [stats, setStats] = useState({ total: 0, critical: 0, high: 0, medium: 0 });
 
-  // Mock data - replace with API call
-  const mockRenewals = [
-    {
-      id: 'PTF001234',
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john.doe@email.com',
-      phone: '+256 700 123 456',
-      membershipType: 'indoor',
-      currentPlan: 'Monthly Premium',
-      expiryDate: '2024-02-05',
-      daysUntilExpiry: 5,
-      amount: 150000,
-      urgency: 'critical',
-      lastRenewal: '2024-01-05',
-      totalRenewals: 3,
-      preferredContact: 'email'
-    },
-    {
-      id: 'PTF001235',
-      firstName: 'Jane',
-      lastName: 'Smith',
-      email: 'jane.smith@email.com',
-      phone: '+256 700 123 457',
-      membershipType: 'outdoor',
-      currentPlan: 'Quarterly Basic',
-      expiryDate: '2024-02-15',
-      daysUntilExpiry: 15,
-      amount: 280000,
-      urgency: 'high',
-      lastRenewal: '2023-11-15',
-      totalRenewals: 2,
-      preferredContact: 'phone'
-    },
-    {
-      id: 'PTF001236',
-      firstName: 'Mike',
-      lastName: 'Johnson',
-      email: 'mike.johnson@email.com',
-      phone: '+256 700 123 458',
-      membershipType: 'both',
-      currentPlan: 'Annual Premium',
-      expiryDate: '2024-02-28',
-      daysUntilExpiry: 28,
-      amount: 1800000,
-      urgency: 'medium',
-      lastRenewal: '2023-02-28',
-      totalRenewals: 1,
-      preferredContact: 'email'
-    },
-    {
-      id: 'PTF001237',
-      firstName: 'Sarah',
-      lastName: 'Wilson',
-      email: 'sarah.wilson@email.com',
-      phone: '+256 700 123 459',
-      membershipType: 'indoor',
-      currentPlan: 'Monthly Basic',
-      expiryDate: '2024-02-02',
-      daysUntilExpiry: 2,
-      amount: 120000,
-      urgency: 'critical',
-      lastRenewal: '2024-01-02',
-      totalRenewals: 5,
-      preferredContact: 'phone'
+  // Fetch renewals due from API
+  const fetchRenewalsDue = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const params = {};
+      if (searchTerm) params.q = searchTerm;
+      if (filterUrgency !== 'all') params.urgency = filterUrgency;
+      
+      const response = await paymentService.getRenewalsDue(params);
+      
+      if (response.success) {
+        const renewalsData = response.results || response.data || [];
+        setRenewals(renewalsData);
+        setFilteredRenewals(renewalsData);
+      } else {
+        throw new Error(response.error || 'Failed to fetch renewals');
+      }
+    } catch (err) {
+      setError(err.message);
+      showToast(err.message, 'error');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  // Fetch renewal statistics
+  const fetchRenewalStats = async () => {
+    try {
+      const response = await paymentService.getRenewalStats();
+      if (response.success) {
+        setStats(response.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch renewal stats:', err);
+    }
+  };
 
   useEffect(() => {
-    setRenewals(mockRenewals);
-    setFilteredRenewals(mockRenewals);
+    fetchRenewalsDue();
+    fetchRenewalStats();
   }, []);
+
+  useEffect(() => {
+    // Debounce search to avoid too many API calls
+    const timeoutId = setTimeout(() => {
+      fetchRenewalsDue();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, filterUrgency]);
 
   useEffect(() => {
     let filtered = renewals;
@@ -122,16 +106,55 @@ const RenewalsDue = () => {
     setShowRenewalModal(true);
   };
 
-  const handleProcessRenewal = (renewalId) => {
-    showToast(`Renewal process initiated for member ${renewalId}`, 'success');
+  const handleProcessRenewal = async (renewal) => {
+    try {
+      const response = await paymentService.processRenewal(renewal.id);
+      if (response.success) {
+        showToast(response.message, 'success');
+        // Refresh the renewals list
+        await fetchRenewalsDue();
+        await fetchRenewalStats();
+      } else {
+        throw new Error(response.error);
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   };
 
-  const handleSendReminder = (renewalId, contactMethod) => {
-    showToast(`Reminder sent via ${contactMethod} to member ${renewalId}`, 'info');
+  const handleSendReminder = async (renewal, contactMethod) => {
+    try {
+      const response = await paymentService.sendPaymentReminder(renewal.id, {
+        reminder_type: contactMethod || 'email',
+        message: `Renewal reminder for ${renewal.member_details.firstName} ${renewal.member_details.lastName}`
+      });
+      
+      if (response.success) {
+        showToast(response.message, 'info');
+      } else {
+        throw new Error(response.error);
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   };
 
-  const handleBulkReminders = () => {
-    showToast(`Bulk reminders sent to ${filteredRenewals.length} members`, 'success');
+  const handleBulkReminders = async () => {
+    try {
+      const memberIds = filteredRenewals.map(renewal => renewal.id);
+      const response = await paymentService.sendBulkReminders({
+        member_ids: memberIds,
+        reminder_type: 'email'
+      });
+      
+      if (response.success) {
+        showToast(response.message, 'success');
+      } else {
+        throw new Error(response.error);
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   };
 
   const getUrgencyBadge = (urgency) => {

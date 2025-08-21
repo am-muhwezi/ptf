@@ -1,4 +1,3 @@
-// frontend/src/pages/Members/index.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
@@ -65,8 +64,8 @@ const Members = () => {
     return `${firstInitial}${lastInitial}`;
   };
 
-  // Fetch members data
-  const fetchMembers = useCallback(async (page = currentPage) => {
+  // Fetch members data with proper dependencies
+  const fetchMembers = useCallback(async (page = 1) => {
     try {
       setLoading(true);
       setError(null);
@@ -81,41 +80,49 @@ const Members = () => {
 
       const response = await memberService.getMembers(params);
       
-      // Handle Django REST framework pagination response
-      if (response.results) {
-        setMembers(response.results);
-        setTotalCount(response.count);
-        setTotalPages(Math.ceil(response.count / pageSize));
+      // Handle Django REST framework pagination response with proper null guards
+      if (response && typeof response === 'object') {
+        const results = response.results || response || [];
+        const count = response.count || (Array.isArray(results) ? results.length : 0);
+        
+        // Ensure results is always an array
+        const safeResults = Array.isArray(results) ? results : [];
+        
+        setMembers(safeResults);
+        setTotalCount(count);
+        setTotalPages(Math.ceil(count / pageSize));
+        setCurrentPage(page);
       } else {
-        // Fallback for non-paginated response
-        setMembers(response);
-        setTotalCount(response.length);
+        // Fallback for unexpected response format
+        setMembers([]);
+        setTotalCount(0);
         setTotalPages(1);
+        setCurrentPage(1);
       }
 
     } catch (err) {
       setError(err.message);
       showToast(err.message, 'error');
       console.error('Error fetching members:', err);
+      // Set safe defaults on error
+      setMembers([]);
+      setTotalCount(0);
+      setTotalPages(1);
+      setCurrentPage(1);
     } finally {
       setLoading(false);
     }
-  }, [currentPage, pageSize, searchTerm, filterStatus, filterMembershipType]);
+  }, [pageSize, searchTerm, filterStatus, filterMembershipType]); // Include all reactive dependencies
 
 
-  // Initial data fetch
+  // Single debounced effect for all data fetching
   useEffect(() => {
-    fetchMembers();
+    const timeoutId = setTimeout(() => {
+      fetchMembers(1); // Always reset to page 1 when filters change
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
   }, [fetchMembers]);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    if (currentPage !== 1) {
-      setCurrentPage(1);
-    } else {
-      fetchMembers(1);
-    }
-  }, [searchTerm, filterStatus, filterMembershipType]);
 
   // Fetch stats separately since we're using pagination
   const fetchStats = useCallback(async () => {
@@ -139,9 +146,10 @@ const Members = () => {
     fetchStats();
   }, [fetchStats]);
 
-  // Update filtered members when members change
+  // Update filtered members when members change with null guard
   useEffect(() => {
-    setFilteredMembers(members);
+    const safeMembers = Array.isArray(members) ? members : [];
+    setFilteredMembers(safeMembers);
   }, [members]);
 
   // Toast helper functions
@@ -162,14 +170,12 @@ const Members = () => {
 
   // Pagination handlers
   const handlePageChange = (newPage) => {
-    setCurrentPage(newPage);
     fetchMembers(newPage);
   };
 
   const handlePageSizeChange = (newSize) => {
     setPageSize(newSize);
-    setCurrentPage(1);
-    fetchMembers(1);
+    // fetchMembers will be called automatically by useEffect when pageSize changes
   };
 
   // Member action handlers
@@ -553,7 +559,7 @@ const Members = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredMembers.map((member) => (
+                      {Array.isArray(filteredMembers) && filteredMembers.map((member) => (
                         <tr key={member.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">

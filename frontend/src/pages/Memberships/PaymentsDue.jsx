@@ -7,6 +7,7 @@ import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
 import PaymentForm from '../../components/forms/PaymentForm';
 import Receipt from '../../components/ui/Receipt';
+import { paymentService } from '../../services/paymentService';
 
 const PaymentsDue = () => {
   const [payments, setPayments] = useState([]);
@@ -19,105 +20,68 @@ const PaymentsDue = () => {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [stats, setStats] = useState({ total: 0, overdue: 0, dueToday: 0, totalOutstanding: 0 });
 
-  // Mock data - replace with API call
-  const mockPayments = [
-    {
-      id: 'PTF001234',
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john.doe@email.com',
-      phone: '+256 700 123 456',
-      membershipType: 'indoor',
-      planType: 'Monthly Premium',
-      amount: 150000,
-      dueDate: '2024-01-25',
-      daysOverdue: 5,
-      status: 'overdue',
-      lastPayment: '2023-12-25',
-      paymentMethod: 'Mobile Money',
-      invoiceNumber: 'INV-2024-001',
-      totalOutstanding: 150000
-    },
-    {
-      id: 'PTF001235',
-      firstName: 'Jane',
-      lastName: 'Smith',
-      email: 'jane.smith@email.com',
-      phone: '+256 700 123 457',
-      membershipType: 'outdoor',
-      planType: 'Quarterly Basic',
-      amount: 280000,
-      dueDate: '2024-02-01',
-      daysOverdue: 0,
-      status: 'due_today',
-      lastPayment: '2023-11-01',
-      paymentMethod: 'Bank Transfer',
-      invoiceNumber: 'INV-2024-002',
-      totalOutstanding: 280000
-    },
-    {
-      id: 'PTF001236',
-      firstName: 'Mike',
-      lastName: 'Johnson',
-      email: 'mike.johnson@email.com',
-      phone: '+256 700 123 458',
-      membershipType: 'both',
-      planType: 'Annual Premium',
-      amount: 1800000,
-      dueDate: '2024-02-05',
-      daysOverdue: 0,
-      status: 'due_soon',
-      lastPayment: '2023-02-05',
-      paymentMethod: 'Credit Card',
-      invoiceNumber: 'INV-2024-003',
-      totalOutstanding: 1800000
-    },
-    {
-      id: 'PTF001237',
-      firstName: 'Sarah',
-      lastName: 'Wilson',
-      email: 'sarah.wilson@email.com',
-      phone: '+256 700 123 459',
-      membershipType: 'indoor',
-      planType: 'Monthly Basic',
-      amount: 120000,
-      dueDate: '2024-01-20',
-      daysOverdue: 10,
-      status: 'overdue',
-      lastPayment: '2023-12-20',
-      paymentMethod: 'Cash',
-      invoiceNumber: 'INV-2024-004',
-      totalOutstanding: 240000 // 2 months overdue
+  // Fetch payments due from API
+  const fetchPaymentsDue = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const params = {};
+      if (searchTerm) params.q = searchTerm;
+      if (filterStatus !== 'all') params.status = filterStatus;
+      
+      const response = await paymentService.getPaymentsDue(params);
+      
+      if (response.success) {
+        const paymentsData = response.results || response.data || [];
+        setPayments(paymentsData);
+        setFilteredPayments(paymentsData);
+      } else {
+        throw new Error(response.error || 'Failed to fetch payments');
+      }
+    } catch (err) {
+      setError(err.message);
+      showToast(err.message, 'error');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  // Fetch payment statistics
+  const fetchPaymentStats = async () => {
+    try {
+      const response = await paymentService.getPaymentStats();
+      if (response.success) {
+        setStats(response.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch payment stats:', err);
+    }
+  };
 
   useEffect(() => {
-    setPayments(mockPayments);
-    setFilteredPayments(mockPayments);
+    fetchPaymentsDue();
+    fetchPaymentStats();
   }, []);
 
   useEffect(() => {
-    let filtered = payments;
+    // Debounce search to avoid too many API calls
+    const timeoutId = setTimeout(() => {
+      fetchPaymentsDue();
+    }, 300);
 
-    // Filter by search term
-    if (searchTerm) {
-      filtered = filtered.filter(payment =>
-        payment.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        payment.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        payment.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        payment.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        payment.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, filterStatus]);
 
-    // Filter by status
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(payment => payment.status === filterStatus);
-    }
-
-    setFilteredPayments(filtered);
-  }, [searchTerm, filterStatus, payments]);
+  // Since we're now filtering on the server side, we don't need client-side filtering
+  // But we'll keep this for any additional client-side logic if needed
+  useEffect(() => {
+    setFilteredPayments(payments);
+  }, [payments]);
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -132,35 +96,65 @@ const PaymentsDue = () => {
     setShowPaymentModal(true);
   };
 
-  const handleRecordPayment = (paymentId) => {
-    const payment = payments.find(p => p.id === paymentId);
-    if (payment) {
-      setSelectedPayment(payment);
-      setShowPaymentFormModal(true);
-    }
+  const handleRecordPayment = (payment) => {
+    setSelectedPayment(payment);
+    setShowPaymentFormModal(true);
   };
 
-  const handlePaymentSuccess = (paymentResponse) => {
+  const handlePaymentSuccess = async (paymentResponse) => {
     setPaymentData(paymentResponse);
     setShowPaymentFormModal(false);
     setShowReceiptModal(true);
     
-    // Update payment status
-    const updatedPayments = payments.map(payment =>
-      payment.id === selectedPayment.id 
-        ? { ...payment, status: 'paid', paymentStatus: 'paid' }
-        : payment
-    );
-    setPayments(updatedPayments);
-    setFilteredPayments(updatedPayments);
+    // Refresh the payments list and stats
+    await fetchPaymentsDue();
+    await fetchPaymentStats();
+    
+    showToast('Payment recorded successfully!', 'success');
   };
 
-  const handleSendInvoice = (paymentId) => {
-    showToast(`Invoice sent to member ${paymentId}`, 'info');
+  const handleSendInvoice = async (payment) => {
+    try {
+      const response = await paymentService.sendPaymentReminder(payment.id, {
+        reminder_type: 'email',
+        message: `Payment reminder for ${payment.member_details.firstName} ${payment.member_details.lastName}`
+      });
+      
+      if (response.success) {
+        showToast(response.message, 'info');
+      } else {
+        throw new Error(response.error);
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   };
 
-  const handleSuspendMember = (paymentId) => {
-    showToast(`Member ${paymentId} has been suspended due to non-payment`, 'warning');
+  const handleSuspendMember = async (payment) => {
+    try {
+      // This would need a suspend member endpoint
+      showToast(`Member ${payment.member_details.firstName} ${payment.member_details.lastName} has been suspended due to non-payment`, 'warning');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleBulkReminders = async () => {
+    try {
+      const memberIds = filteredPayments.map(payment => payment.id);
+      const response = await paymentService.sendBulkReminders({
+        member_ids: memberIds,
+        reminder_type: 'email'
+      });
+      
+      if (response.success) {
+        showToast(response.message, 'success');
+      } else {
+        throw new Error(response.error);
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -211,16 +205,7 @@ const PaymentsDue = () => {
     return new Date(dateString).toLocaleDateString('en-GB');
   };
 
-  const getPaymentStats = () => {
-    return {
-      total: payments.length,
-      overdue: payments.filter(p => p.status === 'overdue').length,
-      dueToday: payments.filter(p => p.status === 'due_today').length,
-      totalOutstanding: payments.reduce((sum, p) => sum + p.totalOutstanding, 0)
-    };
-  };
-
-  const paymentStats = getPaymentStats();
+  // Stats are now fetched from API and stored in state
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -238,7 +223,7 @@ const PaymentsDue = () => {
                 <p className="text-gray-600 mt-1">Track and manage outstanding membership payments</p>
               </div>
               <div className="flex space-x-3">
-                <Button variant="outline">Send Bulk Invoices</Button>
+                <Button variant="outline" onClick={handleBulkReminders}>Send Bulk Invoices</Button>
                 <Button variant="primary">Payment Report</Button>
               </div>
             </div>
@@ -247,25 +232,25 @@ const PaymentsDue = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <Card
                 title="Total Outstanding"
-                value={formatCurrency(paymentStats.totalOutstanding)}
+                value={formatCurrency(stats.totalOutstanding)}
                 subtitle="All pending payments"
                 className="border-red-200"
               />
               <Card
                 title="Overdue Payments"
-                value={paymentStats.overdue}
+                value={stats.overdue}
                 subtitle="Require immediate action"
                 className="border-red-200"
               />
               <Card
                 title="Due Today"
-                value={paymentStats.dueToday}
+                value={stats.dueToday}
                 subtitle="Payment due today"
                 className="border-orange-200"
               />
               <Card
                 title="Total Members"
-                value={paymentStats.total}
+                value={stats.total}
                 subtitle="With pending payments"
               />
             </div>
@@ -299,105 +284,128 @@ const PaymentsDue = () => {
 
             {/* Payments Table */}
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Member
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Plan & Type
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Due Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Amount Due
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Invoice
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredPayments.map((payment) => (
-                      <tr key={payment.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {payment.firstName} {payment.lastName}
-                            </div>
-                            <div className="text-sm text-gray-500">{payment.email}</div>
-                            <div className="text-xs text-gray-400">{payment.id}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{payment.planType}</div>
-                          <div className="mt-1">{getMembershipTypeBadge(payment.membershipType)}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{formatDate(payment.dueDate)}</div>
-                          {payment.daysOverdue > 0 && (
-                            <div className="text-xs text-red-600 font-medium">
-                              {payment.daysOverdue} days overdue
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {getStatusBadge(payment.status)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                            {formatCurrency(payment.totalOutstanding)}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            Plan: {formatCurrency(payment.amount)}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{payment.invoiceNumber}</div>
-                          <div className="text-xs text-gray-500">{payment.paymentMethod}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                          <button
-                            onClick={() => handleViewPayment(payment)}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            View
-                          </button>
-                          <button
-                            onClick={() => handleRecordPayment(payment.id)}
-                            className="text-green-600 hover:text-green-900"
-                          >
-                            Pay Now
-                          </button>
-                          <button
-                            onClick={() => handleSendInvoice(payment.id)}
-                            className="text-orange-600 hover:text-orange-900"
-                          >
-                            Invoice
-                          </button>
-                          {payment.status === 'overdue' && (
-                            <button
-                              onClick={() => handleSuspendMember(payment.id)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              Suspend
-                            </button>
-                          )}
-                        </td>
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                  <span className="ml-3 text-gray-600">Loading payments...</span>
+                </div>
+              ) : error ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-red-600 text-center">
+                    <p className="mb-2">Error loading payments</p>
+                    <button 
+                      onClick={fetchPaymentsDue}
+                      className="text-blue-600 hover:text-blue-800 underline"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                </div>
+              ) : filteredPayments.length === 0 ? (
+                <div className="flex items-center justify-center py-12">
+                  <p className="text-gray-600">No payments due found</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Member
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Plan & Type
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Due Date
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Amount Due
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Invoice
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredPayments.map((payment) => (
+                        <tr key={payment.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {payment.member_details.firstName} {payment.member_details.lastName}
+                              </div>
+                              <div className="text-sm text-gray-500">{payment.member_details.email}</div>
+                              <div className="text-xs text-gray-400">{payment.member_details.id}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{payment.plan_details.planType}</div>
+                            <div className="mt-1">{getMembershipTypeBadge(payment.plan_details.membershipType)}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{formatDate(payment.next_billing_date)}</div>
+                            {payment.days_overdue > 0 && (
+                              <div className="text-xs text-red-600 font-medium">
+                                {payment.days_overdue} days overdue
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {getStatusBadge(payment.status)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">
+                              {formatCurrency(payment.total_outstanding)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Plan: {formatCurrency(payment.amount_due)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{payment.invoice_number}</div>
+                            <div className="text-xs text-gray-500">{payment.payment_status}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                            <button
+                              onClick={() => handleViewPayment(payment)}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              View
+                            </button>
+                            <button
+                              onClick={() => handleRecordPayment(payment)}
+                              className="text-green-600 hover:text-green-900"
+                            >
+                              Pay Now
+                            </button>
+                            <button
+                              onClick={() => handleSendInvoice(payment)}
+                              className="text-orange-600 hover:text-orange-900"
+                            >
+                              Invoice
+                            </button>
+                            {payment.status === 'overdue' && (
+                              <button
+                                onClick={() => handleSuspendMember(payment)}
+                                className="text-red-600 hover:text-red-900"
+                              >
+                                Suspend
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </main>

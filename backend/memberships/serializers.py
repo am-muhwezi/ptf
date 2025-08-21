@@ -237,3 +237,190 @@ class SessionUsageSerializer(serializers.Serializer):
     """Serializer for session usage (check-in)"""
     location = serializers.CharField(max_length=100, required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class PaymentDueSerializer(serializers.ModelSerializer):
+    """Serializer for payments due - optimized for payments page"""
+    
+    member_details = serializers.SerializerMethodField()
+    days_overdue = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    amount_due = serializers.SerializerMethodField()
+    total_outstanding = serializers.SerializerMethodField()
+    plan_details = serializers.SerializerMethodField()
+    invoice_number = serializers.SerializerMethodField()
+    last_payment = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Membership
+        fields = [
+            'id', 'member_details', 'plan_details', 'next_billing_date', 
+            'days_overdue', 'status', 'amount_due', 'total_outstanding',
+            'payment_status', 'invoice_number', 'last_payment', 'created_at'
+        ]
+    
+    def get_member_details(self, obj):
+        return {
+            'id': f'PTF{str(obj.member.id).zfill(6)}',
+            'firstName': obj.member.first_name,
+            'lastName': obj.member.last_name,
+            'email': obj.member.email,
+            'phone': obj.member.phone,
+        }
+    
+    def get_plan_details(self, obj):
+        return {
+            'planType': obj.plan.plan_name,
+            'membershipType': obj.plan.membership_type,
+            'amount': float(obj.plan.monthly_fee)
+        }
+    
+    def get_days_overdue(self, obj):
+        from django.utils import timezone
+        if obj.next_billing_date and obj.next_billing_date < timezone.now().date():
+            return (timezone.now().date() - obj.next_billing_date).days
+        return 0
+    
+    def get_status(self, obj):
+        from django.utils import timezone
+        if not obj.next_billing_date:
+            return 'unknown'
+        
+        days_diff = (obj.next_billing_date - timezone.now().date()).days
+        
+        if days_diff < 0:
+            return 'overdue'
+        elif days_diff == 0:
+            return 'due_today'
+        elif days_diff <= 7:
+            return 'due_soon'
+        else:
+            return 'current'
+    
+    def get_amount_due(self, obj):
+        return float(obj.plan.monthly_fee)
+    
+    def get_total_outstanding(self, obj):
+        # Calculate total outstanding based on overdue periods
+        days_overdue = self.get_days_overdue(obj)
+        if days_overdue > 0:
+            # For simplicity, assume monthly billing
+            months_overdue = max(1, days_overdue // 30)
+            return float(obj.plan.monthly_fee * months_overdue)
+        return float(obj.plan.monthly_fee)
+    
+    def get_invoice_number(self, obj):
+        # Generate invoice number based on membership ID
+        return f'INV-2024-{str(obj.id).zfill(3)}'
+    
+    def get_last_payment(self, obj):
+        # Return start date as last payment for now
+        return obj.start_date
+
+
+class RenewalDueSerializer(serializers.ModelSerializer):
+    """Serializer for renewals due - optimized for renewals page"""
+    
+    member_details = serializers.SerializerMethodField()
+    plan_details = serializers.SerializerMethodField()
+    days_until_expiry = serializers.SerializerMethodField()
+    urgency = serializers.SerializerMethodField()
+    renewal_amount = serializers.SerializerMethodField()
+    last_renewal = serializers.SerializerMethodField()
+    total_renewals = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Membership
+        fields = [
+            'id', 'member_details', 'plan_details', 'end_date',
+            'days_until_expiry', 'urgency', 'renewal_amount',
+            'last_renewal', 'total_renewals', 'status'
+        ]
+    
+    def get_member_details(self, obj):
+        return {
+            'id': f'PTF{str(obj.member.id).zfill(6)}',
+            'firstName': obj.member.first_name,
+            'lastName': obj.member.last_name,
+            'email': obj.member.email,
+            'phone': obj.member.phone,
+            'preferredContact': 'email'  # Default, could be a field on member
+        }
+    
+    def get_plan_details(self, obj):
+        return {
+            'currentPlan': obj.plan.plan_name,
+            'membershipType': obj.plan.membership_type,
+        }
+    
+    def get_days_until_expiry(self, obj):
+        from django.utils import timezone
+        return (obj.end_date - timezone.now().date()).days
+    
+    def get_urgency(self, obj):
+        days_until_expiry = self.get_days_until_expiry(obj)
+        
+        if days_until_expiry <= 7:
+            return 'critical'
+        elif days_until_expiry <= 15:
+            return 'high'
+        elif days_until_expiry <= 30:
+            return 'medium'
+        else:
+            return 'low'
+    
+    def get_renewal_amount(self, obj):
+        return float(obj.plan.monthly_fee)
+    
+    def get_last_renewal(self, obj):
+        return obj.start_date
+    
+    def get_total_renewals(self, obj):
+        # Count how many times this member has had memberships
+        return Membership.objects.filter(member=obj.member).count()
+
+
+class PaymentRecordSerializer(serializers.Serializer):
+    """Serializer for recording payments"""
+    
+    payment_method = serializers.ChoiceField(choices=[
+        ('cash', 'Cash'),
+        ('mpesa', 'M-Pesa'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('card', 'Card')
+    ])
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    description = serializers.CharField(max_length=500, required=False)
+    transaction_reference = serializers.CharField(max_length=100, required=False)
+    recorded_by = serializers.CharField(max_length=100)
+    
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than 0")
+        return value
+
+
+class PaymentReminderSerializer(serializers.Serializer):
+    """Serializer for sending payment reminders"""
+    
+    reminder_type = serializers.ChoiceField(choices=[
+        ('email', 'Email'),
+        ('sms', 'SMS'),
+        ('both', 'Both')
+    ])
+    message = serializers.CharField(max_length=500, required=False)
+
+
+class BulkPaymentReminderSerializer(serializers.Serializer):
+    """Serializer for bulk payment reminders"""
+    
+    member_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=1
+    )
+    reminder_type = serializers.ChoiceField(choices=[
+        ('email', 'Email'),
+        ('sms', 'SMS'),
+        ('both', 'Both')
+    ])
+    message = serializers.CharField(max_length=500, required=False)

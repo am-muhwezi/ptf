@@ -40,17 +40,21 @@ const IndoorMemberships = () => {
         limit: 1000
       });
       
-      if (response.success) {
+      // Handle standard DRF pagination response
+      if (response && Array.isArray(response.data)) {
         const transformedMembers = response.data.map(transformMemberData);
         setAllMembers(transformedMembers);
+      } else {
+        setAllMembers([]);
       }
     } catch (err) {
       console.error('Failed to load all indoor members for stats:', err);
+      setAllMembers([]);
     }
   };
 
-  // Load indoor memberships from API (for display)
-  const loadIndoorMembers = async (page = 1, updateLoading = false) => {
+  // Load indoor memberships from API (for display)  
+  const loadIndoorMembers = async (page = 1, updateLoading = true) => {
     try {
       if (updateLoading) {
         setLoading(true);
@@ -64,7 +68,8 @@ const IndoorMemberships = () => {
         limit: 20
       });
       
-      if (response.success) {
+      // Handle standard DRF pagination response
+      if (response && Array.isArray(response.data)) {
         const transformedMembers = response.data.map(transformMemberData);
         setMembers(transformedMembers);
         
@@ -78,11 +83,22 @@ const IndoorMemberships = () => {
           setTotalPages(Math.ceil(response.count / 20));
         }
       } else {
-        throw new Error('Failed to load indoor memberships');
+        // Set safe defaults
+        setMembers([]);
+        setCurrentPage(1);
+        setTotalPages(1);
+        setHasNext(false);
+        setHasPrevious(false);
       }
     } catch (err) {
       setError(err.message);
       showToast('Error loading indoor memberships: ' + err.message, 'error');
+      // Set safe defaults on error
+      setMembers([]);
+      setCurrentPage(1);
+      setTotalPages(1);
+      setHasNext(false);
+      setHasPrevious(false);
     } finally {
       if (updateLoading) {
         setLoading(false);
@@ -102,34 +118,25 @@ const IndoorMemberships = () => {
     }
   };
 
+  // Single debounced effect for all data fetching
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        await Promise.all([
-          loadAllIndoorMembers(),
-          loadIndoorMembers(),
-          loadStats()
-        ]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadData();
-  }, []);
+    const timeoutId = setTimeout(() => {
+      const loadData = async () => {
+        try {
+          await Promise.all([
+            loadAllIndoorMembers(),
+            loadIndoorMembers(1, true),
+            loadStats()
+          ]);
+        } catch (error) {
+          console.error('Error loading indoor data:', error);
+        }
+      };
+      loadData();
+    }, 300); // 300ms debounce
 
-  // Reload data when search term or filter changes
-  useEffect(() => {
-    const delayedSearch = setTimeout(() => {
-      if (searchTerm || filterStatus !== 'all') {
-        setCurrentPage(1); // Reset to first page
-        loadIndoorMembers(1, true); // Enable loading state for search
-      }
-    }, 300); // Debounce search
-
-    return () => clearTimeout(delayedSearch);
-  }, [searchTerm, filterStatus]);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, filterStatus]); // React to filter changes
 
   // Handle pagination
   const handlePageChange = (newPage) => {
@@ -145,6 +152,20 @@ const IndoorMemberships = () => {
 
   const hideToast = () => {
     setToast({ show: false, message: '', type: 'success' });
+  };
+
+  const refetch = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      await Promise.all([
+        loadAllIndoorMembers(),
+        loadIndoorMembers(),
+        loadStats()
+      ]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleViewMember = (member) => {
@@ -448,7 +469,7 @@ const IndoorMemberships = () => {
                         </td>
                       </tr>
                     )}
-                    {members.map((member) => (
+                    {Array.isArray(members) && members.map((member) => (
                       <tr key={member.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
