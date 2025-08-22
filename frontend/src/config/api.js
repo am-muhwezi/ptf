@@ -22,14 +22,13 @@ export const API_ENDPOINTS = {
     detail: (id) => `members/${id}/`,
     update: (id) => `members/${id}/`,
     delete: (id) => `members/${id}/`,
-    checkin: (id) => `members/${id}/checkin/`,
     search: 'members/',
   },
   
   // Memberships
   memberships: {
-    list: 'memberships/memberships/',
-    create: 'memberships/memberships/',
+    list: 'memberships/',
+    create: 'memberships/',
     detail: (id) => `memberships/${id}/`,
     update: (id) => `memberships/${id}/`,
     delete: (id) => `memberships/${id}/`,
@@ -42,7 +41,7 @@ export const API_ENDPOINTS = {
     reactivate: (id) => `memberships/${id}/reactivate/`,
     renew: (id) => `memberships/${id}/renew/`,
     // Membership Plans
-    plans: 'memberships/plans/',
+    plans: 'plans/',
   },
   
   // Dashboard
@@ -61,8 +60,9 @@ export const API_ENDPOINTS = {
   
   // Attendance
   attendance: {
-    list: 'attendance/',
-    create: 'attendance/',
+    checkin: 'attendance/check-in/',
+    checkout: 'attendance/check-out/',
+    status: 'attendance/status/',
     today: 'attendance/today/',
   },
   

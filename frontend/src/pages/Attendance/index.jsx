@@ -5,6 +5,8 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
+import CheckInForm from '../../components/forms/CheckInForm';
+import attendanceService from '../../services/attendanceService';
 import { formatDate, formatRelativeTime } from '../../utils/formatters';
 
 const Attendance = () => {
@@ -15,82 +17,78 @@ const Attendance = () => {
   const [filterDate, setFilterDate] = useState('today');
   const [selectedLog, setSelectedLog] = useState(null);
   const [showLogModal, setShowLogModal] = useState(false);
+  const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [todaysStats, setTodaysStats] = useState({
+    totalToday: 0,
+    indoorToday: 0,
+    outdoorToday: 0,
+    activeNow: 0
+  });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  // Mock data - replace with API call
-  const mockAttendanceLogs = [
-    {
-      id: 1,
-      memberId: 'PTF001234',
-      memberName: 'John Doe',
-      membershipType: 'indoor',
-      checkInTime: '2024-02-01T08:30:00Z',
-      checkOutTime: '2024-02-01T10:15:00Z',
-      duration: '1h 45m',
-      visitType: 'indoor',
-      activities: ['Weight Training', 'Cardio'],
-      trainer: 'Mike Johnson',
-      notes: 'Great workout session'
-    },
-    {
-      id: 2,
-      memberId: 'PTF001235',
-      memberName: 'Jane Smith',
-      membershipType: 'outdoor',
-      checkInTime: '2024-02-01T07:00:00Z',
-      checkOutTime: '2024-02-01T08:30:00Z',
-      duration: '1h 30m',
-      visitType: 'outdoor',
-      activities: ['Running', 'Yoga'],
-      trainer: 'Sarah Wilson',
-      notes: 'Morning outdoor session'
-    },
-    {
-      id: 3,
-      memberId: 'PTF001236',
-      memberName: 'Mike Johnson',
-      membershipType: 'both',
-      checkInTime: '2024-02-01T18:00:00Z',
-      checkOutTime: null,
-      duration: 'Active',
-      visitType: 'indoor',
-      activities: ['CrossFit'],
-      trainer: 'Alex Thompson',
-      notes: 'Evening session in progress'
-    },
-    {
-      id: 4,
-      memberId: 'PTF001237',
-      memberName: 'Sarah Wilson',
-      membershipType: 'indoor',
-      checkInTime: '2024-02-01T16:30:00Z',
-      checkOutTime: '2024-02-01T18:00:00Z',
-      duration: '1h 30m',
-      visitType: 'indoor',
-      activities: ['Pilates', 'Stretching'],
-      trainer: 'Lisa Anderson',
-      notes: 'Rehabilitation session'
-    },
-    {
-      id: 5,
-      memberId: 'PTF001238',
-      memberName: 'David Brown',
-      membershipType: 'outdoor',
-      checkInTime: '2024-02-01T06:00:00Z',
-      checkOutTime: '2024-02-01T07:30:00Z',
-      duration: '1h 30m',
-      visitType: 'outdoor',
-      activities: ['Bootcamp', 'Running'],
-      trainer: 'Maria Garcia',
-      notes: 'Early morning bootcamp'
-    }
-  ];
-
+  // Load attendance data on component mount
   useEffect(() => {
-    setAttendanceLogs(mockAttendanceLogs);
-    setFilteredLogs(mockAttendanceLogs);
+    loadTodaysAttendance();
+    loadAttendanceLogs();
   }, []);
 
+  const loadTodaysAttendance = async () => {
+    try {
+      setLoading(true);
+      const response = await attendanceService.getTodaysAttendance();
+      
+      setTodaysStats({
+        totalToday: response.summary.total_checkins,
+        indoorToday: response.summary.indoor.total,
+        outdoorToday: response.summary.outdoor.total,
+        activeNow: response.summary.currently_active
+      });
+      
+      // Convert active members to attendance logs format
+      const activeLogs = response.active_members.map(member => ({
+        id: `active_${member.id}`,
+        memberId: member.id,
+        memberName: member.name,
+        membershipType: 'active', // Since they're currently active
+        checkInTime: member.check_in_time,
+        checkOutTime: null,
+        duration: 'Active',
+        visitType: member.visit_type,
+        activities: member.activities || [],
+        notes: '',
+        status: 'active'
+      }));
+      
+      setAttendanceLogs(activeLogs);
+      setFilteredLogs(activeLogs);
+      
+    } catch (error) {
+      console.error('Failed to load attendance data:', error);
+      showToast('Failed to load attendance data', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAttendanceLogs = async () => {
+    try {
+      const filters = {
+        searchTerm,
+        visitType: filterType,
+        dateFilter: filterDate
+      };
+      
+      const logs = await attendanceService.getAttendanceLogs(filters);
+      setAttendanceLogs(logs);
+      setFilteredLogs(logs);
+    } catch (error) {
+      console.error('Failed to load attendance logs:', error);
+      // Don't show error for this, as it might be expected if no data exists yet
+    }
+  };
+
+  // Filter logs when search term or filter type changes
   useEffect(() => {
     let filtered = attendanceLogs;
 
@@ -98,7 +96,7 @@ const Attendance = () => {
     if (searchTerm) {
       filtered = filtered.filter(log =>
         log.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.memberId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        log.memberId.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.activities.some(activity => 
           activity.toLowerCase().includes(searchTerm.toLowerCase())
         )
@@ -110,16 +108,17 @@ const Attendance = () => {
       filtered = filtered.filter(log => log.visitType === filterType);
     }
 
-    // Filter by date
-    if (filterDate === 'today') {
-      const today = new Date().toDateString();
-      filtered = filtered.filter(log => 
-        new Date(log.checkInTime).toDateString() === today
-      );
-    }
-
     setFilteredLogs(filtered);
-  }, [searchTerm, filterType, filterDate, attendanceLogs]);
+  }, [searchTerm, filterType, attendanceLogs]);
+
+  // Reload data when date filter changes
+  useEffect(() => {
+    if (filterDate !== 'today') {
+      // For now, we only support 'today'. In the future, you can add more date filtering
+      showToast('Only "today" filter is currently supported', 'info');
+    }
+    loadTodaysAttendance();
+  }, [filterDate]);
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -134,8 +133,36 @@ const Attendance = () => {
     setShowLogModal(true);
   };
 
-  const handleCheckOut = (logId) => {
-    showToast(`Member checked out successfully`, 'success');
+  const handleCheckOut = async (logId) => {
+    try {
+      // Find the log to get member ID
+      const log = attendanceLogs.find(l => l.id === logId);
+      if (!log) {
+        showToast('Attendance log not found', 'error');
+        return;
+      }
+
+      await attendanceService.checkOut({
+        memberId: log.memberId,
+        attendanceId: log.id.toString().replace('active_', ''), // Remove prefix if exists
+        notes: ''
+      });
+
+      showToast(`${log.memberName} checked out successfully`, 'success');
+      
+      // Reload attendance data
+      loadTodaysAttendance();
+      
+    } catch (error) {
+      console.error('Check-out failed:', error);
+      showToast(error.message || 'Failed to check out member', 'error');
+    }
+  };
+
+  const handleCheckInSuccess = (response) => {
+    showToast('Member checked in successfully!', 'success');
+    loadTodaysAttendance(); // Refresh data
+    setShowCheckInModal(false);
   };
 
   const handleExportLogs = () => {
@@ -170,21 +197,8 @@ const Attendance = () => {
     );
   };
 
-  const getAttendanceStats = () => {
-    const today = new Date().toDateString();
-    const todayLogs = attendanceLogs.filter(log => 
-      new Date(log.checkInTime).toDateString() === today
-    );
-    
-    return {
-      totalToday: todayLogs.length,
-      indoorToday: todayLogs.filter(log => log.visitType === 'indoor').length,
-      outdoorToday: todayLogs.filter(log => log.visitType === 'outdoor').length,
-      activeNow: attendanceLogs.filter(log => !log.checkOutTime).length
-    };
-  };
-
-  const stats = getAttendanceStats();
+  // Use the real stats from API
+  const stats = todaysStats;
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -204,6 +218,9 @@ const Attendance = () => {
               <div className="flex space-x-3">
                 <Button variant="outline" onClick={handleExportLogs}>
                   Export Logs
+                </Button>
+                <Button variant="outline" onClick={() => setShowCheckInModal(true)}>
+                  Check In Member
                 </Button>
                 <Button variant="primary">Generate Report</Button>
               </div>
@@ -366,6 +383,18 @@ const Attendance = () => {
         </main>
       </div>
 
+      {/* Check-In Form Modal */}
+      {showCheckInModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <CheckInForm
+              onSubmit={handleCheckInSuccess}
+              onCancel={() => setShowCheckInModal(false)}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Log Details Modal */}
       <Modal
         isOpen={showLogModal}
@@ -390,10 +419,6 @@ const Attendance = () => {
                   <div>
                     <label className="text-sm font-medium text-gray-500">Membership Type</label>
                     <p className="text-sm text-gray-900">{selectedLog.membershipType}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Trainer</label>
-                    <p className="text-sm text-gray-900">{selectedLog.trainer}</p>
                   </div>
                 </div>
               </div>

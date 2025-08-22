@@ -5,6 +5,7 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
+import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import authService from '../../services/authService';
 
 const OutdoorMemberships = () => {
@@ -15,6 +16,7 @@ const OutdoorMemberships = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedMember, setSelectedMember] = useState(null);
   const [showMemberModal, setShowMemberModal] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -209,6 +211,22 @@ const OutdoorMemberships = () => {
     }
   };
 
+  const handleAddOutdoorMember = async (memberData) => {
+    try {
+      const response = await authService.createOutdoorMember(memberData);
+      if (response.success) {
+        showToast('Outdoor member added successfully!', 'success');
+        setShowAddMemberModal(false);
+        loadOutdoorMembers(currentPage);
+        loadAllOutdoorMembers();
+        loadStats();
+      }
+    } catch (err) {
+      showToast('Failed to add member: ' + err.message, 'error');
+      throw err;
+    }
+  };
+
   const getStatusBadge = (status) => {
     const statusStyles = {
       active: 'bg-green-100 text-green-800',
@@ -325,7 +343,12 @@ const OutdoorMemberships = () => {
               </div>
               <div className="flex space-x-3">
                 <Button variant="outline">Export Data</Button>
-                <Button variant="primary">Add New Member</Button>
+                <Button 
+                  variant="primary"
+                  onClick={() => setShowAddMemberModal(true)}
+                >
+                  Add New Member
+                </Button>
               </div>
             </div>
 
@@ -478,6 +501,20 @@ const OutdoorMemberships = () => {
           </div>
         </main>
       </div>
+
+      {/* Add Member Modal */}
+      <Modal
+        isOpen={showAddMemberModal}
+        onClose={() => setShowAddMemberModal(false)}
+        title="Add New Outdoor Member"
+        size="large"
+      >
+        <RegisterMemberForm
+          initialMembershipType="outdoor"
+          onSubmit={handleAddOutdoorMember}
+          onCancel={() => setShowAddMemberModal(false)}
+        />
+      </Modal>
 
       {/* Member Details Modal */}
       <Modal

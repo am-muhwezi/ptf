@@ -52,6 +52,19 @@ class MemberViewset(viewsets.ModelViewSet):
     serializer_class = MemberSerializer
     pagination_class = MemberPagination
 
+    def get_location(self, location_name):
+        """Get or create location based on location name"""
+        if not location_name:
+            return None
+        
+        # Try to find existing location
+        from .models import Location
+        location, created = Location.objects.get_or_create(
+            name=location_name.title(),
+            defaults={'code': location_name.lower().replace(' ', '_')}
+        )
+        return location
+
     def create(self, request, *args, **kwargs):
         """
         Create a new member with detailed error handling
@@ -95,9 +108,12 @@ class MemberViewset(viewsets.ModelViewSet):
                 from decimal import Decimal
                 
                 try:
+                    # Get membership type from the request data
+                    membership_type = request.data.get('membership_type', 'indoor')
+                    
                     # Find the appropriate membership plan
                     plan = MembershipPlan.objects.get(
-                        membership_type=member.membership_type,
+                        membership_type=membership_type,
                         plan_type=plan_type
                     )
                     
@@ -121,17 +137,16 @@ class MemberViewset(viewsets.ModelViewSet):
                         payment_status='pending',  # Default to pending
                         total_sessions_allowed=total_sessions,
                         sessions_used=0,
-                        sessions_remaining=total_sessions,
                         start_date=start_date,
                         end_date=end_date,
                         amount_paid=plan.monthly_fee,
-                        location=member.location or '',
+                        location=self.get_location(request.data.get('location')) if membership_type == 'outdoor' else None,
                     )
                     
                     logger.info(f"Membership created for member {member.id}: Plan {plan.plan_name}")
                     
                 except MembershipPlan.DoesNotExist:
-                    logger.warning(f"No membership plan found for {member.membership_type}/{plan_type}")
+                    logger.warning(f"No membership plan found for {membership_type}/{plan_type}")
                 except Exception as e:
                     logger.error(f"Failed to create membership for member {member.id}: {e}")
             
@@ -214,74 +229,4 @@ class MemberViewset(viewsets.ModelViewSet):
             return queryset.filter(q_objects).distinct()
         return queryset
 
-    @action(detail=True, methods=["post"])
-    def checkin(self, request: Request, pk: int = None):
-        """
-        Check-in a member by ID.
-        """
-        member = get_object_or_404(Member, pk=pk)
-        logger.info(f"Check-in attempt for member ID: {pk}")
 
-        if member.status != "active":
-            logger.warning(
-                f"Check-in denied for member {member.id} with status '{member.status}'"
-            )
-            return Response(
-                {
-                    "error": f"Cannot check in {member.first_name}. Status is '{member.status}'."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if member.is_checked_in:
-            logger.info(f"Member {member.id} already checked in.")
-            return Response(
-                {"message": f"{member.first_name} is already checked in."},
-                status=status.HTTP_200_OK,
-            )
-
-        member.is_checked_in = True
-        # Verify this field name against your models.py if it still fails
-        member.last_visit = timezone.now()
-
-        # FIXED: Use the correct field names in the update_fields list
-        member.save(update_fields=["is_checked_in", "last_visit"])
-
-        # Serialize the member data after check-in
-        serializer = self.get_serializer(member)
-
-        logger.info(f"Successfully checked in member: {member.id}")
-        return Response(
-            {
-                "message": f"{member.first_name} {member.last_name} checked in successfully."
-            },
-            status=status.HTTP_200_OK,
-        )
-
-    @action(detail=True, methods=["post"])
-    def checkout(self, request: Request, pk: int = None):
-        """
-        Check-out a member by ID.
-        """
-        member = get_object_or_404(Member, pk=pk)
-        logger.info(f"Check-out attempt for member ID: {pk}")
-
-        if not member.is_checked_in:
-            return Response(
-                {"message": f"{member.first_name} is not currently checked in."},
-                status=status.HTTP_200_OK,
-            )
-
-        member.is_checked_in = False
-        # Verify this field name against your models.py if it still fails
-        member.last_visit = timezone.now()
-
-        # FIXED: Use the correct field names in the update_fields list
-        member.save(update_fields=["is_checked_in", "last_visit"])
-
-        logger.info(f"Successfully checked out member: {member.id}")
-        serializer = self.get_serializer(member)
-        return Response(
-            {"message": f"{member.first_name} checked out successfully."},
-            status=status.HTTP_200_OK,
-        )

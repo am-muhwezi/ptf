@@ -12,11 +12,14 @@ import PaymentReminder from '../../components/ui/PaymentReminder';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import UpdateMemberProfileForm from '../../components/forms/UpdateMemberProfileForm';
 import { memberService } from '../../services/memberService';
+import { membershipService } from '../../services/membershipService';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 
 const Members = () => {
   // State management
   const [members, setMembers] = useState([]);
+  const [memberships, setMemberships] = useState([]);
+  const [combinedData, setCombinedData] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -65,38 +68,71 @@ const Members = () => {
     return `${firstInitial}${lastInitial}`;
   };
 
-  // Fetch members data
+  // Simple data processing since Members API now includes membership_type directly
+  const processMembers = (membersData) => {
+    // Members API now includes membership_type directly, no need for complex combination
+    return membersData.map(member => ({
+      ...member,
+      // membership_type is now included in the member object from the API
+      // Fallback to 'unknown' if not present (for members without memberships)
+      membership_type: member.membership_type || 'unknown'
+    }));
+  };
+
+  // Fetch members and memberships data
   const fetchMembers = useCallback(async (page = currentPage) => {
     try {
       setLoading(true);
       setError(null);
       
-      const params = { 
+      // Prepare member params
+      const memberParams = { 
         page: page,
         limit: pageSize
       };
-      if (searchTerm) params.search = searchTerm;
-      if (filterStatus !== 'all') params.status = filterStatus;
-      if (filterMembershipType !== 'all') params.membership_type = filterMembershipType;
+      if (searchTerm) memberParams.search = searchTerm;
+      if (filterStatus !== 'all') memberParams.status = filterStatus;
 
-      const response = await memberService.getMembers(params);
+      // Prepare membership params for filtering
+      const membershipParams = {};
+      if (filterMembershipType !== 'all') {
+        membershipParams.membership_type = filterMembershipType;
+      }
+
+      // Fetch members data (now includes membership_type directly)
+      const memberResponse = await memberService.getMembers(memberParams);
       
-      // Handle Django REST framework pagination response
-      if (response.results) {
-        setMembers(response.results);
-        setTotalCount(response.count);
-        setTotalPages(Math.ceil(response.count / pageSize));
+      // Handle member response (paginated)
+      let membersData = [];
+      if (memberResponse.results) {
+        membersData = memberResponse.results;
+        setTotalCount(memberResponse.count);
+        setTotalPages(Math.ceil(memberResponse.count / pageSize));
       } else {
-        // Fallback for non-paginated response
-        setMembers(response);
-        setTotalCount(response.length);
+        membersData = memberResponse;
+        setTotalCount(memberResponse.length);
         setTotalPages(1);
       }
+
+      // Process the members data (simple processing since membership_type is included)
+      const processed = processMembers(membersData);
+      
+      // Apply membership type filtering if needed  
+      let filtered = processed;
+      if (filterMembershipType !== 'all') {
+        filtered = processed.filter(member => 
+          member.membership_type === filterMembershipType
+        );
+      }
+
+      setMembers(processed);
+      setCombinedData(processed);
+      setFilteredMembers(filtered);
 
     } catch (err) {
       setError(err.message);
       showToast(err.message, 'error');
-      console.error('Error fetching members:', err);
+      console.error('Error fetching data:', err);
     } finally {
       setLoading(false);
     }
@@ -117,27 +153,28 @@ const Members = () => {
     }
   }, [searchTerm, filterStatus, filterMembershipType]);
 
-  // Fetch stats separately since we're using pagination
-  const fetchStats = useCallback(async () => {
-    try {
-      // For now, calculate stats from total count and current filters
-      // In a real app, you'd have a separate stats endpoint
-      const params = {};
-      if (filterStatus !== 'all') params.status = filterStatus;
-      if (filterMembershipType !== 'all') params.membership_type = filterMembershipType;
-      
-      setStats(prevStats => ({
-        ...prevStats,
-        total_members: totalCount
-      }));
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
-  }, [totalCount, filterStatus, filterMembershipType]);
+  // Calculate stats from combined data
+  const calculateStats = useCallback(() => {
+    if (combinedData.length === 0) return;
+
+    const total_members = combinedData.length;
+    const active_members = combinedData.filter(m => m.status === 'active').length;
+    const inactive_members = combinedData.filter(m => m.status === 'inactive').length;
+    const indoor_members = combinedData.filter(m => m.membership_type === 'indoor').length;
+    const outdoor_members = combinedData.filter(m => m.membership_type === 'outdoor').length;
+
+    setStats({
+      total_members,
+      active_members,
+      inactive_members,
+      indoor_members,
+      outdoor_members
+    });
+  }, [combinedData]);
 
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    calculateStats();
+  }, [calculateStats]);
 
   // Update filtered members when members change
   useEffect(() => {
@@ -154,10 +191,8 @@ const Members = () => {
   };
   
   const refreshData = async () => {
-      await Promise.all([
-          fetchMembers(),
-          fetchStats()
-      ]);
+      await fetchMembers();
+      // Stats will be calculated automatically via useEffect
   };
 
   // Pagination handlers
@@ -301,13 +336,12 @@ const Members = () => {
   const getMembershipTypeBadge = (type) => {
     const typeStyles = {
       indoor: 'bg-blue-100 text-blue-800',
-      outdoor: 'bg-green-100 text-green-800',
-      both: 'bg-purple-100 text-purple-800'
+      outdoor: 'bg-green-100 text-green-800'
     };
     
     return (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${typeStyles[type] || 'bg-gray-100 text-gray-800'}`}>
-        {type === 'both' ? 'Indoor + Outdoor' : type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Unknown'}
+        {type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Unknown'}
       </span>
     );
   };
@@ -508,7 +542,6 @@ const Members = () => {
                     <option value="all">All Types</option>
                     <option value="indoor">Indoor</option>
                     <option value="outdoor">Outdoor</option>
-                    <option value="both">Both</option>
                   </select>
                 </div>
               </div>

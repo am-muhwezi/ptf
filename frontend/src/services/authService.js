@@ -654,11 +654,11 @@ const useSession = async (membershipId, sessionData = {}) => {
 
 const getOutdoorRateCards = async () => {
   try {
-    const response = await apiClient.get(API_ENDPOINTS.memberships.rate_cards);
+    const response = await apiClient.get(API_ENDPOINTS.memberships.plans);
     
     return {
       success: true,
-      data: response.data.data || response.data
+      data: response.data.results || response.data.data || response.data
     };
   } catch (error) {
     throw new Error(

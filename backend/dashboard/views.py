@@ -41,39 +41,42 @@ class DashboardNotificationsView(APIView):
             notifications = []
             today = timezone.now().date()
             
-            # Check for members with expiring memberships
-            expiring_soon = Member.objects.filter(
-                membership_end_date__lte=today + timedelta(days=30),
-                membership_end_date__gt=today,
+            # Check for memberships expiring soon
+            from memberships.models import Membership
+            expiring_soon = Membership.objects.filter(
+                end_date__lte=today + timedelta(days=30),
+                end_date__gt=today,
                 status='active'
-            ).order_by('membership_end_date')[:5]
+            ).select_related('member').order_by('end_date')[:5]
             
-            for member in expiring_soon:
-                days_left = (member.membership_end_date - today).days
+            for membership in expiring_soon:
+                days_left = (membership.end_date - today).days
                 notifications.append({
-                    'id': f'expiry_{member.id}',
+                    'id': f'expiry_{membership.id}',
                     'type': 'warning',
                     'title': 'Membership Expiring',
-                    'message': f'{member.full_name} membership expires in {days_left} days',
-                    'member_id': member.id,
-                    'date': member.membership_end_date.isoformat(),
+                    'message': f'{membership.member.full_name} membership expires in {days_left} days',
+                    'member_id': membership.member.id,
+                    'membership_id': membership.id,
+                    'date': membership.end_date.isoformat(),
                     'priority': 'high' if days_left <= 7 else 'medium',
                     'action': 'renew_membership'
                 })
             
             # Check for overdue payments
-            overdue_payments = Member.objects.filter(
+            overdue_payments = Membership.objects.filter(
                 payment_status='overdue',
                 status='active'
-            )[:5]
+            ).select_related('member')[:5]
             
-            for member in overdue_payments:
+            for membership in overdue_payments:
                 notifications.append({
-                    'id': f'payment_{member.id}',
+                    'id': f'payment_{membership.id}',
                     'type': 'error',
                     'title': 'Payment Overdue',
-                    'message': f'{member.full_name} has overdue payment',
-                    'member_id': member.id,
+                    'message': f'{membership.member.full_name} has overdue payment',
+                    'member_id': membership.member.id,
+                    'membership_id': membership.id,
                     'priority': 'high',
                     'action': 'collect_payment'
                 })
@@ -99,8 +102,8 @@ class DashboardNotificationsView(APIView):
             
             # Check for new members (registered in last 7 days)
             new_members = Member.objects.filter(
-                registrationDate__date__gte=today - timedelta(days=7)
-            ).order_by('-registrationDate')[:3]
+                registration_date__gte=today - timedelta(days=7)
+            ).order_by('-registration_date')[:3]
             
             for member in new_members:
                 notifications.append({
@@ -109,7 +112,7 @@ class DashboardNotificationsView(APIView):
                     'title': 'New Member',
                     'message': f'{member.full_name} joined recently',
                     'member_id': member.id,
-                    'date': member.registrationDate.date().isoformat(),
+                    'date': member.registration_date.date().isoformat(),
                     'priority': 'low',
                     'action': 'welcome_member'
                 })
