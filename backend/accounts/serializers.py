@@ -1,6 +1,12 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.core.mail import send_mail
+from django.conf import settings
+from django.template.loader import render_to_string
 from .models import User
 
 
@@ -191,3 +197,157 @@ class AdminUserSerializer(serializers.ModelSerializer):
             
         instance.save()
         return instance
+
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    """Serializer for forgot password request"""
+    
+    email = serializers.EmailField(required=True)
+    
+    def validate_email(self, value):
+        """Check if user with email exists"""
+        try:
+            user = User.objects.get(email=value, is_active=True)
+            return value
+        except User.DoesNotExist:
+            # Don't reveal if email exists or not for security
+            # But still validate the format
+            return value
+    
+    def save(self):
+        """Send password reset email"""
+        email = self.validated_data['email']
+        
+        try:
+            user = User.objects.get(email=email, is_active=True)
+            
+            # Generate token
+            token = default_token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            
+            # Create reset URL
+            reset_url = f"{settings.FRONTEND_URL}/password-reset?token={token}&uid={uid}&email={email}"
+            
+            # Email content
+            subject = 'Password Reset - Paul\'s Tropical Fitness'
+            
+            html_message = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #065f46, #0f766e, #0891b2); color: white; padding: 30px; text-align: center;">
+                    <h1 style="margin: 0; font-size: 28px;">🏝️ Paul's Tropical Fitness</h1>
+                    <p style="margin: 10px 0 0 0; opacity: 0.9;">Password Reset Request</p>
+                </div>
+                
+                <div style="padding: 30px; background: #f8fafc;">
+                    <h2 style="color: #065f46; margin-top: 0;">Reset Your Password</h2>
+                    
+                    <p>Hi {user.first_name},</p>
+                    
+                    <p>We received a request to reset your password for your Paul's Tropical Fitness account.</p>
+                    
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{reset_url}" 
+                           style="background: linear-gradient(135deg, #10b981, #14b8a6); 
+                                  color: white; 
+                                  padding: 15px 30px; 
+                                  text-decoration: none; 
+                                  border-radius: 8px; 
+                                  font-weight: bold;
+                                  display: inline-block;">
+                            Reset Password
+                        </a>
+                    </div>
+                    
+                    <p style="color: #6b7280; font-size: 14px;">
+                        If you didn't request this password reset, you can safely ignore this email. 
+                        Your password will remain unchanged.
+                    </p>
+                    
+                    <p style="color: #6b7280; font-size: 14px;">
+                        This link will expire in 24 hours for security reasons.
+                    </p>
+                    
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+                    
+                    <p style="color: #6b7280; font-size: 12px; text-align: center;">
+                        © 2024 Paul's Tropical Fitness. All rights reserved.
+                    </p>
+                </div>
+            </div>
+            """
+            
+            plain_message = f"""
+            Paul's Tropical Fitness - Password Reset
+            
+            Hi {user.first_name},
+            
+            We received a request to reset your password for your account.
+            
+            Please click the link below to reset your password:
+            {reset_url}
+            
+            If you didn't request this password reset, you can safely ignore this email.
+            This link will expire in 24 hours for security reasons.
+            
+            © 2024 Paul's Tropical Fitness. All rights reserved.
+            """
+            
+            # Send email
+            send_mail(
+                subject=subject,
+                message=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                html_message=html_message,
+                fail_silently=False,
+            )
+            
+            return True
+            
+        except User.DoesNotExist:
+            # Don't reveal if email exists or not
+            return True
+        except Exception as e:
+            # Log the error but don't reveal it
+            print(f"Error sending password reset email: {e}")
+            return False
+
+
+class PasswordResetSerializer(serializers.Serializer):
+    """Serializer for password reset confirmation"""
+    
+    token = serializers.CharField(required=True)
+    uid = serializers.CharField(required=True)
+    password = serializers.CharField(
+        required=True, min_length=8, validators=[validate_password]
+    )
+    confirm_password = serializers.CharField(required=True)
+    
+    def validate(self, attrs):
+        """Validate token and passwords"""
+        # Check if passwords match
+        if attrs['password'] != attrs['confirm_password']:
+            raise serializers.ValidationError("Passwords don't match")
+        
+        # Validate token
+        try:
+            uid = force_str(urlsafe_base64_decode(attrs['uid']))
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            raise serializers.ValidationError("Invalid reset link")
+        
+        if not default_token_generator.check_token(user, attrs['token']):
+            raise serializers.ValidationError("Invalid or expired reset link")
+        
+        attrs['user'] = user
+        return attrs
+    
+    def save(self):
+        """Reset user password"""
+        user = self.validated_data['user']
+        password = self.validated_data['password']
+        
+        user.set_password(password)
+        user.save()
+        
+        return user

@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../../components/ui/Button';
+import ForgotPasswordForm from '../../components/forms/ForgotPasswordForm';
 import authService from '../../services/authService';
 import { useAuthContext } from '../../contexts/AuthContext'; // ✅ CRITICAL FIX: Import useAuthContext
 
@@ -290,7 +291,16 @@ const LandingPage = () => {
           /* Auth Form - Takes full screen when shown */
           <div className="w-full flex items-center justify-center p-4">
             <div className="max-w-md w-full">
-              <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border border-white/20">
+              {authMode === 'forgotPassword' ? (
+                <ForgotPasswordForm
+                  onBack={() => setAuthMode('login')}
+                  onSuccess={(email) => {
+                    setSuccess(`Password reset instructions sent to ${email}`);
+                    setTimeout(() => setAuthMode('login'), 3000);
+                  }}
+                />
+              ) : (
+                <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border border-white/20">
                 {/* Back Button */}
                 <button
                   onClick={handleBackToHome}
@@ -434,12 +444,25 @@ const LandingPage = () => {
                   </button>
                 </div>
 
+                {authMode === 'login' && (
+                  <div className="mt-2 text-center">
+                    <button
+                      onClick={() => setAuthMode('forgotPassword')}
+                      className="text-emerald-300 hover:text-emerald-200 transition-colors disabled:opacity-50 text-sm underline"
+                      disabled={loading}
+                    >
+                      Forgot your password?
+                    </button>
+                  </div>
+                )}
+
                 <div className="mt-3 text-center">
                   <p className="text-emerald-200/70 text-xs">
                     By {authMode === 'signup' ? 'creating an account' : 'signing in'}, you agree to our Terms of Service
                   </p>
                 </div>
               </div>
+              )}
             </div>
           </div>
         ) : (

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Button from '../ui/Button';
 import { useApiMutation } from '../../hooks/useApi';
 import { memberService } from '../../services/memberService';
+import attendanceService from '../../services/attendanceService';
 
 const CheckInForm = ({ onSubmit, onCancel }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -12,9 +13,8 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
   const [successMessage, setSuccessMessage] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Use separate mutations for search and check-in
+  // Use separate mutations for search only (check-in moved to attendance service)
   const { mutate: searchMembers, loading: isSearching } = useApiMutation(memberService.searchMembers);
-  const { mutate: performCheckin, loading: isCheckingIn } = useApiMutation(memberService.checkinMember);
 
   // Debounce hook for search optimization
   const useDebounce = (value, delay) => {
@@ -102,18 +102,18 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
       return;
     }
 
-
-
     try {
       setIsSubmitting(true);
       setError('');
       setSuccessMessage('');
 
-      
-
-  
-      const response = await performCheckin(selectedMember.id);
-      
+      // Use attendance service for check-in with basic indoor visit
+      const response = await attendanceService.checkIn({
+        memberId: selectedMember.id,
+        visitType: 'indoor', // Default to indoor for simplicity
+        activities: ['General Workout'], // Simple default activity
+        notes: ''
+      });
 
       // Show success message
       setSuccessMessage(response?.message || 'Member checked in successfully!');
@@ -208,7 +208,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
             onChange={handleSearchChange}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Enter name, email, or member ID"
-            disabled={isSubmitting || isCheckingIn}
+            disabled={isSubmitting}
           />
           
           {/* Search Results Dropdown */}
@@ -251,7 +251,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
           )}
 
           {/* Loading indicator */}
-          {(isSearching || isCheckingIn) && (
+          {(isSearching || isSubmitting) && (
             <div className="absolute right-3 top-11 transform -translate-y-1/2">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
             </div>
@@ -266,7 +266,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
               <button
                 onClick={clearSelection}
                 className="text-gray-400 hover:text-gray-600"
-                disabled={isSubmitting || isCheckingIn}
+                disabled={isSubmitting}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -356,7 +356,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
             type="button"
             variant="outline"
             onClick={onCancel}
-            disabled={isSubmitting || isCheckingIn}
+            disabled={isSubmitting}
           >
             Cancel
           </Button>
@@ -364,10 +364,10 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
             type="button"
             variant="primary"
             onClick={handleCheckIn}
-            disabled={isSubmitting || isCheckingIn}
+            disabled={isSubmitting}
             className="min-w-32"
           >
-            {(isSubmitting || isCheckingIn) ? 'Checking In...' : 'Check In Member'}
+            {isSubmitting ? 'Checking In...' : 'Check In Member'}
           </Button>
         </div>
       </div>

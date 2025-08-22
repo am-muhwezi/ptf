@@ -1,14 +1,31 @@
 from rest_framework import serializers
-from .models import Member
+from .models import Member, PhysicalProfile
 from datetime import date
 
 
-class MemberSerializer(serializers.ModelSerializer):
-    member_id = serializers.ReadOnlyField()
-    full_name = serializers.ReadOnlyField()
+class PhysicalProfileSerializer(serializers.ModelSerializer):
     bmi = serializers.ReadOnlyField()
-    days_until_expiry = serializers.ReadOnlyField()
-    is_expiring_soon = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = PhysicalProfile
+        fields = [
+            "height",
+            "weight",
+            "bmi",
+            "body_fat_percentage",
+            "fitness_level",
+            "strength_test_results",
+            "cardio_test_results",
+            "flexibility_test_results",
+            "short_term_goals",
+            "long_term_goals",
+        ]
+
+
+class MemberSerializer(serializers.ModelSerializer):
+    full_name = serializers.ReadOnlyField()
+    membership_type = serializers.ReadOnlyField()
+    physical_profile = PhysicalProfileSerializer(required=False)
     
     # Make required fields explicit
     first_name = serializers.CharField(max_length=100, required=True, error_messages={
@@ -28,46 +45,28 @@ class MemberSerializer(serializers.ModelSerializer):
         model = Member
         fields = [
             "id",
-            "member_id",
             "first_name",
             "last_name",
             "full_name",
             "email",
             "phone",
-            "membership_type",
-            "plan_type",
-            "location",
-            "status",
-            "payment_status",
             "address",
-            "dateOfBirth",
-            "bloodGroup",
-            "idPassport",
-            "emergencyContact",
-            "emergencyPhone",
-            "medicalConditions",
-            "height",
-            "weight",
-            "bmi",
-            "body_fat_percentage",
-            "fitness_level",
-            "strength_test_results",
-            "cardio_test_results",
-            "flexibility_test_results",
-            "short_term_goals",
-            "long_term_goals",
-            "registrationDate",
-            "membership_start_date",
-            "membership_end_date",
-            "last_visit",
-            "is_checked_in",
+            "date_of_birth",
+            "id_passport",
+            "blood_group",
+            "emergency_contact",
+            "emergency_phone",
+            "medical_conditions",
+            "membership_type",
+            "status",
+            "registration_date",
             "total_visits",
-            "amount",
-            "last_payment",
-            "days_until_expiry",
-            "is_expiring_soon",
+            "last_visit",
+            "created_at",
+            "updated_at",
+            "physical_profile",
         ]
-        read_only_fields = ["id", "registrationDate", "total_visits", "last_visit"]
+        read_only_fields = ["id", "registration_date", "total_visits", "last_visit", "created_at", "updated_at"]
 
     def validate_email(self, value):
         """Ensure email is unique during updates"""
@@ -80,39 +79,6 @@ class MemberSerializer(serializers.ModelSerializer):
         if Member.objects.filter(email=value).exists():
             raise serializers.ValidationError(
                 "A member with this email already exists."
-            )
-        return value
-
-    def validate_membership_dates(self, data):
-        """Validate membership start and end dates"""
-        start_date = data.get("membership_start_date")
-        end_date = data.get("membership_end_date")
-
-        if start_date and end_date:
-            if start_date >= end_date:
-                raise serializers.ValidationError(
-                    {"membership_end_date": "End date must be after start date."}
-                )
-
-        return data
-
-    def validate_height(self, value):
-        """Validate height is within reasonable range"""
-        if value is not None and (value < 50 or value > 300):
-            raise serializers.ValidationError("Height must be between 50-300 cm")
-        return value
-
-    def validate_weight(self, value):
-        """Validate weight is within reasonable range"""
-        if value is not None and (value < 20 or value > 500):
-            raise serializers.ValidationError("Weight must be between 20-500 kg")
-        return value
-
-    def validate_body_fat_percentage(self, value):
-        """Validate body fat percentage"""
-        if value is not None and (value < 0 or value > 100):
-            raise serializers.ValidationError(
-                "Body fat percentage must be between 0-100%"
             )
         return value
 
@@ -132,118 +98,87 @@ class MemberSerializer(serializers.ModelSerializer):
             )
         return value
 
-    def validate_idPassport(self, value):
-        """Validate idPassport uniqueness only for non-empty values"""
+    def validate_id_passport(self, value):
+        """Validate id_passport uniqueness only for non-empty values"""
         if not value:  # Convert empty string to None for unique constraint
             return None
             
         # Check for uniqueness (excluding current instance during updates)
-        query = Member.objects.filter(idPassport=value)
+        query = Member.objects.filter(id_passport=value)
         if self.instance:
             query = query.exclude(pk=self.instance.pk)
         
         if query.exists():
             raise serializers.ValidationError(
-                "A member with this idPassport already exists."
+                "A member with this id_passport already exists."
             )
         return value
 
-    def validate_plan_type(self, value):
-        """Validate plan type based on membership type"""
-        membership_type = self.initial_data.get('membershipType') or self.initial_data.get('membership_type')
+    def create(self, validated_data):
+        """Create member with optional physical profile"""
+        physical_profile_data = validated_data.pop('physical_profile', None)
+        member = Member.objects.create(**validated_data)
         
-        if membership_type == 'indoor' and not value:
-            raise serializers.ValidationError(
-                "Plan type is required for indoor membership."
-            )
-        elif membership_type == 'outdoor' and not value:
-            raise serializers.ValidationError(
-                "Plan type is required for outdoor membership."
-            )
+        if physical_profile_data:
+            PhysicalProfile.objects.create(member=member, **physical_profile_data)
         
-        return value
+        return member
 
-    def validate_location(self, value):
-        """Validate location for outdoor memberships"""
-        membership_type = self.initial_data.get('membershipType') or self.initial_data.get('membership_type')
+    def update(self, instance, validated_data):
+        """Update member and physical profile"""
+        physical_profile_data = validated_data.pop('physical_profile', None)
         
-        if membership_type == 'outdoor' and not value:
-            raise serializers.ValidationError(
-                "Location is required for outdoor membership."
-            )
+        # Update member instance
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
         
-        return value
-
-    def validate(self, data):
-        """Custom validation for the entire object"""
-        data = self.validate_membership_dates(data)
+        # Update or create physical profile
+        if physical_profile_data:
+            if hasattr(instance, 'physical_profile'):
+                for attr, value in physical_profile_data.items():
+                    setattr(instance.physical_profile, attr, value)
+                instance.physical_profile.save()
+            else:
+                PhysicalProfile.objects.create(member=instance, **physical_profile_data)
         
-        # Cross-field validation for membership type requirements
-        membership_type = data.get('membership_type') or data.get('membershipType')
-        plan_type = data.get('plan_type') or data.get('planType')
-        location = data.get('location')
-        
-        if membership_type == 'indoor' and not plan_type:
-            raise serializers.ValidationError({
-                'plan_type': 'Plan type is required for indoor membership.'
-            })
-            
-        if membership_type == 'outdoor' and not location:
-            raise serializers.ValidationError({
-                'location': 'Location is required for outdoor membership.'
-            })
-        
-        return data
+        return instance
 
 
 class MemberListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for listing members"""
 
-    member_id = serializers.ReadOnlyField()
     full_name = serializers.ReadOnlyField()
-    days_until_expiry = serializers.ReadOnlyField()
 
     class Meta:
         model = Member
         fields = [
             "id",
-            "member_id",
             "first_name",
             "last_name",
             "full_name",
             "email",
             "phone",
-            "membership_type",
-            "plan_type",
             "status",
-            "payment_status",
-            "registrationDate",
-            "membership_end_date",
+            "registration_date",
             "last_visit",
             "total_visits",
-            "amount",
-            "is_checked_in",
-            "days_until_expiry",
         ]
 
 
 class MemberSearchSerializer(serializers.ModelSerializer):
     """Minimal serializer for search results"""
 
-    member_id = serializers.ReadOnlyField()
     full_name = serializers.ReadOnlyField()
 
     class Meta:
         model = Member
         fields = [
             "id",
-            "member_id",
             "first_name",
             "last_name",
             "full_name",
             "email",
-            "membership_type",
+            "phone",
             "status",
-            "payment_status",
-            "is_checked_in",    
         ]

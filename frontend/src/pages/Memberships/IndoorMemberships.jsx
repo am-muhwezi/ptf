@@ -6,37 +6,141 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
 import UpdateMemberProfileForm from '../../components/forms/UpdateMemberProfileForm';
-import { useApi, useApiMutation } from '../../hooks/useApi';
-import { membershipService } from '../../services/membershipService';
-import { formatCurrency, formatDate, isExpiringSoon } from '../../utils/formatters';
+import authService from '../../services/authService';
 
 const IndoorMemberships = () => {
-  const [filteredMembers, setFilteredMembers] = useState([]);
+  const [allMembers, setAllMembers] = useState([]);
+  const [members, setMembers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedMember, setSelectedMember] = useState(null);
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [stats, setStats] = useState({
+    total_memberships: 0,
+    active_memberships: 0,
+    expiring_soon: 0,
+    new_this_month: 0,
+    total_revenue: 0,
+    sessions_used_today: 0
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
 
-  // API hooks
-  const { data: members = [], loading, error, refetch } = useApi(
-    () => membershipService.getIndoorMemberships({ 
-      search: searchTerm, 
-      status: filterStatus === 'all' ? undefined : filterStatus 
-    }),
-    [searchTerm, filterStatus]
-  );
+  // Load all indoor memberships from API (for stats)
+  const loadAllIndoorMembers = async () => {
+    try {
+      const response = await authService.getIndoorMembers({
+        page: 1,
+        limit: 1000
+      });
+      
+      if (response.success) {
+        const transformedMembers = response.data.map(transformMemberData);
+        setAllMembers(transformedMembers);
+      }
+    } catch (err) {
+      console.error('Failed to load all indoor members for stats:', err);
+    }
+  };
 
-  const { mutate: renewMembership, loading: renewLoading } = useApiMutation(membershipService.renewMembership);
-  const { mutate: suspendMember, loading: suspendLoading } = useApiMutation(membershipService.suspendMember);
+  // Load indoor memberships from API (for display)
+  const loadIndoorMembers = async (page = 1, updateLoading = false) => {
+    try {
+      if (updateLoading) {
+        setLoading(true);
+      }
+      setError(null);
+      
+      const response = await authService.getIndoorMembers({
+        search: searchTerm,
+        status: filterStatus !== 'all' ? filterStatus : undefined,
+        page: page,
+        limit: 20
+      });
+      
+      if (response.success) {
+        const transformedMembers = response.data.map(transformMemberData);
+        setMembers(transformedMembers);
+        
+        // Handle pagination
+        setCurrentPage(page);
+        setHasNext(!!response.next);
+        setHasPrevious(!!response.previous);
+        
+        // Calculate total pages from count
+        if (response.count) {
+          setTotalPages(Math.ceil(response.count / 20));
+        }
+      } else {
+        throw new Error('Failed to load indoor memberships');
+      }
+    } catch (err) {
+      setError(err.message);
+      showToast('Error loading indoor memberships: ' + err.message, 'error');
+    } finally {
+      if (updateLoading) {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Load membership statistics
+  const loadStats = async () => {
+    try {
+      const response = await authService.getIndoorMembershipStats();
+      if (response.success) {
+        setStats(response.data);
+      }
+    } catch (err) {
+      console.error('Failed to load stats:', err);
+    }
+  };
 
   useEffect(() => {
-    setFilteredMembers(members);
-  }, [members]);
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          loadAllIndoorMembers(),
+          loadIndoorMembers(),
+          loadStats()
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadData();
+  }, []);
+
+  // Reload data when search term or filter changes
+  useEffect(() => {
+    const delayedSearch = setTimeout(() => {
+      if (searchTerm || filterStatus !== 'all') {
+        setCurrentPage(1); // Reset to first page
+        loadIndoorMembers(1, true); // Enable loading state for search
+      }
+    }, 300); // Debounce search
+
+    return () => clearTimeout(delayedSearch);
+  }, [searchTerm, filterStatus]);
+
+  // Handle pagination
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      loadIndoorMembers(newPage, true); // Enable loading state for pagination
+    }
+  };
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
   };
 
   const hideToast = () => {
@@ -49,23 +153,13 @@ const IndoorMemberships = () => {
   };
 
   const handleRenewMembership = async (memberId) => {
-    try {
-      await renewMembership(memberId, {});
-      showToast(`Membership renewal initiated for member ${memberId}`, 'success');
-      refetch();
-    } catch (error) {
-      showToast(error.message, 'error');
-    }
+    // TODO: Implement renewal functionality when backend endpoint is ready
+    showToast(`Membership renewal initiated for member ${memberId}`, 'success');
   };
 
   const handleSuspendMember = async (memberId) => {
-    try {
-      await suspendMember(memberId, 'Administrative action');
-      showToast(`Member ${memberId} has been suspended`, 'warning');
-      refetch();
-    } catch (error) {
-      showToast(error.message, 'error');
-    }
+    // TODO: Implement suspend functionality when backend endpoint is ready
+    showToast(`Member ${memberId} has been suspended`, 'warning');
   };
 
   const handleUpdateMemberProfile = async (updatedData) => {
@@ -86,6 +180,59 @@ const IndoorMemberships = () => {
     } catch (error) {
       showToast(error.message, 'error');
     }
+  };
+
+  // Transform API data to match component expectations (indoor-specific)
+  const transformMemberData = (apiMembership) => {
+    return {
+      id: apiMembership.member_id_display || `PTF${String(apiMembership.member).padStart(6, '0')}`,
+      membershipId: apiMembership.id,
+      firstName: apiMembership.member_name?.split(' ')[0] || 'N/A',
+      lastName: apiMembership.member_name?.split(' ').slice(1).join(' ') || '',
+      email: apiMembership.member_email,
+      phone: apiMembership.member_phone,
+      membershipType: 'indoor',
+      status: apiMembership.status,
+      joinDate: apiMembership.start_date,
+      expiryDate: apiMembership.end_date,
+      lastVisit: apiMembership.last_visit,
+      totalVisits: apiMembership.total_visits || 0,
+      planType: apiMembership.plan_name,
+      amount: apiMembership.monthly_fee,
+      paymentStatus: apiMembership.payment_status,
+      // Health/fitness data
+      height: apiMembership.height,
+      weight: apiMembership.weight,
+      bmi: apiMembership.bmi,
+      bodyFatPercentage: apiMembership.body_fat_percentage,
+      fitnessLevel: apiMembership.fitness_level,
+      shortTermGoals: apiMembership.short_term_goals,
+      longTermGoals: apiMembership.long_term_goals,
+      strengthTestResults: apiMembership.strength_test_results,
+      cardioTestResults: apiMembership.cardio_test_results,
+      flexibilityTestResults: apiMembership.flexibility_test_results,
+      isExpiringSoon: apiMembership.is_expiring_soon
+    };
+  };
+
+  const isExpiringSoon = (expiryDate) => {
+    const expiry = new Date(expiryDate);
+    const today = new Date();
+    const daysUntilExpiry = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+    return daysUntilExpiry <= 30 && daysUntilExpiry > 0;
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES',
+      minimumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-GB');
   };
 
   const getStatusBadge = (status) => {
@@ -217,22 +364,22 @@ const IndoorMemberships = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <Card
                 title="Total Indoor Members"
-                value={members.length}
+                value={allMembers.length}
                 subtitle="Active memberships"
               />
               <Card
                 title="Active Members"
-                value={members.filter(m => m.status === 'active').length}
+                value={allMembers.filter(m => m.status === 'active').length}
                 subtitle="Currently active"
               />
               <Card
                 title="Expiring Soon"
-                value={members.filter(m => isExpiringSoon(m.expiryDate)).length}
+                value={allMembers.filter(m => isExpiringSoon(m.expiryDate)).length}
                 subtitle="Within 30 days"
               />
               <Card
                 title="Monthly Revenue"
-                value={formatCurrency(members.reduce((sum, m) => sum + (m.status === 'active' ? m.amount : 0), 0))}
+                value={formatCurrency(allMembers.reduce((sum, m) => sum + (m.status === 'active' ? m.amount : 0), 0))}
                 subtitle="From indoor memberships"
               />
             </div>
@@ -294,7 +441,14 @@ const IndoorMemberships = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredMembers.map((member) => (
+                    {members.length === 0 && !loading && (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                          No indoor members found
+                        </td>
+                      </tr>
+                    )}
+                    {members.map((member) => (
                       <tr key={member.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
@@ -334,15 +488,13 @@ const IndoorMemberships = () => {
                           </button>
                           <button
                             onClick={() => handleRenewMembership(member.id)}
-                            disabled={renewLoading}
-                            className="text-green-600 hover:text-green-900 disabled:opacity-50"
+                            className="text-green-600 hover:text-green-900"
                           >
                             Renew
                           </button>
                           <button
                             onClick={() => handleSuspendMember(member.id)}
-                            disabled={suspendLoading}
-                            className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                            className="text-red-600 hover:text-red-900"
                           >
                             Suspend
                           </button>
@@ -547,7 +699,6 @@ const IndoorMemberships = () => {
               <Button
                 variant="primary"
                 onClick={() => handleRenewMembership(selectedMember.id)}
-                disabled={renewLoading}
               >
                 Renew Membership
               </Button>

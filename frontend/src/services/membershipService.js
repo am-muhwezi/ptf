@@ -1,6 +1,16 @@
 import apiClient, { API_ENDPOINTS } from '../config/api';
 
 export const membershipService = {
+  // Get all memberships
+  getAllMemberships: async (params = {}) => {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.memberships.list, { params });
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch memberships');
+    }
+  },
+
   // Indoor Memberships
   getIndoorMemberships: async (params = {}) => {
     try {
