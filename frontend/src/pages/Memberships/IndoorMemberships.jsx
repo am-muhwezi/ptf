@@ -6,7 +6,9 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
 import UpdateMemberProfileForm from '../../components/forms/UpdateMemberProfileForm';
+import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import authService from '../../services/authService';
+import { memberService } from '../../services/memberService';
 
 const IndoorMemberships = () => {
   const [allMembers, setAllMembers] = useState([]);
@@ -16,6 +18,7 @@ const IndoorMemberships = () => {
   const [selectedMember, setSelectedMember] = useState(null);
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -122,9 +125,9 @@ const IndoorMemberships = () => {
   // Reload data when search term or filter changes
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
-      if (searchTerm || filterStatus !== 'all') {
+      if (searchTerm !== undefined || filterStatus !== undefined) {
         setCurrentPage(1); // Reset to first page
-        loadIndoorMembers(1, true); // Enable loading state for search
+        loadIndoorMembers(1); // Consistent with outdoor implementation
       }
     }, 300); // Debounce search
 
@@ -177,6 +180,33 @@ const IndoorMemberships = () => {
       setShowUpdateModal(false);
       
       showToast(`Profile updated successfully for ${selectedMember.firstName} ${selectedMember.lastName}`, 'success');
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  };
+
+  const handleAddMember = () => {
+    setShowAddMemberModal(true);
+  };
+
+  const handleAddMemberSubmit = async (memberData) => {
+    try {
+      // Ensure membership_type is set to indoor for consistency
+      const indoorMemberData = {
+        ...memberData,
+        membership_type: 'indoor'
+      };
+      
+      // Use the memberService to create a new member
+      await memberService.createMember(indoorMemberData);
+      
+      setShowAddMemberModal(false);
+      showToast(`${memberData.first_name} ${memberData.last_name} added successfully!`, 'success');
+      
+      // Refresh the member lists
+      await loadAllIndoorMembers();
+      await loadIndoorMembers(currentPage);
+      await loadStats();
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -356,7 +386,7 @@ const IndoorMemberships = () => {
               </div>
               <div className="flex space-x-3">
                 <Button variant="outline">Export Data</Button>
-                <Button variant="primary">Add New Member</Button>
+                <Button variant="primary" onClick={handleAddMember}>Add New Member</Button>
               </div>
             </div>
 
@@ -443,8 +473,27 @@ const IndoorMemberships = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {members.length === 0 && !loading && (
                       <tr>
-                        <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
-                          No indoor members found
+                        <td colSpan="7" className="px-6 py-12">
+                          <div className="text-center">
+                            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            <h3 className="mt-4 text-lg font-medium text-gray-900">No indoor members found</h3>
+                            <p className="mt-1 text-sm text-gray-500">
+                              {searchTerm || filterStatus !== 'all' 
+                                ? 'Try adjusting your search or filter criteria.'
+                                : 'Get started by adding your first indoor member.'
+                              }
+                            </p>
+                            {(!searchTerm && filterStatus === 'all') && (
+                              <button 
+                                onClick={handleAddMember}
+                                className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                              >
+                                Add Indoor Member
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )}
@@ -504,6 +553,89 @@ const IndoorMemberships = () => {
                   </tbody>
                 </table>
               </div>
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center text-sm text-gray-700">
+                    <span>
+                      Showing {((currentPage - 1) * 20) + 1} to {Math.min(currentPage * 20, members.length + ((currentPage - 1) * 20))} of {allMembers.length} indoor members
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <button
+                      onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                    >
+                      <span>←</span>
+                      <span className="hidden sm:inline">Previous</span>
+                    </button>
+                    
+                    <div className="flex space-x-1">
+                      {/* Show first page if current page is far from start */}
+                      {currentPage > 3 && totalPages > 5 && (
+                        <>
+                          <button
+                            onClick={() => handlePageChange(1)}
+                            className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                          >
+                            1
+                          </button>
+                          {currentPage > 4 && <span className="px-2 py-2 text-sm text-gray-500">...</span>}
+                        </>
+                      )}
+                      
+                      {/* Show page numbers around current page */}
+                      {(() => {
+                        const start = Math.max(1, currentPage - 2);
+                        const end = Math.min(totalPages, currentPage + 2);
+                        const pages = [];
+                        
+                        for (let i = start; i <= end; i++) {
+                          pages.push(
+                            <button
+                              key={i}
+                              onClick={() => handlePageChange(i)}
+                              className={`px-3 py-2 text-sm border rounded-md transition-colors ${
+                                currentPage === i
+                                  ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
+                                  : 'border-gray-300 hover:bg-gray-50 text-gray-700'
+                              }`}
+                            >
+                              {i}
+                            </button>
+                          );
+                        }
+                        
+                        return pages;
+                      })()}
+                      
+                      {/* Show last page if current page is far from end */}
+                      {currentPage < totalPages - 2 && totalPages > 5 && (
+                        <>
+                          {currentPage < totalPages - 3 && <span className="px-2 py-2 text-sm text-gray-500">...</span>}
+                          <button
+                            onClick={() => handlePageChange(totalPages)}
+                            className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                          >
+                            {totalPages}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    
+                    <button
+                      onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                    >
+                      <span className="hidden sm:inline">Next</span>
+                      <span>→</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </main>
@@ -718,6 +850,20 @@ const IndoorMemberships = () => {
           initialData={selectedMember}
           onSubmit={handleUpdateMemberProfile}
           onCancel={() => setShowUpdateModal(false)}
+        />
+      </Modal>
+
+      {/* Add Member Modal */}
+      <Modal
+        isOpen={showAddMemberModal}
+        onClose={() => setShowAddMemberModal(false)}
+        title="Add New Indoor Member"
+        size="large"
+      >
+        <RegisterMemberForm
+          initialMembershipType="indoor"
+          onSubmit={handleAddMemberSubmit}
+          onCancel={() => setShowAddMemberModal(false)}
         />
       </Modal>
 

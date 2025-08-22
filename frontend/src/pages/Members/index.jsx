@@ -79,7 +79,29 @@ const Members = () => {
     }));
   };
 
-  // Fetch members and memberships data
+  // Fetch all members for stats (separate from paginated data)
+  const fetchAllMembersForStats = useCallback(async () => {
+    try {
+      // Fetch all members without pagination for stats calculation
+      const allMembersResponse = await memberService.getMembers({ limit: 1000 }); // Large limit to get all
+      let allMembersData = [];
+      
+      if (allMembersResponse.results) {
+        allMembersData = allMembersResponse.results;
+      } else {
+        allMembersData = allMembersResponse;
+      }
+      
+      // Process all members data for stats
+      const processedAllMembers = processMembers(allMembersData);
+      setCombinedData(processedAllMembers);
+      
+    } catch (err) {
+      console.error('Error fetching all members for stats:', err);
+    }
+  }, []);
+
+  // Fetch members and memberships data (paginated)
   const fetchMembers = useCallback(async (page = currentPage) => {
     try {
       setLoading(true);
@@ -90,7 +112,7 @@ const Members = () => {
         page: page,
         limit: pageSize
       };
-      if (searchTerm) memberParams.search = searchTerm;
+      if (searchTerm && searchTerm.trim() !== '') memberParams.q = searchTerm;
       if (filterStatus !== 'all') memberParams.status = filterStatus;
 
       // Prepare membership params for filtering
@@ -126,7 +148,6 @@ const Members = () => {
       }
 
       setMembers(processed);
-      setCombinedData(processed);
       setFilteredMembers(filtered);
 
     } catch (err) {
@@ -141,16 +162,21 @@ const Members = () => {
 
   // Initial data fetch
   useEffect(() => {
-    fetchMembers();
-  }, [fetchMembers]);
+    fetchAllMembersForStats(); // Fetch all members for stats
+    fetchMembers(); // Fetch paginated members for display
+  }, []); // Empty dependency - only run on mount, not on every function change
 
   // Reset to page 1 when filters change
   useEffect(() => {
-    if (currentPage !== 1) {
-      setCurrentPage(1);
-    } else {
-      fetchMembers(1);
-    }
+    const delayedSearch = setTimeout(() => {
+      if (searchTerm !== undefined || filterStatus !== undefined || filterMembershipType !== undefined) {
+        setCurrentPage(1);
+        fetchMembers(1); // Consistent with indoor/outdoor pattern
+      }
+    }, 300); // Add debounce like indoor/outdoor pages
+
+    return () => clearTimeout(delayedSearch);
+    // Don't refetch all members for stats when filtering, stats should remain constant
   }, [searchTerm, filterStatus, filterMembershipType]);
 
   // Calculate stats from combined data
@@ -191,7 +217,8 @@ const Members = () => {
   };
   
   const refreshData = async () => {
-      await fetchMembers();
+      await fetchAllMembersForStats(); // Refresh all members for stats
+      await fetchMembers(); // Refresh paginated members for display
       // Stats will be calculated automatically via useEffect
   };
 
@@ -637,56 +664,82 @@ const Members = () => {
               
               {/* Pagination Controls */}
               {totalPages > 1 && (
-                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center text-sm text-gray-700">
                     <span>
                       Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} members
                     </span>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1">
                     <button
                       onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
                     >
-                      Previous
+                      <span>←</span>
+                      <span className="hidden sm:inline">Previous</span>
                     </button>
                     
                     <div className="flex space-x-1">
-                      {[...Array(Math.min(5, totalPages))].map((_, index) => {
-                        let pageNum;
-                        if (totalPages <= 5) {
-                          pageNum = index + 1;
-                        } else if (currentPage <= 3) {
-                          pageNum = index + 1;
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + index;
-                        } else {
-                          pageNum = currentPage - 2 + index;
+                      {/* Show first page if current page is far from start */}
+                      {currentPage > 3 && totalPages > 5 && (
+                        <>
+                          <button
+                            onClick={() => handlePageChange(1)}
+                            className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                          >
+                            1
+                          </button>
+                          {currentPage > 4 && <span className="px-2 py-2 text-sm text-gray-500">...</span>}
+                        </>
+                      )}
+                      
+                      {/* Show page numbers around current page */}
+                      {(() => {
+                        const start = Math.max(1, currentPage - 2);
+                        const end = Math.min(totalPages, currentPage + 2);
+                        const pages = [];
+                        
+                        for (let i = start; i <= end; i++) {
+                          pages.push(
+                            <button
+                              key={i}
+                              onClick={() => handlePageChange(i)}
+                              className={`px-3 py-2 text-sm border rounded-md transition-colors ${
+                                currentPage === i
+                                  ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
+                                  : 'border-gray-300 hover:bg-gray-50 text-gray-700'
+                              }`}
+                            >
+                              {i}
+                            </button>
+                          );
                         }
                         
-                        return (
+                        return pages;
+                      })()}
+                      
+                      {/* Show last page if current page is far from end */}
+                      {currentPage < totalPages - 2 && totalPages > 5 && (
+                        <>
+                          {currentPage < totalPages - 3 && <span className="px-2 py-2 text-sm text-gray-500">...</span>}
                           <button
-                            key={pageNum}
-                            onClick={() => handlePageChange(pageNum)}
-                            className={`px-3 py-1 text-sm border rounded-md ${
-                              currentPage === pageNum
-                                ? 'bg-blue-500 text-white border-blue-500'
-                                : 'border-gray-300 hover:bg-gray-50'
-                            }`}
+                            onClick={() => handlePageChange(totalPages)}
+                            className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
                           >
-                            {pageNum}
+                            {totalPages}
                           </button>
-                        );
-                      })}
+                        </>
+                      )}
                     </div>
                     
                     <button
                       onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
                     >
-                      Next
+                      <span className="hidden sm:inline">Next</span>
+                      <span>→</span>
                     </button>
                   </div>
                 </div>

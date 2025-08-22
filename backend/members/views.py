@@ -48,7 +48,9 @@ class MemberViewset(viewsets.ModelViewSet):
     authentication_classes = []
     permission_classes = []
 
-    queryset = Member.objects.all().order_by("id")
+    queryset = Member.objects.prefetch_related(
+        'memberships__plan'
+    ).select_related().order_by("id")
     serializer_class = MemberSerializer
     pagination_class = MemberPagination
 

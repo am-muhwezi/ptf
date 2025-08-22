@@ -25,6 +25,10 @@ class PhysicalProfileSerializer(serializers.ModelSerializer):
 class MemberSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField()
     membership_type = serializers.ReadOnlyField()
+    payment_status = serializers.SerializerMethodField()
+    plan_type = serializers.SerializerMethodField()
+    amount = serializers.SerializerMethodField()
+    member_id = serializers.SerializerMethodField()
     physical_profile = PhysicalProfileSerializer(required=False)
     
     # Make required fields explicit
@@ -45,6 +49,7 @@ class MemberSerializer(serializers.ModelSerializer):
         model = Member
         fields = [
             "id",
+            "member_id",
             "first_name",
             "last_name",
             "full_name",
@@ -58,6 +63,9 @@ class MemberSerializer(serializers.ModelSerializer):
             "emergency_phone",
             "medical_conditions",
             "membership_type",
+            "payment_status",
+            "plan_type",
+            "amount",
             "status",
             "registration_date",
             "total_visits",
@@ -67,6 +75,28 @@ class MemberSerializer(serializers.ModelSerializer):
             "physical_profile",
         ]
         read_only_fields = ["id", "registration_date", "total_visits", "last_visit", "created_at", "updated_at"]
+
+    def get_payment_status(self, obj):
+        """Get payment status from active membership"""
+        active_membership = obj.memberships.filter(status='active').first()
+        return active_membership.payment_status if active_membership else 'unknown'
+
+    def get_plan_type(self, obj):
+        """Get plan type from active membership"""
+        active_membership = obj.memberships.filter(status='active').first()
+        return active_membership.plan.plan_name if active_membership and active_membership.plan else 'No Plan'
+
+    def get_amount(self, obj):
+        """Get amount from active membership"""
+        active_membership = obj.memberships.filter(status='active').first()
+        if active_membership and active_membership.plan:
+            # Return monthly fee if available, otherwise weekly fee
+            return active_membership.plan.monthly_fee or active_membership.plan.weekly_fee or 0
+        return 0
+
+    def get_member_id(self, obj):
+        """Generate formatted member ID"""
+        return f"PTF{str(obj.id).zfill(6)}"
 
     def validate_email(self, value):
         """Ensure email is unique during updates"""

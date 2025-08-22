@@ -130,7 +130,8 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
         dateOfBirth: formData.dateOfBirth,
         address: formData.address,
         registrationDate: new Date().toISOString(),
-        status: 'active'
+        status: 'active',
+        payment_status: formData.paymentStatus
       };
       
       console.log('Sending member data:', memberData);
