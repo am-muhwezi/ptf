@@ -240,8 +240,6 @@ def get_dashboard_statistics():
         "bookingData": {
             "groupSessions": group_sessions,
             "oneOnOneSessions": one_on_one_sessions,
-            "trainersAvailable": 0,  # You'll need to implement this
-            "waitlistRequests": 0,  # You'll need to implement this
         },
         "attendanceData": {
             "indoorVisits": indoor_visits,
@@ -259,10 +257,6 @@ def get_dashboard_statistics():
         "feedbackData": {
             "openTickets": 0,  # You'll need to implement this
             "avgResolutionTime": "0 days",  # You'll need to implement this
-        },
-        "inventoryData": {
-            "availableStock": 0,  # You'll need to implement this
-            "lowStockAlerts": 0,  # You'll need to implement this
         },
         
         # MEMBER STATISTICS - Enhanced with proper categorization

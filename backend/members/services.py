@@ -5,7 +5,6 @@ This module contains all business logic related to members,
 separated from models and views for better maintainability.
 """
 
-import logging
 from django.utils import timezone
 from django.db.models import Q, Count, Avg
 from django.core.exceptions import ValidationError
@@ -14,7 +13,6 @@ from decimal import Decimal
 
 from .models import Member, Location, PhysicalProfile
 
-logger = logging.getLogger(__name__)
 
 
 class MemberService:
@@ -65,7 +63,6 @@ class MemberService:
             **kwargs
         )
         
-        logger.info(f"Created member {member.id}: {member.full_name}")
         return member
 
     @staticmethod
@@ -81,10 +78,8 @@ class MemberService:
             member.last_visit = timezone.now()
             member.save(update_fields=['total_visits', 'last_visit'])
             
-            logger.info(f"Updated visit tracking for member {member.id}")
             
         except Exception as e:
-            logger.error(f"Error updating visit tracking for member {member.id}: {e}")
             raise
 
     @staticmethod
@@ -198,13 +193,45 @@ class MemberService:
             filters &= Q(memberships__plan__membership_type=membership_type)
         
         if search_query:
-            search_filters = (
-                Q(first_name__icontains=search_query) |
-                Q(last_name__icontains=search_query) |
+            # Handle full name search by splitting the query
+            search_terms = search_query.strip().split()
+            
+            if len(search_terms) >= 2:
+                # For multi-word searches, try full name combinations
+                full_name_filters = Q()
+                for i in range(len(search_terms)):
+                    for j in range(i + 1, len(search_terms) + 1):
+                        partial_name = ' '.join(search_terms[i:j])
+                        full_name_filters |= (
+                            Q(first_name__icontains=partial_name) |
+                            Q(last_name__icontains=partial_name)
+                        )
+                
+                # Also try first name + last name combination
+                first_term = search_terms[0]
+                last_term = search_terms[-1]
+                full_name_filters |= (
+                    Q(first_name__icontains=first_term) & Q(last_name__icontains=last_term)
+                )
+                
+                search_filters = full_name_filters
+            else:
+                # Single word search - search all relevant fields
+                search_filters = (
+                    Q(first_name__icontains=search_query) |
+                    Q(last_name__icontains=search_query) |
+                    Q(email__icontains=search_query) |
+                    Q(phone__icontains=search_query) |
+                    Q(id_passport__icontains=search_query)
+                )
+            
+            # Also include other fields for any search
+            search_filters |= (
                 Q(email__icontains=search_query) |
                 Q(phone__icontains=search_query) |
                 Q(id_passport__icontains=search_query)
             )
+            
             filters &= search_filters
         
         return filters
@@ -285,7 +312,6 @@ class PhysicalProfileService:
             
             profile.save()
         
-        logger.info(f"{'Created' if created else 'Updated'} physical profile for member {member.id}")
         return profile
 
     @staticmethod

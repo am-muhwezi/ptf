@@ -140,15 +140,6 @@ updateMemberStatus: async (memberId, status) => {
     }
   },
 
-  // Get checked-in members
-  getCheckedInMembers: async () => {
-    try {
-      const response = await apiClient.get(`${API_ENDPOINTS.members.list}checked_in_members/`);
-      return response.data;
-    } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch checked-in members');
-    }
-  },
   /**
    * Export members data
    * @param {string} format - Export format (e.g., 'csv', 'excel')

@@ -1,17 +1,21 @@
 from .models import Booking
 from rest_framework import status, viewsets
-from rest_framework.decorators import api_view, action
+from rest_framework.decorators import api_view, action, permission_classes
 from rest_framework.response import Response
 from rest_framework import serializers
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.authentication import SessionAuthentication
 from django.shortcuts import get_object_or_404
 from rest_framework.request import Request
 from .serializers import BookingSerializer
+from ptf.permissions import IsStaffOrSuperUser, CustomModelPermissions
 
 
 @api_view(http_method_names=["GET", "POST"])
+@permission_classes([IsStaffOrSuperUser])
 def homepage(request: Request):
     """
-    Home view for the bookings app.
+    Home view for the bookings app - Staff and Superuser only.
     """
     if request.method == "POST":
         data = request.data
@@ -24,8 +28,14 @@ def homepage(request: Request):
 class BookingViewSet(viewsets.ModelViewSet):
     """
     View to list and create bookings.
+    
+    Permissions:
+    - Staff: Can view and create bookings
+    - Superuser: Full CRUD access to bookings
     """
 
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    permission_classes = [CustomModelPermissions]
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
 

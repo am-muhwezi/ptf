@@ -165,6 +165,16 @@ const Attendance = () => {
     setShowCheckInModal(false);
   };
 
+  const handleAutoCheckout = (result) => {
+    if (result.successful > 0) {
+      showToast(`Auto-checked out ${result.successful} members who exceeded 2hr 20min session limit`, 'success');
+      loadTodaysAttendance(); // Refresh data
+    }
+    if (result.failed > 0) {
+      showToast(`Failed to auto-checkout ${result.failed} members`, 'error');
+    }
+  };
+
   const handleExportLogs = () => {
     showToast('Attendance logs exported successfully', 'info');
   };
@@ -250,6 +260,7 @@ const Attendance = () => {
                 className="border-green-200"
               />
             </div>
+
 
             {/* Filters and Search */}
             <div className="bg-white rounded-xl p-6 shadow-sm">

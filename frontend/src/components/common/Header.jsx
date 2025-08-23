@@ -1,9 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../../contexts/AuthContext';
+import NotificationBell from '../notifications/NotificationBell';
 
 const Header = ({ onMenuClick }) => {
   const { user, logout, isLoading } = useAuthContext();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const navigate = useNavigate();
   const menuRef = useRef(null);
 
   // Close menu when clicking outside
@@ -37,7 +40,10 @@ const Header = ({ onMenuClick }) => {
   const getUserDisplayName = () => {
     if (!user) return 'User';
     if (user.firstName && user.lastName) {
-      console.log('Header user:', user);
+      // Debug logging only in development
+      if (import.meta.env.MODE === 'development' && import.meta.env.VITE_DEBUG_AUTH === 'true') {
+        console.log('Header user:', user);
+      }
       return `${user.firstName} ${user.lastName}`;
     }
     return user.email || 'User';
@@ -65,16 +71,10 @@ const Header = ({ onMenuClick }) => {
 
         {/* Right side - user menu */}
         <div className="flex items-center space-x-2 sm:space-x-4">
-          {/* Notifications (placeholder) - Hidden on very small screens */}
-          <button className="relative p-2 text-gray-600 hover:text-gray-800 transition-colors hidden sm:block">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-3.5-3.5a50.8 50.8 0 00-.001-.001L12 9l-4.5 4.5-.001.001L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-            {/* Notification badge */}
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-              3
-            </span>
-          </button>
+          {/* Notifications - Hidden on very small screens */}
+          <div className="hidden sm:block">
+            <NotificationBell />
+          </div>
 
           {/* User Menu */}
           <div className="relative" ref={menuRef}>
@@ -136,8 +136,7 @@ const Header = ({ onMenuClick }) => {
                   <button
                     onClick={() => {
                       setShowUserMenu(false);
-                      // Navigate to profile page when implemented
-                      console.log('Navigate to profile');
+                      navigate('/profile');
                     }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
                   >

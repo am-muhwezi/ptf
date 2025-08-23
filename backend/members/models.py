@@ -61,6 +61,14 @@ class Member(models.Model):
     
     class Meta:
         ordering = ['-registration_date']
+        indexes = [
+            models.Index(fields=['first_name']),
+            models.Index(fields=['last_name']),
+            models.Index(fields=['email']),
+            models.Index(fields=['phone']),
+            models.Index(fields=['status']),
+            models.Index(fields=['first_name', 'last_name']),
+        ]
     
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
@@ -85,6 +93,16 @@ class Member(models.Model):
     def active_membership(self):
         """Get the member's active membership"""
         return self.memberships.filter(status='active').first()
+    
+    @property
+    def is_checked_in(self):
+        """Check if member is currently checked in"""
+        from attendance.models import AttendanceLog
+        return AttendanceLog.objects.filter(
+            member=self,
+            check_out_time__isnull=True,
+            status='checked_in'
+        ).exists()
 
 
 class PhysicalProfile(models.Model):

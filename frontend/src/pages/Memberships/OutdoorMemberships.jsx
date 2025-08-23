@@ -285,6 +285,28 @@ const OutdoorMemberships = () => {
     return planName || `${sessions} Sessions/Week - KES ${fee}`;
   };
 
+  // Location mapping function
+  const getLocationDisplayName = (locationValue) => {
+    const locationMap = {
+      'arboretum': 'Arboretum',
+      'boxwood': 'Boxwood', 
+      'botanical': 'Botanical',
+      'karura': 'Karura',
+      'sagret': 'Sagret',
+      'mushroom': 'Mushroom',
+      'loreto': 'PCEA Loreto',
+      '1': 'Arboretum',
+      '2': 'Boxwood',
+      '3': 'Botanical', 
+      '4': 'Karura',
+      '5': 'Sagret',
+      '6': 'Mushroom',
+      '7': 'PCEA Loreto'
+    };
+    
+    return locationMap[locationValue] || locationValue || 'Not specified';
+  };
+
   // Transform API data to match component expectations
   const transformMemberData = (apiMembership) => {
     const planDisplayName = getPlanDisplayName(
@@ -309,7 +331,7 @@ const OutdoorMemberships = () => {
       planType: planDisplayName,
       amount: apiMembership.weekly_fee,
       paymentStatus: apiMembership.payment_status,
-      location: apiMembership.location,
+      location: getLocationDisplayName(apiMembership.location),
       sessionsPerWeek: apiMembership.sessions_per_week,
       totalSessionsAllowed: apiMembership.total_sessions_allowed,
       sessionsUsed: apiMembership.sessions_used,

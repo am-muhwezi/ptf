@@ -25,6 +25,7 @@ class PhysicalProfileSerializer(serializers.ModelSerializer):
 class MemberSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField()
     membership_type = serializers.ReadOnlyField()
+    is_checked_in = serializers.ReadOnlyField()
     payment_status = serializers.SerializerMethodField()
     plan_type = serializers.SerializerMethodField()
     amount = serializers.SerializerMethodField()
@@ -63,6 +64,7 @@ class MemberSerializer(serializers.ModelSerializer):
             "emergency_phone",
             "medical_conditions",
             "membership_type",
+            "is_checked_in",
             "payment_status",
             "plan_type",
             "amount",
@@ -179,6 +181,7 @@ class MemberListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for listing members"""
 
     full_name = serializers.ReadOnlyField()
+    is_checked_in = serializers.ReadOnlyField()
 
     class Meta:
         model = Member
@@ -193,6 +196,7 @@ class MemberListSerializer(serializers.ModelSerializer):
             "registration_date",
             "last_visit",
             "total_visits",
+            "is_checked_in",
         ]
 
 
@@ -200,6 +204,7 @@ class MemberSearchSerializer(serializers.ModelSerializer):
     """Minimal serializer for search results"""
 
     full_name = serializers.ReadOnlyField()
+    is_checked_in = serializers.ReadOnlyField()
 
     class Meta:
         model = Member
@@ -211,4 +216,5 @@ class MemberSearchSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "status",
+            "is_checked_in",
         ]

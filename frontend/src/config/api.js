@@ -73,13 +73,6 @@ export const API_ENDPOINTS = {
     update: (id) => `feedback/${id}/`,
   },
   
-  // Inventory
-  inventory: {
-    list: 'inventory/',
-    create: 'inventory/',
-    update: (id) => `inventory/${id}/`,
-    lowStock: 'inventory/low-stock/',
-  },
 };
 
 // Create axios instance with default config
@@ -101,11 +94,13 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // Log request for debugging (remove in production)
-    console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
-      data: config.data,
-      headers: config.headers
-    });
+    // Log request for debugging (only in development)
+    if (import.meta.env.MODE === 'development' && import.meta.env.VITE_DEBUG_API === 'true') {
+      console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+        data: config.data,
+        headers: config.headers
+      });
+    }
     
     return config;
   },
@@ -118,11 +113,13 @@ apiClient.interceptors.request.use(
 // ✅ FIXED: Enhanced response interceptor with comprehensive error handling
 apiClient.interceptors.response.use(
   (response) => {
-    // Log successful responses (remove in production)
-    console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
-      status: response.status,
-      data: response.data
-    });
+    // Log successful responses (only in development)
+    if (import.meta.env.MODE === 'development' && import.meta.env.VITE_DEBUG_API === 'true') {
+      console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
+        status: response.status,
+        data: response.data
+      });
+    }
     
     return response;
   },

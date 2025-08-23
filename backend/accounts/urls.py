@@ -33,6 +33,10 @@ urlpatterns = [
         views.PasswordResetView.as_view(),
         name="password_reset",
     ),
+    # User management endpoints (superuser only)
+    path("management/users/", views.user_management, name="user_management_list"),
+    path("management/users/<int:user_id>/", views.user_management, name="user_management_detail"),
+    
     # Admin management endpoints
     path("admin/", include(admin_router.urls)),
 ]
