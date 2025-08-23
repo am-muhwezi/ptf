@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Button from '../ui/Button';
 import { useApiMutation } from '../../hooks/useApi';
 import { memberService } from '../../services/memberService';
+import attendanceService from '../../services/attendanceService';
 
 const CheckInForm = ({ onSubmit, onCancel }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -11,10 +12,10 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(null);
 
-  // Use separate mutations for search and check-in
+  // Use separate mutations for search only (check-in moved to attendance service)
   const { mutate: searchMembers, loading: isSearching } = useApiMutation(memberService.searchMembers);
-  const { mutate: performCheckin, loading: isCheckingIn } = useApiMutation(memberService.checkinMember);
 
   // Debounce hook for search optimization
   const useDebounce = (value, delay) => {
@@ -42,21 +43,49 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
     };
   }, []);
 
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
   // Handle search input changes
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
     setError('');
     setSuccessMessage('');
+    setAlreadyCheckedIn(null);
+    if (selectedMember) {
+      setSelectedMember(null); // Clear selection when user starts typing again
+    }
   };
 
   // Handle member selection from dropdown
-  const handleMemberSelect = (member) => {
+  const handleMemberSelect = async (member) => {
     setSelectedMember(member);
     setSearchQuery(`${member.first_name} ${member.last_name}`);
     setSearchResults([]);
     setError('');
+    setSuccessMessage('');
+    setAlreadyCheckedIn(null);
+    
+    // Check if member is already checked in
+    try {
+      const memberStatus = await attendanceService.getMemberStatus(member.id);
+      if (memberStatus.data.member.is_active) {
+        const activeLogs = memberStatus.data.active_checkins || [];
+        const activeLog = activeLogs[0];
+        if (activeLog) {
+          setAlreadyCheckedIn({
+            member: member,
+            currentCheckin: {
+              id: activeLog.id,
+              check_in_time: activeLog.checkInTime,
+              visit_type: activeLog.visitType
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to get member status:', error);
+      // Don't show error for status check failure, just proceed
+    }
   };
 
   // Clear selected member
@@ -66,22 +95,40 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
     setSearchResults([]);
     setError('');
     setSuccessMessage('');
+    setAlreadyCheckedIn(null);
   };
 
-  // FIXED: Proper search function with error handling
+  // FIXED: Proper search function with error handling and query caching
+  const [searchCache, setSearchCache] = useState(new Map());
+  
   const performSearch = useCallback(async (query) => {
-    if (!query.trim()) {
+    if (!query.trim() || query.length < 2) {
       setSearchResults([]);
       return;
     }
 
-    try {
-      
-      const response = await searchMembers(query);
-      
+    // Check cache first
+    if (searchCache.has(query)) {
+      setSearchResults(searchCache.get(query));
+      return;
+    }
 
-      // Handle the response from your Django backend
+    try {
+      const response = await searchMembers(query);
       const results = response?.results || [];
+      
+      // Cache the results
+      setSearchCache(prev => {
+        const newCache = new Map(prev);
+        newCache.set(query, results);
+        // Limit cache size to prevent memory issues
+        if (newCache.size > 50) {
+          const firstKey = newCache.keys().next().value;
+          newCache.delete(firstKey);
+        }
+        return newCache;
+      });
+      
       setSearchResults(results);
 
       if (results.length === 0) {
@@ -93,7 +140,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
       setSearchResults([]);
       setError('Search failed. Please try again.');
     }
-  }, [searchMembers]);
+  }, [searchMembers, searchCache]);
 
 
   const handleCheckIn = async () => {
@@ -102,21 +149,22 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
       return;
     }
 
-
-
     try {
       setIsSubmitting(true);
       setError('');
       setSuccessMessage('');
+      setAlreadyCheckedIn(null);
 
-      
-
-  
-      const response = await performCheckin(selectedMember.id);
-      
+      // Use attendance service for check-in with basic indoor visit
+      const response = await attendanceService.checkIn({
+        memberId: selectedMember.id,
+        visitType: 'indoor', // Default to indoor for simplicity
+        activities: ['General Workout'], // Simple default activity
+        notes: ''
+      });
 
       // Show success message
-      setSuccessMessage(response?.message || 'Member checked in successfully!');
+      setSuccessMessage(`✅ ${selectedMember.first_name} ${selectedMember.last_name} checked in successfully!`);
 
       // Optional: Call parent onSubmit if needed for additional processing
       if (onSubmit) {
@@ -132,25 +180,36 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
         await onSubmit(checkInData);
       }
 
-      // Reset form after successful check-in
+      // Reset form after successful check-in with a longer delay to show success message
       setTimeout(() => {
         clearSelection();
         setSuccessMessage('');
-      }, 3000);
+      }, 2000);
       
     } catch (error) {
       console.error('Check-in error:', error);
-      setError(error.message || 'Failed to check in member. Please try again.');
+      
+      if (error.isAlreadyCheckedIn) {
+        setAlreadyCheckedIn({
+          member: selectedMember,
+          currentCheckin: error.currentCheckin
+        });
+        setError('');
+      } else {
+        setError(error.message || 'Failed to check in member. Please try again.');
+        setAlreadyCheckedIn(null);
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // FIXED: Debounced search effect with proper cleanup
+
+  // FIXED: Debounced search effect with proper cleanup and minimum length
   useEffect(() => {
-    if (debouncedSearchQuery && !selectedMember) {
+    if (debouncedSearchQuery && debouncedSearchQuery.length >= 2 && !selectedMember) {
       performSearch(debouncedSearchQuery);
-    } else if (!debouncedSearchQuery) {
+    } else if (!debouncedSearchQuery || debouncedSearchQuery.length < 2) {
       setSearchResults([]);
       setError('');
     }
@@ -182,91 +241,119 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
 
         {/* Success Message */}
         {successMessage && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 text-center animate-pulse">
+            <div className="flex flex-col items-center">
+              <div className="flex-shrink-0 mb-3">
+                <svg className="h-12 w-12 text-green-500" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
               </div>
-              <div className="ml-3">
-                <p className="text-sm text-green-800">{successMessage}</p>
+              <div>
+                <h3 className="text-lg font-medium text-green-800 mb-1">Check-in Successful!</h3>
+                <p className="text-sm text-green-700">{successMessage}</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Search Input */}
-        <div className="relative">
-          <label htmlFor="memberSearch" className="block text-sm font-medium text-gray-700 mb-2">
-            Search Member
-          </label>
-          <input
-            type="text"
-            id="memberSearch"
-            value={searchQuery}
-            onChange={handleSearchChange}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter name, email, or member ID"
-            disabled={isSubmitting || isCheckingIn}
-          />
-          
-          {/* Search Results Dropdown */}
-          {searchResults.length > 0 && !selectedMember && (
-            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-              {searchResults.map((member) => (
-                <div
-                  key={member.id}
-                  onClick={() => handleMemberSelect(member)}
-                  className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {member.first_name} {member.last_name}
-                      </p>
-                      <p className="text-sm text-gray-600">{member.email}</p>
-                      <p className="text-xs text-gray-500">ID: {member.id}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className={`inline-block px-2 py-1 text-xs rounded-full ${
-                        member.membership_type === 'indoor' ? 'bg-blue-100 text-blue-800' :
-                        member.membership_type === 'outdoor' ? 'bg-green-100 text-green-800' :
-                        'bg-purple-100 text-purple-800'
-                      }`}>
-                        {member.membership_type}
-                      </span>
-                      <div className="mt-1">
+        {/* Already Checked In Message */}
+        {alreadyCheckedIn && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-blue-800 mb-2">
+                  Already Checked In
+                </h3>
+                <p className="text-sm text-blue-700">
+                  <strong>{alreadyCheckedIn.member.first_name} {alreadyCheckedIn.member.last_name}</strong> is already checked in today at {' '}
+                  {alreadyCheckedIn.currentCheckin?.check_in_time ? 
+                    new Date(alreadyCheckedIn.currentCheckin.check_in_time).toLocaleTimeString() : 
+                    'Unknown time'
+                  }.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Search Input - Hide when showing success message */}
+        {!successMessage && (
+          <div className="relative">
+            <label htmlFor="memberSearch" className="block text-sm font-medium text-gray-700 mb-2">
+              Search Member
+            </label>
+            <input
+              type="text"
+              id="memberSearch"
+              value={searchQuery}
+              onChange={handleSearchChange}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Type at least 2 characters to search..."
+              disabled={isSubmitting}
+            />
+            
+            {/* Search Results Dropdown */}
+            {searchResults.length > 0 && !selectedMember && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {searchResults.map((member) => (
+                  <div
+                    key={member.id}
+                    onClick={() => handleMemberSelect(member)}
+                    className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {member.first_name} {member.last_name}
+                        </p>
+                        <p className="text-sm text-gray-600">{member.email}</p>
+                        <p className="text-xs text-gray-500">ID: {member.id}</p>
+                      </div>
+                      <div className="text-right">
                         <span className={`inline-block px-2 py-1 text-xs rounded-full ${
-                          member.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          member.membership_type === 'indoor' ? 'bg-blue-100 text-blue-800' :
+                          member.membership_type === 'outdoor' ? 'bg-green-100 text-green-800' :
+                          'bg-purple-100 text-purple-800'
                         }`}>
-                          {member.status === 'active' ? 'Active' : 'Inactive'}
+                          {member.membership_type}
                         </span>
+                        <div className="mt-1">
+                          <span className={`inline-block px-2 py-1 text-xs rounded-full ${
+                            member.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {member.status === 'active' ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
 
-          {/* Loading indicator */}
-          {(isSearching || isCheckingIn) && (
-            <div className="absolute right-3 top-11 transform -translate-y-1/2">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-            </div>
-          )}
-        </div>
+            {/* Loading indicator */}
+            {(isSearching || isSubmitting) && (
+              <div className="absolute right-3 top-11 transform -translate-y-1/2">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Selected Member Details */}
-        {selectedMember && (
+        {/* Selected Member Details - Hide when showing success message */}
+        {selectedMember && !successMessage && (
           <div className="bg-gray-50 rounded-lg p-4">
             <div className="flex justify-between items-start mb-4">
               <h3 className="text-lg font-medium text-gray-900">Selected Member</h3>
               <button
                 onClick={clearSelection}
                 className="text-gray-400 hover:text-gray-600"
-                disabled={isSubmitting || isCheckingIn}
+                disabled={isSubmitting}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -311,8 +398,8 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
           </div>
         )}
 
-        {/* Check-in Time Display */}
-        {selectedMember && (
+        {/* Check-in Time Display - Hide when showing success message */}
+        {selectedMember && !successMessage && (
           <div className="bg-blue-50 rounded-lg p-4">
             <h4 className="text-sm font-medium text-blue-900 mb-2">Check-in Details</h4>
             <div className="space-y-1">
@@ -332,8 +419,8 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
           </div>
         )}
 
-        {/* Ready to Check-in Message */}
-        {selectedMember && selectedMember.status === 'active' && !successMessage && (
+        {/* Ready to Check-in Message - Hide when showing success message or already checked in */}
+        {selectedMember && selectedMember.status === 'active' && !successMessage && !alreadyCheckedIn && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex">
               <div className="flex-shrink-0">
@@ -356,19 +443,34 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
             type="button"
             variant="outline"
             onClick={onCancel}
-            disabled={isSubmitting || isCheckingIn}
+            disabled={isSubmitting}
           >
-            Cancel
+            {successMessage ? 'Close' : 'Cancel'}
           </Button>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={handleCheckIn}
-            disabled={isSubmitting || isCheckingIn}
-            className="min-w-32"
-          >
-            {(isSubmitting || isCheckingIn) ? 'Checking In...' : 'Check In Member'}
-          </Button>
+          {/* Show different button states based on current state */}
+          {successMessage ? (
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => {
+                clearSelection();
+                setSuccessMessage('');
+              }}
+              className="min-w-32"
+            >
+              Check In Another Member
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleCheckIn}
+              disabled={isSubmitting || alreadyCheckedIn || !selectedMember}
+              className="min-w-32"
+            >
+{isSubmitting ? 'Checking In...' : alreadyCheckedIn ? 'Already Checked In' : 'Check In Member'}
+            </Button>
+          )}
         </div>
       </div>
     </div>

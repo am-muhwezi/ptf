@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Button from '../ui/Button';
+import authService from '../../services/authService';
 
-const RegisterMemberForm = ({ onSubmit, onCancel }) => {
+const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoor' }) => {
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -9,7 +10,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
     phone: '',
     idPassport: '',
     bloodGroup: '',
-    membershipType: 'indoor',
+    membershipType: initialMembershipType,
     planType: '',
     paymentStatus: 'pending',
     location: '',
@@ -23,6 +24,22 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
+  const [outdoorRateCards, setOutdoorRateCards] = useState([]);
+  const [loadingRateCards, setLoadingRateCards] = useState(false);
+
+  // Set hardcoded outdoor rate cards when membership type changes to outdoor
+  useEffect(() => {
+    if (formData.membershipType === 'outdoor') {
+      setOutdoorRateCards([
+        { id: 'outdoor_daily', plan_code: 'outdoor_daily', display_name: 'Daily Drop-in - KES 1,000', weekly_fee: 1000, sessions_per_week: 1 },
+        { id: '1_week', plan_code: '1_session_week', display_name: '1x/Week - KES 3,000', weekly_fee: 3000, sessions_per_week: 1 },
+        { id: '2_week', plan_code: '2_sessions_week', display_name: '2x/Week - KES 4,000', weekly_fee: 4000, sessions_per_week: 2 },
+        { id: '3_week', plan_code: '3_sessions_week', display_name: '3x/Week - KES 5,000', weekly_fee: 5000, sessions_per_week: 3 },
+        { id: '4_week', plan_code: '4_sessions_week', display_name: '4x/Week - KES 6,000', weekly_fee: 6000, sessions_per_week: 4 },
+        { id: '5_week', plan_code: '5_sessions_week', display_name: '5x/Week - KES 7,000', weekly_fee: 7000, sessions_per_week: 5 }
+      ]);
+    }
+  }, [formData.membershipType]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -113,7 +130,8 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
         dateOfBirth: formData.dateOfBirth,
         address: formData.address,
         registrationDate: new Date().toISOString(),
-        status: 'active'
+        status: 'active',
+        payment_status: formData.paymentStatus
       };
       
       console.log('Sending member data:', memberData);
@@ -348,10 +366,11 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select a plan</option>
-              <option value="daily">Daily - KES 500</option>
-              <option value="monthly">Monthly - KES 8,000</option>
-              <option value="bi-annual">Bi-Annual - KES 40,000</option>
-              <option value="annual">Annual - KES 70,000</option>
+              <option value="daily">Daily</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="bi-annual">Bi-Annual</option>
+              <option value="annual">Annual</option>
             </select>
             {errors.planType && <p className="text-red-500 text-xs mt-1">{errors.planType}</p>}
           </div>
@@ -373,7 +392,11 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
                 <option value="">Select a location</option>
                 <option value="arboretum">Arboretum</option>
                 <option value="boxwood">Boxwood</option>
+                <option value="botanical">Botanical</option>
                 <option value="karura">Karura</option>
+                <option value="sagret">Sagret</option>
+                <option value="mushroom">Mushroom</option>
+                <option value="loreto">PCEA Loreto</option>
               </select>
               {errors.location && <p className="text-red-500 text-xs mt-1">{errors.location}</p>}
             </div>
@@ -388,18 +411,26 @@ const RegisterMemberForm = ({ onSubmit, onCancel }) => {
                 value={formData.planType}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={loadingRateCards}
               >
-                <option value="">Select a plan</option>
-                <option value="daily">Daily - KES 1,000</option>
+                <option value="">{loadingRateCards ? 'Loading plans...' : 'Select a plan'}</option>
+                {outdoorRateCards.map((card) => (
+                  <option key={card.id || card.plan_code} value={card.plan_code}>
+                    {card.display_name}
+                  </option>
+                ))}
               </select>
               {errors.planType && <p className="text-red-500 text-xs mt-1">{errors.planType}</p>}
+              {loadingRateCards && (
+                <p className="text-blue-500 text-xs mt-1">Loading available plans...</p>
+              )}
             </div>
           </div>
         )}
 
         <div>
           <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-            Address
+            Physical Address
           </label>
           <textarea
             id="address"

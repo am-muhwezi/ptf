@@ -20,6 +20,7 @@ INSTALLED_APPS = [
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
+    "django_extensions",
     "django.contrib.messages",
     "django.contrib.staticfiles",  # Needed for admin panel (even if no static files served)
     # Your apps
@@ -29,6 +30,7 @@ INSTALLED_APPS = [
     "dashboard",
     "memberships",
     "attendance",
+    "payments",
     # Third-party
     "rest_framework",
     "rest_framework_simplejwt",
@@ -207,3 +209,23 @@ LOGGING = {
         },
     },
 }
+
+# FRONTEND URL
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+# EMAIL SETTINGS
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.getenv(
+    "DEFAULT_FROM_EMAIL", "Paul's Tropical Fitness <noreply@paulstropicalfitness.fit>"
+)
+
+# For development - print emails to console instead of sending
+if DEBUG and not EMAIL_HOST_USER:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

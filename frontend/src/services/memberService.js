@@ -105,27 +105,6 @@ export const memberService = {
   },
 
 
-  checkinMember: async (memberId) => {
-    try {
-
-      const response = await apiClient.post(`${API_ENDPOINTS.members.list}${memberId}/checkin/`);
-      return response.data;
-    } catch (error) {
-      console.error('Check-in API Error:', error);
-      throw new Error(error.response?.data?.error || 'Failed to check-in member');
-    }
-  },
-
-  // Check-out member
-  checkoutMember: async (memberId) => {
-    try {
-      const response = await apiClient.post(`${API_ENDPOINTS.members.list}${memberId}/checkout/`);
-      return response.data;
-    } catch (error) {
-      console.error('Check-out API Error:', error);
-      throw new Error(error.response?.data?.error || 'Failed to check-out member');
-    }
-  },
 
   // Get outdoor memberships
   getOutdoorMemberships: async () => {
@@ -161,15 +140,6 @@ updateMemberStatus: async (memberId, status) => {
     }
   },
 
-  // Get checked-in members
-  getCheckedInMembers: async () => {
-    try {
-      const response = await apiClient.get(`${API_ENDPOINTS.members.list}checked_in_members/`);
-      return response.data;
-    } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch checked-in members');
-    }
-  },
   /**
    * Export members data
    * @param {string} format - Export format (e.g., 'csv', 'excel')

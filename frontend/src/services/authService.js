@@ -430,7 +430,70 @@ const resetPassword = async (resetData) => {
   }
 };
 
-// Membership API functions
+// Indoor Membership API functions
+const getIndoorMembers = async (params = {}) => {
+  try {
+    const queryParams = new URLSearchParams();
+    
+    // Add optional search query
+    if (params.search) {
+      queryParams.append('q', params.search);
+    }
+    
+    // Add pagination
+    if (params.page) {
+      queryParams.append('page', params.page);
+    }
+    
+    if (params.limit) {
+      queryParams.append('limit', params.limit);
+    }
+    
+    // Add status filter
+    if (params.status) {
+      queryParams.append('status', params.status);
+    }
+    
+    const url = queryParams.toString() 
+      ? `${API_ENDPOINTS.memberships.indoor}?${queryParams.toString()}`
+      : API_ENDPOINTS.memberships.indoor;
+    
+    const response = await apiClient.get(url);
+    
+    return {
+      success: true,
+      data: response.data.results || response.data.data || response.data,
+      count: response.data.count || (response.data.results ? response.data.results.length : 0),
+      next: response.data.next,
+      previous: response.data.previous
+    };
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to fetch indoor memberships. Please try again.'
+    );
+  }
+};
+
+const getIndoorMembershipStats = async () => {
+  try {
+    const response = await apiClient.get(API_ENDPOINTS.memberships.indoor_stats);
+    
+    return {
+      success: true,
+      data: response.data.data || response.data
+    };
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || 
+      error.message || 
+      'Failed to fetch indoor membership statistics. Please try again.'
+    );
+  }
+};
+
+// Outdoor Membership API functions
 const getOutdoorMembers = async (params = {}) => {
   try {
     const queryParams = new URLSearchParams();
@@ -591,11 +654,11 @@ const useSession = async (membershipId, sessionData = {}) => {
 
 const getOutdoorRateCards = async () => {
   try {
-    const response = await apiClient.get(API_ENDPOINTS.memberships.rate_cards);
+    const response = await apiClient.get(API_ENDPOINTS.memberships.plans);
     
     return {
       success: true,
-      data: response.data.data || response.data
+      data: response.data.results || response.data.data || response.data
     };
   } catch (error) {
     throw new Error(
@@ -620,6 +683,9 @@ const authService = {
   fetchUserData,
   forgotPassword,
   resetPassword,
+  // Indoor membership functions
+  getIndoorMembers,
+  getIndoorMembershipStats,
   // Outdoor membership functions
   getOutdoorMembers,
   createOutdoorMember,

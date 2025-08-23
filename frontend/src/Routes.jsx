@@ -7,6 +7,7 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 
 // Import landing page
 import LandingPage from './pages/LandingPage';
+import PasswordReset from './pages/PasswordReset';
 
 // Import page components
 import DashboardPage from './pages/Dashboard';
@@ -21,6 +22,7 @@ import PaymentsDue from './pages/Memberships/PaymentsDue';
 import DesignShowcase from './pages/DesignShowcase';
 import AdminManagement from './pages/AdminManagement';
 import Unauthorized from './pages/Unauthorized';
+import Profile from './pages/Profile';
 
 // Import permission components
 import { SuperuserRoute, AdminRoute } from './components/common/PermissionRoute';
@@ -73,6 +75,7 @@ const AppRoutes = () => {
       {/* Public routes that anyone can access */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/landing" element={<LandingPage />} />
+      <Route path="/password-reset" element={<PasswordReset />} />
       <Route path="/design-showcase" element={<DesignShowcase />} />
       <Route path="/designs" element={<DesignShowcase />} />
       <Route path="/unauthorized" element={<Unauthorized />} />
@@ -83,6 +86,7 @@ const AppRoutes = () => {
       {/* If not, it redirects to root. */}
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="/members" element={<Members />} />
         <Route path="/memberships/indoor" element={<IndoorMemberships />} />
         <Route path="/memberships/outdoor" element={<OutdoorMemberships />} />
@@ -91,8 +95,6 @@ const AppRoutes = () => {
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/bookings" element={<Bookings />} />
         <Route path="/feedback" element={<ComingSoon />} />
-        <Route path="/communication" element={<ComingSoon />} />
-        <Route path="/inventory" element={<ComingSoon />} />
         
         {/* Admin-only routes */}
         <Route 

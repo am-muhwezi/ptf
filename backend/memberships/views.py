@@ -1,3 +1,262 @@
-from django.shortcuts import render
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.authentication import SessionAuthentication
+from django.db.models import Q
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from ptf.permissions import IsStaffOrSuperUser, CustomModelPermissions, IsSuperUser
+from .models import MembershipPlan, Membership, SessionLog
+from .serializers import (
+    MembershipPlanSerializer,
+    MembershipSerializer,
+    IndoorMembershipListSerializer,
+    OutdoorMembershipListSerializer,
+    CreateMembershipSerializer,
+    SessionUsageSerializer,
+    SessionLogSerializer,
+)
+from .services import MembershipService, MembershipPlanService
+import logging
 
-# Create your views here.
+logger = logging.getLogger(__name__)
+
+
+class MembershipPagination(PageNumberPagination):
+    """Custom pagination for memberships"""
+
+    page_size = 20
+    page_size_query_param = "limit"
+    max_page_size = 100
+
+
+class MembershipPlanViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing membership plans (now using normalized models)
+
+    Permissions:
+    - Staff: Read-only access to view plans
+    - Superuser: Full CRUD access to plans
+    """
+
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
+
+    serializer_class = MembershipPlanSerializer
+    pagination_class = MembershipPagination
+
+    def get_queryset(self):
+        queryset = MembershipPlan.objects.all()
+        membership_type = self.request.query_params.get("membership_type")
+        if membership_type:
+            queryset = queryset.filter(membership_type=membership_type)
+        return queryset
+
+
+class MembershipViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing individual memberships (now using normalized models)
+
+    Permissions:
+    - Staff: Can view and create memberships
+    - Superuser: Full CRUD access to memberships
+    """
+
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    serializer_class = MembershipSerializer
+    pagination_class = MembershipPagination
+
+    def get_queryset(self):
+        return Membership.objects.select_related(
+            "member", "plan", "location"
+        ).prefetch_related("session_logs")
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            # Use optimized serializer for listing - default to outdoor
+            return OutdoorMembershipListSerializer
+        elif self.action == "indoor":
+            # Use indoor-specific serializer
+            return IndoorMembershipListSerializer
+        elif self.action == "outdoor":
+            # Use outdoor-specific serializer
+            return OutdoorMembershipListSerializer
+        elif self.action == "create":
+            return CreateMembershipSerializer
+        return MembershipSerializer
+
+    def filter_queryset(self, queryset):
+        # Use service layer for search filtering
+        membership_type = self.request.query_params.get("membership_type")
+        status_filter = self.request.query_params.get("status")
+        search = self.request.query_params.get("q")
+
+        filters = MembershipService.search_memberships(
+            search_query=search,
+            membership_type=membership_type,
+            status_filter=status_filter,
+        )
+
+        return queryset.filter(filters).order_by("-created_at")
+
+    @action(detail=False, methods=["get"])
+    def outdoor(self, request):
+        """Get outdoor memberships with pagination and search"""
+        # Filter for outdoor memberships only
+        queryset = self.filter_queryset(
+            self.get_queryset().filter(plan__membership_type="outdoor")
+        )
+
+        # Apply pagination
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(
+            {"success": True, "data": serializer.data, "count": queryset.count()}
+        )
+
+    @action(detail=False, methods=["get"])
+    def indoor(self, request):
+        """Get indoor memberships with pagination and search"""
+        # Filter for indoor memberships only
+        queryset = self.filter_queryset(
+            self.get_queryset().filter(plan__membership_type="indoor")
+        )
+
+        # Apply pagination
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(
+            {"success": True, "data": serializer.data, "count": queryset.count()}
+        )
+
+    @action(detail=False, methods=["get"])
+    def indoor_stats(self, request):
+        """Get indoor membership statistics"""
+        try:
+            stats = MembershipService.get_membership_statistics(
+                membership_type="indoor"
+            )
+
+            return Response({"success": True, "data": stats})
+
+        except Exception as e:
+            logger.error(f"Error calculating indoor stats: {e}")
+            return Response(
+                {"success": False, "error": "Failed to calculate statistics"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["get"])
+    def outdoor_stats(self, request):
+        """Get outdoor membership statistics"""
+        try:
+            stats = MembershipService.get_membership_statistics(
+                membership_type="outdoor"
+            )
+
+            return Response({"success": True, "data": stats})
+
+        except Exception as e:
+            logger.error(f"Error calculating outdoor stats: {e}")
+            return Response(
+                {"success": False, "error": "Failed to calculate statistics"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=True, methods=["post"])
+    def use_session(self, request, pk=None):
+        """Use a session (check-in)"""
+        try:
+            membership = self.get_object()
+
+            # Validate session usage data
+            serializer = SessionUsageSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {"success": False, "errors": serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Use the session through service layer
+            success, message = MembershipService.use_session(
+                membership=membership,
+                session_type=serializer.validated_data.get("session_type", "regular"),
+                notes=serializer.validated_data.get("notes", ""),
+            )
+
+            if success:
+                return Response(
+                    {
+                        "success": True,
+                        "message": message,
+                        "sessions_remaining": membership.sessions_remaining,
+                    }
+                )
+            else:
+                return Response(
+                    {"success": False, "error": message},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        except Exception as e:
+            logger.error(f"Error using session: {e}")
+            return Response(
+                {"success": False, "error": "Failed to use session. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=True, methods=["post"])
+    def suspend(self, request, pk=None):
+        """Suspend a membership"""
+        try:
+            membership = self.get_object()
+            reason = request.data.get("reason", "")
+
+            success, message = MembershipService.suspend_membership(membership, reason)
+
+            if success:
+                return Response({"success": True, "message": message})
+            else:
+                return Response(
+                    {"success": False, "error": message},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        except Exception as e:
+            logger.error(f"Error suspending membership: {e}")
+            return Response(
+                {"success": False, "error": "Failed to suspend membership."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=True, methods=["post"])
+    def reactivate(self, request, pk=None):
+        """Reactivate a suspended membership"""
+        try:
+            membership = self.get_object()
+
+            success, message = MembershipService.reactivate_membership(membership)
+
+            if success:
+                return Response({"success": True, "message": message})
+            else:
+                return Response(
+                    {"success": False, "error": message},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        except Exception as e:
+            logger.error(f"Error reactivating membership: {e}")
+            return Response(
+                {"success": False, "error": "Failed to reactivate membership."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

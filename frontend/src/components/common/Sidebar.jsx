@@ -25,8 +25,6 @@ const Sidebar = ({ isOpen, onClose }) => {
     { name: 'Bookings', icon: '/images/img_vector_0_gray_900_24x24.svg', path: '/bookings' },
     { name: 'Attendance', icon: '/images/img_vector_0_24x24.svg', path: '/attendance' },
     { name: 'Feedback', icon: '/images/img_vector_0_1.svg', path: '/feedback' },
-    { name: 'Communication', icon: '/images/img_vector_0_2.svg', path: '/communication' },
-    { name: 'Inventory', icon: '/images/img_vector_0_3.svg', path: '/inventory' },
   ];
 
   // Add admin menu items for superusers
