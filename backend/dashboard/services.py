@@ -55,17 +55,17 @@ def get_dashboard_statistics():
     cancelled_bookings = Booking.objects.filter(status="cancelled").count()
 
     # Bookings today
-    bookings_today = Booking.objects.filter(booking_date__date=today).count()
+    bookings_today = Booking.objects.filter(booking_date=today).count()
 
-    # Session type breakdown
-    group_sessions = Booking.objects.filter(session_type="Group Class").count()
-    one_on_one_sessions = Booking.objects.filter(session_type="One-on-One").count()
+    # Booking type breakdown
+    indoor_bookings = Booking.objects.filter(booking_type="indoor").count()
+    outdoor_bookings = Booking.objects.filter(booking_type="outdoor").count()
 
     # Weekly bookings trend (last 7 days)
     weekly_bookings = []
     for i in range(7):
         day = today - timedelta(days=i)
-        count = Booking.objects.filter(booking_date__date=day).count()
+        count = Booking.objects.filter(booking_date=day).count()
         weekly_bookings.append(
             {"date": day.isoformat(), "count": count, "day": day.strftime("%A")}
         )
@@ -238,8 +238,8 @@ def get_dashboard_statistics():
             "paymentOverdue": overdue_payments,
         },
         "bookingData": {
-            "groupSessions": group_sessions,
-            "oneOnOneSessions": one_on_one_sessions,
+            "indoorBookings": indoor_bookings,
+            "outdoorBookings": outdoor_bookings,
             "trainersAvailable": 0,  # You'll need to implement this
             "waitlistRequests": 0,  # You'll need to implement this
         },
@@ -389,8 +389,8 @@ def get_dashboard_statistics():
             "completed": completed_bookings,
             "cancelled": cancelled_bookings,
             "today": bookings_today,
-            "groupSessions": group_sessions,
-            "oneOnOneSessions": one_on_one_sessions,
+            "indoorBookings": indoor_bookings,
+            "outdoorBookings": outdoor_bookings,
             "weeklyTrend": weekly_bookings,
         },
         # METADATA

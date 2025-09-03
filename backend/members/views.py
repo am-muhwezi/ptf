@@ -1,7 +1,7 @@
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework import status, viewsets
-from rest_framework.decorators import api_view, action, permission_classes
+from rest_framework.decorators import api_view, action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.exceptions import ValidationError
 from rest_framework import permissions
@@ -48,9 +48,11 @@ class MemberViewset(viewsets.ModelViewSet):
     authentication_classes = []
     permission_classes = []
 
-    queryset = Member.objects.prefetch_related(
-        'memberships__plan'
-    ).select_related().order_by("id")
+    queryset = (
+        Member.objects.prefetch_related("memberships__plan")
+        .select_related()
+        .order_by("id")
+    )
     serializer_class = MemberSerializer
     pagination_class = MemberPagination
 
@@ -58,12 +60,13 @@ class MemberViewset(viewsets.ModelViewSet):
         """Get or create location based on location name"""
         if not location_name:
             return None
-        
+
         # Try to find existing location
         from .models import Location
+
         location, created = Location.objects.get_or_create(
             name=location_name.title(),
-            defaults={'code': location_name.lower().replace(' ', '_')}
+            defaults={"code": location_name.lower().replace(" ", "_")},
         )
         return location
 
@@ -73,145 +76,181 @@ class MemberViewset(viewsets.ModelViewSet):
         """
         try:
             serializer = self.get_serializer(data=request.data)
-            
+
             if not serializer.is_valid():
                 # Return detailed field-level errors
                 errors = serializer.errors
                 logger.error(f"Validation failed with errors: {errors}")
                 error_messages = []
-                
+
                 for field, field_errors in errors.items():
                     if isinstance(field_errors, list):
                         for error in field_errors:
-                            if field == 'non_field_errors':
+                            if field == "non_field_errors":
                                 error_messages.append(str(error))
                             else:
-                                field_name = field.replace('_', ' ').title()
+                                field_name = field.replace("_", " ").title()
                                 error_messages.append(f"{field_name}: {error}")
                     else:
-                        field_name = field.replace('_', ' ').title()
+                        field_name = field.replace("_", " ").title()
                         error_messages.append(f"{field_name}: {field_errors}")
-                
-                return Response({
-                    'error': 'Validation failed',
-                    'message': '; '.join(error_messages) if error_messages else 'Please check the form and correct any errors.',
-                    'field_errors': errors,
-                    'details': errors  # Also include raw errors for debugging
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
+
+                return Response(
+                    {
+                        "error": "Validation failed",
+                        "message": (
+                            "; ".join(error_messages)
+                            if error_messages
+                            else "Please check the form and correct any errors."
+                        ),
+                        "field_errors": errors,
+                        "details": errors,  # Also include raw errors for debugging
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             # Try to save the member
             member = serializer.save()
-            
+
             # Create membership based on form data
-            plan_type = request.data.get('plan_type')
+            plan_type = request.data.get("plan_type")
             if plan_type:
                 from memberships.models import MembershipPlan, Membership
                 from datetime import datetime, timedelta
                 from decimal import Decimal
-                
+
                 try:
                     # Get membership type from the request data
-                    membership_type = request.data.get('membership_type', 'indoor')
-                    
+                    membership_type = request.data.get("membership_type", "indoor")
+
                     # Find the appropriate membership plan
                     plan = MembershipPlan.objects.get(
-                        membership_type=membership_type,
-                        plan_type=plan_type
+                        membership_type=membership_type, plan_type=plan_type
                     )
-                    
+
                     # Calculate membership duration (1 month)
                     start_date = datetime.now().date()
                     end_date = start_date + timedelta(days=30)  # 1 month
-                    
+
                     # Calculate total sessions for the period
-                    if plan.plan_type == 'daily':
+                    if plan.plan_type == "daily":
                         # For daily plans, allow unlimited sessions (or set a high number)
                         total_sessions = 30  # 1 session per day for a month
                     else:
                         # For weekly plans, calculate based on sessions per week
-                        total_sessions = plan.sessions_per_week * 4  # 4 weeks in a month
-                    
+                        total_sessions = (
+                            plan.sessions_per_week * 4
+                        )  # 4 weeks in a month
+
                     # Create the membership
                     membership = Membership.objects.create(
                         member=member,
                         plan=plan,
-                        status='active',
-                        payment_status='pending',  # Default to pending
+                        status="active",
+                        payment_status="pending",  # Default to pending
                         total_sessions_allowed=total_sessions,
                         sessions_used=0,
                         start_date=start_date,
                         end_date=end_date,
                         amount_paid=plan.monthly_fee,
-                        location=self.get_location(request.data.get('location')) if membership_type == 'outdoor' else None,
+                        location=(
+                            self.get_location(request.data.get("location"))
+                            if membership_type == "outdoor"
+                            else None
+                        ),
                     )
-                    
-                    logger.info(f"Membership created for member {member.id}: Plan {plan.plan_name}")
-                    
+
+                    logger.info(
+                        f"Membership created for member {member.id}: Plan {plan.plan_name}"
+                    )
+
                 except MembershipPlan.DoesNotExist:
-                    logger.warning(f"No membership plan found for {membership_type}/{plan_type}")
+                    logger.warning(
+                        f"No membership plan found for {membership_type}/{plan_type}"
+                    )
                 except Exception as e:
-                    logger.error(f"Failed to create membership for member {member.id}: {e}")
-            
+                    logger.error(
+                        f"Failed to create membership for member {member.id}: {e}"
+                    )
+
             logger.info(f"Member created successfully: {member.id}")
-            return Response({
-                'message': f'Member {member.first_name} {member.last_name} registered successfully!',
-                'member': serializer.data
-            }, status=status.HTTP_201_CREATED)
-            
+            return Response(
+                {
+                    "message": f"Member {member.first_name} {member.last_name} registered successfully!",
+                    "member": serializer.data,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
         except IntegrityError as e:
             error_message = "A member with this information already exists"
-            if 'email' in str(e).lower():
+            if "email" in str(e).lower():
                 error_message = "A member with this email address already exists"
-            elif 'phone' in str(e).lower():
+            elif "phone" in str(e).lower():
                 error_message = "A member with this phone number already exists"
-            
+
             logger.error(f"IntegrityError creating member: {e}")
-            return Response({
-                'error': 'Duplicate member',
-                'message': error_message
-            }, status=status.HTTP_400_BAD_REQUEST)
-            
+            return Response(
+                {"error": "Duplicate member", "message": error_message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         except ValidationError as e:
             logger.error(f"ValidationError creating member: {e}")
-            return Response({
-                'error': 'Validation error',
-                'message': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
-            
+            return Response(
+                {"error": "Validation error", "message": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         except Exception as e:
             logger.error(f"Unexpected error creating member: {e}")
-            return Response({
-                'error': 'Internal server error',
-                'message': 'An unexpected error occurred while creating the member. Please try again.'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {
+                    "error": "Internal server error",
+                    "message": "An unexpected error occurred while creating the member. Please try again.",
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     def destroy(self, request, *args, **kwargs):
         """
         Delete a member with proper error handling - Admin only
         """
         # Check if user has admin permissions for deletion
-        if not (request.user.is_authenticated and (request.user.is_staff or request.user.is_superuser)):
-            return Response({
-                'error': 'Permission denied',
-                'message': 'Only admin users can delete members.'
-            }, status=status.HTTP_403_FORBIDDEN)
-            
+        if not (
+            request.user.is_authenticated
+            and (request.user.is_staff or request.user.is_superuser)
+        ):
+            return Response(
+                {
+                    "error": "Permission denied",
+                    "message": "Only admin users can delete members.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
             member = self.get_object()
             member_name = f"{member.first_name} {member.last_name}"
             member.delete()
-            
-            logger.info(f"Member deleted successfully by {request.user.email}: {member_name}")
-            return Response({
-                'message': f'Member {member_name} has been deleted successfully.'
-            }, status=status.HTTP_200_OK)
-            
+
+            logger.info(
+                f"Member deleted successfully by {request.user.email}: {member_name}"
+            )
+            return Response(
+                {"message": f"Member {member_name} has been deleted successfully."},
+                status=status.HTTP_200_OK,
+            )
+
         except Exception as e:
             logger.error(f"Error deleting member: {e}")
-            return Response({
-                'error': 'Delete failed',
-                'message': 'Failed to delete member. Please try again.'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {
+                    "error": "Delete failed",
+                    "message": "Failed to delete member. Please try again.",
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     def get_queryset(self):
         """
@@ -230,5 +269,3 @@ class MemberViewset(viewsets.ModelViewSet):
 
             return queryset.filter(q_objects).distinct()
         return queryset
-
-

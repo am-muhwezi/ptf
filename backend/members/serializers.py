@@ -31,48 +31,50 @@ class MemberSerializer(serializers.ModelSerializer):
     member_id = serializers.SerializerMethodField()
     physical_profile = PhysicalProfileSerializer(required=False)
     
-    # Make required fields explicit
-    first_name = serializers.CharField(max_length=100, required=True, error_messages={
-        'required': 'First name is required.',
-        'blank': 'First name cannot be blank.'
-    })
-    last_name = serializers.CharField(max_length=100, required=True, error_messages={
-        'required': 'Last name is required.',
-        'blank': 'Last name cannot be blank.'
-    })
-    phone = serializers.CharField(max_length=15, required=True, error_messages={
-        'required': 'Phone number is required.',
-        'blank': 'Phone number cannot be blank.'
-    })
+    # CamelCase fields to match frontend
+    firstName = serializers.CharField(source='first_name', max_length=100, required=True)
+    lastName = serializers.CharField(source='last_name', max_length=100, required=True)
+    dateOfBirth = serializers.DateField(source='date_of_birth', required=False)
+    bloodGroup = serializers.CharField(source='blood_group', required=False)
+    idPassport = serializers.CharField(source='id_passport', required=False)
+    emergencyContact = serializers.CharField(source='emergency_contact', required=False)
+    emergencyPhone = serializers.CharField(source='emergency_phone', required=False)
+    medicalConditions = serializers.CharField(source='medical_conditions', required=False)
+    registrationDate = serializers.DateTimeField(source='registration_date', read_only=True)
+    totalVisits = serializers.IntegerField(source='total_visits', read_only=True)
+    lastVisit = serializers.DateTimeField(source='last_visit', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
 
     class Meta:
         model = Member
         fields = [
             "id",
             "member_id",
-            "first_name",
-            "last_name",
             "full_name",
             "email",
             "phone",
             "address",
-            "date_of_birth",
-            "id_passport",
-            "blood_group",
-            "emergency_contact",
-            "emergency_phone",
-            "medical_conditions",
+            "status",
             "membership_type",
             "payment_status",
             "plan_type",
             "amount",
-            "status",
-            "registration_date",
-            "total_visits",
-            "last_visit",
-            "created_at",
-            "updated_at",
             "physical_profile",
+            # CamelCase fields for frontend
+            "firstName",
+            "lastName",
+            "dateOfBirth",
+            "bloodGroup",
+            "idPassport",
+            "emergencyContact",
+            "emergencyPhone",
+            "medicalConditions",
+            "registrationDate",
+            "totalVisits",
+            "lastVisit",
+            "createdAt",
+            "updatedAt",
         ]
         read_only_fields = ["id", "registration_date", "total_visits", "last_visit", "created_at", "updated_at"]
 
