@@ -1,19 +1,17 @@
 from django.urls import path, include
-from . import views
 from .views_registration import register_member
-from .views_checkin import checkin_member, checkout_member
+from .views_checkin import checkin
+from .views_list import list_all_members, list_indoor_members, list_outdoor_members
 from rest_framework.routers import DefaultRouter
 
 
 router = DefaultRouter()
 
-
-router.register(r"members", views.MemberViewset, basename="member")
-
-
 urlpatterns = [
     path("", include(router.urls)),
-    path("register/", register_member, name="register-member"),
-    path("checkin/", checkin_member, name="checkin-member"),
-    path("checkout/", checkout_member, name="checkout-member"),
+    path("all/", list_all_members, name="list-all-members"),
+    path("indoor/", list_indoor_members, name="list-indoor-members"),
+    path("outdoor/", list_outdoor_members, name="list-outdoor-members"),
+    path("member/register/", register_member, name="register-member"),
+    path("member/checkin/<int:member_id>/", checkin, name="checkin-member"),
 ]

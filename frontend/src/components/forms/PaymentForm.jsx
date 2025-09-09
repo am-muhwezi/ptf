@@ -1,23 +1,23 @@
-import React, { useState } from 'react';
+import React from 'react';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import Toast from '../ui/Toast';
-import { paymentService } from '../../services/paymentService';
+import { usePaymentForm } from '../../hooks/usePayments';
 import { formatCurrency } from '../../utils/formatters';
 
 const PaymentForm = ({ member, isOpen, onClose, onPaymentSuccess }) => {
-  const [paymentData, setPaymentData] = useState({
-    amount: member?.amount || 0,
-    phoneNumber: member?.phone || '',
-    paymentMethod: 'mpesa',
-    description: `Membership payment for ${member?.firstName} ${member?.lastName}`,
-    membershipType: member?.membershipType || 'indoor'
-  });
+  const {
+    formData,
+    errors,
+    paymentStatus,
+    isProcessing,
+    handleInputChange,
+    handleMpesaPayment,
+    handleManualPayment,
+    resetPaymentStatus
+  } = usePaymentForm(member, onPaymentSuccess);
 
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState(null);
-  const [transactionId, setTransactionId] = useState(null);
-  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [toast, setToast] = React.useState({ show: false, message: '', type: 'success' });
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -27,123 +27,19 @@ const PaymentForm = ({ member, isOpen, onClose, onPaymentSuccess }) => {
     setToast({ show: false, message: '', type: 'success' });
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setPaymentData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const formatPhoneNumber = (phone) => {
-    // Remove any non-digit characters
-    let cleaned = phone.replace(/\D/g, '');
-    
-    // If it starts with 0, replace with 254
-    if (cleaned.startsWith('0')) {
-      cleaned = '254' + cleaned.substring(1);
-    }
-    
-    // If it doesn't start with 254, add it
-    if (!cleaned.startsWith('254')) {
-      cleaned = '254' + cleaned;
-    }
-    
-    return cleaned;
-  };
-
-  const handleMpesaPayment = async () => {
-    setIsProcessing(true);
-    setPaymentStatus('initiating');
-
-    try {
-      const formattedPhone = formatPhoneNumber(paymentData.phoneNumber);
-      
-      const mpesaData = {
-        memberId: member.id,
-        amount: paymentData.amount,
-        phoneNumber: formattedPhone,
-        description: paymentData.description,
-        membershipType: paymentData.membershipType
-      };
-
-      // Simulate M-Pesa STK Push
-      const response = await paymentService.initiateMpesaPayment(mpesaData);
-      
-      setTransactionId(response.transactionId);
-      setPaymentStatus('pending');
+  // Show toast messages based on payment status
+  React.useEffect(() => {
+    if (paymentStatus === 'pending') {
       showToast('M-Pesa payment request sent to your phone. Please enter your PIN.', 'info');
-
-      // Simulate checking payment status
-      setTimeout(async () => {
-        try {
-          // Mock successful payment after 10 seconds
-          const statusResponse = {
-            status: 'completed',
-            transactionId: response.transactionId,
-            mpesaReceiptNumber: `QK${Math.random().toString(36).substr(2, 8).toUpperCase()}`,
-            amount: paymentData.amount,
-            phoneNumber: formattedPhone,
-            timestamp: new Date().toISOString()
-          };
-
-          setPaymentStatus('completed');
-          showToast('Payment completed successfully!', 'success');
-          
-          if (onPaymentSuccess) {
-            onPaymentSuccess(statusResponse);
-          }
-        } catch (error) {
-          setPaymentStatus('failed');
-          showToast('Payment failed. Please try again.', 'error');
-        }
-      }, 10000);
-
-    } catch (error) {
-      setPaymentStatus('failed');
-      showToast(error.message, 'error');
-    } finally {
-      setIsProcessing(false);
+    } else if (paymentStatus === 'completed') {
+      showToast('Payment completed successfully!', 'success');
+    } else if (paymentStatus === 'failed') {
+      showToast('Payment failed. Please try again.', 'error');
     }
-  };
-
-  const handleManualPayment = async () => {
-    setIsProcessing(true);
-
-    try {
-      const manualPaymentData = {
-        memberId: member.id,
-        amount: paymentData.amount,
-        paymentMethod: 'cash',
-        description: paymentData.description,
-        membershipType: paymentData.membershipType,
-        recordedBy: 'Admin', // In real app, get from auth context
-        timestamp: new Date().toISOString()
-      };
-
-      const response = await paymentService.recordManualPayment(manualPaymentData);
-      
-      setPaymentStatus('completed');
-      showToast('Manual payment recorded successfully!', 'success');
-      
-      if (onPaymentSuccess) {
-        onPaymentSuccess(response);
-      }
-    } catch (error) {
-      showToast(error.message, 'error');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const resetForm = () => {
-    setPaymentStatus(null);
-    setTransactionId(null);
-    setIsProcessing(false);
-  };
+  }, [paymentStatus]);
 
   const handleClose = () => {
-    resetForm();
+    resetPaymentStatus();
     onClose();
   };
 
@@ -164,25 +60,60 @@ const PaymentForm = ({ member, isOpen, onClose, onPaymentSuccess }) => {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-gray-600">Name:</span>
-                <span className="ml-2 font-medium">{member.firstName} {member.lastName}</span>
+                <span className="ml-2 font-medium">
+                  {member.first_name} {member.last_name}
+                </span>
               </div>
               <div>
                 <span className="text-gray-600">Member ID:</span>
-                <span className="ml-2 font-medium">{member.id}</span>
+                <span className="ml-2 font-medium">{member.member_id || member.id}</span>
               </div>
               <div>
                 <span className="text-gray-600">Plan:</span>
-                <span className="ml-2 font-medium">{member.planType}</span>
+                <span className="ml-2 font-medium">{member.plan_type || 'Indoor Daily'}</span>
               </div>
               <div>
                 <span className="text-gray-600">Type:</span>
-                <span className="ml-2 font-medium capitalize">{member.membershipType}</span>
+                <span className="ml-2 font-medium capitalize">{member.membership_type || 'indoor'}</span>
               </div>
             </div>
           </div>
 
           {/* Payment Form */}
           <div className="space-y-4">
+            {/* Payment Method Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Payment Method
+              </label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => handleInputChange({ target: { name: 'paymentMethod', value: 'cash' } })}
+                  className={`p-4 border-2 rounded-lg text-center transition-colors ${
+                    formData.paymentMethod === 'cash'
+                      ? 'border-green-500 bg-green-50 text-green-700'
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  <div className="text-lg font-medium">💵</div>
+                  <div className="text-sm font-medium">Cash</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInputChange({ target: { name: 'paymentMethod', value: 'mpesa' } })}
+                  className={`p-4 border-2 rounded-lg text-center transition-colors ${
+                    formData.paymentMethod === 'mpesa'
+                      ? 'border-green-500 bg-green-50 text-green-700'
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  <div className="text-lg font-medium">📱</div>
+                  <div className="text-sm font-medium">M-Pesa</div>
+                </button>
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Amount to Pay
@@ -190,29 +121,37 @@ const PaymentForm = ({ member, isOpen, onClose, onPaymentSuccess }) => {
               <input
                 type="number"
                 name="amount"
-                value={paymentData.amount}
+                value={formData.amount}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  errors.amount ? 'border-red-500' : 'border-gray-300'
+                }`}
                 min="0"
                 step="1000"
               />
-              <p className="text-sm text-gray-500 mt-1">{formatCurrency(paymentData.amount)}</p>
+              {errors.amount && <p className="text-red-500 text-xs mt-1">{errors.amount}</p>}
+              <p className="text-sm text-gray-500 mt-1">{formatCurrency(formData.amount)}</p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                M-Pesa Phone Number
-              </label>
-              <input
-                type="tel"
-                name="phoneNumber"
-                value={paymentData.phoneNumber}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="0700123456"
-              />
-              <p className="text-xs text-gray-500 mt-1">Enter the M-Pesa registered phone number</p>
-            </div>
+            {formData.paymentMethod === 'mpesa' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  M-Pesa Phone Number
+                </label>
+                <input
+                  type="tel"
+                  name="phoneNumber"
+                  value={formData.phoneNumber}
+                  onChange={handleInputChange}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    errors.phoneNumber ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="0700123456"
+                />
+                {errors.phoneNumber && <p className="text-red-500 text-xs mt-1">{errors.phoneNumber}</p>}
+                <p className="text-xs text-gray-500 mt-1">Enter the M-Pesa registered phone number</p>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -220,7 +159,7 @@ const PaymentForm = ({ member, isOpen, onClose, onPaymentSuccess }) => {
               </label>
               <textarea
                 name="description"
-                value={paymentData.description}
+                value={formData.description}
                 onChange={handleInputChange}
                 rows={2}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -263,9 +202,6 @@ const PaymentForm = ({ member, isOpen, onClose, onPaymentSuccess }) => {
                     {paymentStatus === 'completed' && 'Payment completed successfully!'}
                     {paymentStatus === 'failed' && 'Payment failed. Please try again.'}
                   </p>
-                  {transactionId && (
-                    <p className="text-xs text-gray-600 mt-1">Transaction ID: {transactionId}</p>
-                  )}
                 </div>
               </div>
             </div>
@@ -280,21 +216,28 @@ const PaymentForm = ({ member, isOpen, onClose, onPaymentSuccess }) => {
             >
               Cancel
             </Button>
-            <Button
-              variant="outline"
-              onClick={handleManualPayment}
-              disabled={isProcessing || paymentStatus === 'completed'}
-            >
-              Record Cash Payment
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleMpesaPayment}
-              disabled={isProcessing || !paymentData.phoneNumber || paymentStatus === 'completed'}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {isProcessing ? 'Processing...' : 'Pay with M-Pesa'}
-            </Button>
+            
+            {formData.paymentMethod === 'cash' && (
+              <Button
+                variant="primary"
+                onClick={handleManualPayment}
+                disabled={isProcessing || paymentStatus === 'completed'}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isProcessing ? 'Recording...' : 'Record Cash Payment'}
+              </Button>
+            )}
+
+            {formData.paymentMethod === 'mpesa' && (
+              <Button
+                variant="primary"
+                onClick={handleMpesaPayment}
+                disabled={isProcessing || !formData.phoneNumber || paymentStatus === 'completed'}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isProcessing ? 'Processing...' : 'Pay with M-Pesa'}
+              </Button>
+            )}
           </div>
         </div>
       </Modal>

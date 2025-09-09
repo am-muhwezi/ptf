@@ -1,4 +1,4 @@
-"""
+;"""
 Member business logic services
 
 This module contains all business logic related to members,

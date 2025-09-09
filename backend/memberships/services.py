@@ -96,14 +96,92 @@ class MembershipService:
         return [{"code": k, **v} for k, v in MembershipService.QUICK_PLANS.items()]
 
     @staticmethod
-    def use_session(membership):
+    def use_session(membership, session_type="regular", notes=""):
         """Use one session from membership"""
         if membership.sessions_used >= membership.total_sessions_allowed:
-            raise ValueError("No sessions remaining")
+            return False, "No sessions remaining"
 
         membership.sessions_used += 1
         membership.save()
-        return membership.total_sessions_allowed - membership.sessions_used  # remaining
+        
+        # Create session log if needed
+        # TODO: Implement session logging
+        
+        return True, f"Session used successfully. {membership.sessions_remaining} sessions remaining."
+
+    @staticmethod
+    def search_memberships(search_query=None, membership_type=None, status_filter=None):
+        """
+        Build filters for membership search
+        Returns Q object for filtering memberships
+        """
+        from django.db.models import Q
+        
+        filters = Q()
+        
+        if search_query:
+            # Search in member name, email, or membership ID
+            filters &= (
+                Q(member__first_name__icontains=search_query) |
+                Q(member__last_name__icontains=search_query) |
+                Q(member__email__icontains=search_query) |
+                Q(id__icontains=search_query)
+            )
+        
+        if membership_type:
+            filters &= Q(plan__membership_type=membership_type)
+            
+        if status_filter:
+            filters &= Q(status=status_filter)
+            
+        return filters
+
+    @staticmethod
+    def get_membership_statistics(membership_type=None):
+        """Get membership statistics"""
+        from django.db.models import Count, Sum
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Base queryset
+        memberships = Membership.objects.all()
+        
+        # Filter by type if specified
+        if membership_type:
+            memberships = memberships.filter(plan__membership_type=membership_type)
+        
+        # Calculate stats
+        total_memberships = memberships.count()
+        active_memberships = memberships.filter(status='active').count()
+        
+        # Expiring soon (within 7 days)
+        week_from_now = timezone.now().date() + timedelta(days=7)
+        expiring_soon = memberships.filter(
+            end_date__lte=week_from_now,
+            end_date__gt=timezone.now().date(),
+            status='active'
+        ).count()
+        
+        # Revenue calculation
+        total_revenue = memberships.filter(
+            status='active'
+        ).aggregate(total=Sum('amount_paid'))['total'] or 0
+        
+        # Sessions used today
+        today = timezone.now().date()
+        sessions_used_today = 0  # TODO: Calculate from session logs when implemented
+        
+        return {
+            'total_memberships': total_memberships,
+            'active_memberships': active_memberships,
+            'expiring_soon': expiring_soon,
+            'new_this_month': memberships.filter(
+                created_at__month=timezone.now().month,
+                created_at__year=timezone.now().year
+            ).count(),
+            'total_revenue': float(total_revenue),
+            'sessions_used_today': sessions_used_today
+        }
 
 
 class MembershipPlanService:

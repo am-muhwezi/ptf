@@ -107,12 +107,9 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
       setError('');
       setSuccessMessage('');
 
-      // Use attendance service for check-in with basic indoor visit
+      // Simple check-in with just member ID
       const response = await attendanceService.checkIn({
-        memberId: selectedMember.id,
-        visitType: 'indoor', // Default to indoor for simplicity
-        activities: ['General Workout'], // Simple default activity
-        notes: ''
+        memberId: selectedMember.id
       });
 
       // Show success message
@@ -140,21 +137,31 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
       
     } catch (error) {
       console.error('Check-in error:', error);
-      setError(error.message || 'Failed to check in member. Please try again.');
+      
+      // Handle specific error cases
+      if (error.message && error.message.includes('already checked in')) {
+        setError(`${selectedMember.first_name} ${selectedMember.last_name} is already checked in today.`);
+      } else {
+        setError(error.message || 'Failed to check in member. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // FIXED: Debounced search effect with proper cleanup
+  // FIXED: Debounced search effect with proper cleanup and minimum 2 characters
   useEffect(() => {
-    if (debouncedSearchQuery && !selectedMember) {
+    if (debouncedSearchQuery && debouncedSearchQuery.length >= 2 && !selectedMember) {
       performSearch(debouncedSearchQuery);
-    } else if (!debouncedSearchQuery) {
+    } else if (!debouncedSearchQuery || debouncedSearchQuery.length < 2) {
       setSearchResults([]);
-      setError('');
+      if (debouncedSearchQuery && debouncedSearchQuery.length < 2) {
+        setError('Please enter at least 2 characters to search');
+      } else {
+        setError('');
+      }
     }
-  }, [debouncedSearchQuery, selectedMember]);
+  }, [debouncedSearchQuery, selectedMember, performSearch]);
 
   return (
     <div className="max-w-lg mx-auto bg-white p-8 rounded-xl shadow-lg">

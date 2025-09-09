@@ -1,4 +1,3 @@
-# RESPONSIBILITY: Everything about payments (cash, mpesa, cards, receipts)
 from django.db import transaction
 from .models import Payment, PaymentMethod
 
@@ -13,7 +12,7 @@ class PaymentService:
         """
         # Create payment record - always pending
         payment = PaymentService._create_payment_record(membership, payment_method)
-        
+
         # Keep membership payment status as pending until payment is confirmed
         return {"status": "pending", "payment_id": str(payment.payment_id)}
 
@@ -83,7 +82,7 @@ class PaymentService:
         """
         payment.status = new_status
         payment.save()
-        
+
         # Update membership payment status based on payment status
         if new_status == "completed":
             payment.membership.payment_status = "paid"
@@ -93,5 +92,5 @@ class PaymentService:
             payment.membership.payment_status = "unpaid"
             payment.membership.save()
             return {"membership_status": "unpaid"}
-            
+
         return {"membership_status": payment.membership.payment_status}

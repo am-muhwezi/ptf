@@ -42,7 +42,7 @@ class Member(models.Model):
     phone = models.CharField(max_length=15, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
-    id_passport = models.CharField(max_length=50, unique=True, blank=True, null=True)
+    id_passport = models.CharField(max_length=50, blank=True, null=True)
     blood_group = models.CharField(max_length=3, choices=BLOOD_GROUPS, default='nil')
     emergency_contact = models.CharField(max_length=100, blank=True, null=True)
     emergency_phone = models.CharField(max_length=15, blank=True, null=True)
@@ -61,6 +61,22 @@ class Member(models.Model):
     
     class Meta:
         ordering = ['-registration_date']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['id_passport'],
+                condition=models.Q(id_passport__isnull=False) & ~models.Q(id_passport=''),
+                name='unique_id_passport_when_not_null'
+            )
+        ]
+    
+    def clean(self):
+        # Convert empty string to None for id_passport to avoid unique constraint issues
+        if self.id_passport == '':
+            self.id_passport = None
+    
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.first_name} {self.last_name}"

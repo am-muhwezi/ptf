@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
 import Card from '../../components/ui/Card';
@@ -7,6 +7,8 @@ import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
 import PaymentForm from '../../components/forms/PaymentForm';
 import Receipt from '../../components/ui/Receipt';
+import { usePaymentsDue } from '../../hooks/usePayments';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 
 const PaymentsDue = () => {
   const [payments, setPayments] = useState([]);
@@ -278,7 +280,10 @@ const PaymentsDue = () => {
                     type="text"
                     placeholder="Search members or invoice numbers..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      // Add debounced search logic here
+                    }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>

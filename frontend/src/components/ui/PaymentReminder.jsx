@@ -103,8 +103,10 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
               <select
                 name="method"
                 value={reminderData.method}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => setReminderData({...reminderData, method: e.target.value})}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  'border-gray-300'
+                }`}
               >
                 <option value="sms">SMS</option>
                 <option value="email">Email</option>
@@ -119,7 +121,7 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
               <select
                 name="urgency"
                 value={reminderData.urgency}
-                onChange={handleInputChange}
+                onChange={(e) => setReminderData({...reminderData, [e.target.name]: e.target.value})}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="normal">Normal</option>
@@ -135,7 +137,7 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
               <textarea
                 name="message"
                 value={reminderData.message}
-                onChange={handleInputChange}
+                onChange={(e) => setReminderData({...reminderData, [e.target.name]: e.target.value})}
                 rows={4}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter reminder message..."

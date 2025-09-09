@@ -64,7 +64,22 @@ const Dashboard = () => {
     }
   };
 
-  const stats = dashboardStats || defaultStats;
+  const stats = {
+    ...defaultStats,
+    ...dashboardStats,
+    bookingData: {
+      ...defaultStats.bookingData,
+      ...(dashboardStats?.bookingData || {})
+    },
+    membershipData: {
+      ...defaultStats.membershipData,
+      ...(dashboardStats?.membershipData || {})
+    },
+    inventoryData: {
+      ...defaultStats.inventoryData,
+      ...(dashboardStats?.inventoryData || {})
+    }
+  };
 
 
   const showToast = (message, type = 'success') => {
@@ -95,10 +110,13 @@ const Dashboard = () => {
 
 const handleCheckInSubmit = async (memberData) => {
   try {
-    const result = await memberService.checkinMember(memberData.memberId);  // ✅ Correct property
+    // Check-in is already handled by CheckInForm, just close modal and show success
     setShowCheckInModal(false);
-    showToast(`${memberData.memberName} checked in successfully!`, 'success');  // ✅ Use pre-formatted name
-    return result;
+    showToast(`${memberData.memberName} checked in successfully!`, 'success');
+    
+    // Optionally refresh dashboard stats after check-in
+    // You could reload dashboard stats here if needed
+    
   } catch (error) {
     showToast(error.message, 'error');
     throw error;

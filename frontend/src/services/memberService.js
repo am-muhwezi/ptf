@@ -91,9 +91,9 @@ export const memberService = {
       // Handle the response structure from your Django backend
       const data = response.data;
       
-      // Your Django backend returns { results: [], count: number, query: string }
+      // Your Django backend returns { data: [], count: number, success: true }
       return {
-        results: data.results || [],
+        results: data.data || [],
         count: data.count || 0,
         query: data.query || query,
         hasMore: false // Since you limit to 10, implement pagination if needed
@@ -158,13 +158,59 @@ updateMemberStatus: async (memberId, status) => {
     try {
       const response = await apiClient.get(API_ENDPOINTS.members.list, {
         params: { export: format },
-        responseType: 'blob' // Important: tells the client to expect a file
+        responseType: 'blob'
       });
       return response.data;
     } catch (error) {
       throw new Error('Failed to export members data');
     }
   },
+
+  // Process payment for member
+  processPayment: async (memberId, paymentData) => {
+    try {
+      const response = await apiClient.post(`/payments/process/${memberId}/`, paymentData);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to process payment');
+    }
+  },
+
+  // Send payment reminder
+  sendPaymentReminder: async (memberId, reminderData) => {
+    try {
+      const response = await apiClient.post(`/payments/reminder/${memberId}/`, reminderData);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to send payment reminder');
+    }
+  },
+
+  // Update member profile
+  updateMemberProfile: async (memberId, profileData) => {
+    try {
+      const response = await apiClient.put(API_ENDPOINTS.members.update(memberId), profileData);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to update member profile');
+    }
+  },
+
 };
 
 export default memberService;
+
+/**
+ * Member Service API Documentation
+ * 
+ * This service handles all member-related API operations including:
+ * - CRUD operations for members
+ * - Member search and filtering
+ * - Membership type management (indoor/outdoor)
+ * - Payment processing
+ * - Check-in functionality
+ * - Data export capabilities
+ * 
+ * All functions return promises and include proper error handling
+ * with descriptive error messages for UI feedback.
+ */

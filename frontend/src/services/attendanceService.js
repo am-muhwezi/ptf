@@ -1,22 +1,17 @@
 import api from '../config/api';
 
 const ENDPOINTS = {
-  CHECK_IN: 'attendance/check-in/',
-  CHECK_OUT: 'attendance/check-out/',
-  STATUS: 'attendance/status/',
-  TODAY: 'attendance/today/',
+  CHECK_IN: '/check-in/',
+  CHECK_OUT: '/check-out/',
+  STATUS: '/status/',
+  TODAY: '/today/',
 };
 
 export const attendanceService = {
-  // Check-in a member
+  // Check-in a member - simplified to only require member ID
   async checkIn(data) {
     try {
-      const response = await api.post(ENDPOINTS.CHECK_IN, {
-        member_id: data.memberId,
-        visit_type: data.visitType, // 'indoor' or 'outdoor'
-        activities: data.activities || [],
-        notes: data.notes || ''
-      });
+      const response = await api.post(`/member/checkin/${data.memberId}/`);
       return response.data;
     } catch (error) {
       console.error('Check-in failed:', error);

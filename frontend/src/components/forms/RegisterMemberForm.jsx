@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../ui/Button';
-import authService from '../../services/authService';
+import { useForm } from '../../hooks/useForm';
 
 const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoor' }) => {
-  const [formData, setFormData] = useState({
+  const initialValues = {
     first_name: '',
     last_name: '',
     email: '',
@@ -14,16 +14,80 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
     planType: '',
     paymentStatus: 'pending',
     location: '',
-    emergencyContact: '',
-    emergencyPhone: '',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
     medicalConditions: '',
     dateOfBirth: '',
     address: ''
-  });
+  };
 
-  const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [serverError, setServerError] = useState('');
+  const validateMemberForm = (values) => {
+    const errors = {};
+    
+    if (!values.first_name?.trim()) {
+      errors.first_name = 'First name is required';
+    }
+    
+    if (!values.last_name?.trim()) {
+      errors.last_name = 'Last name is required';
+    }
+    
+    if (values.email?.trim() && !/\S+@\S+\.\S+/.test(values.email)) {
+      errors.email = 'Email is invalid';
+    }
+    
+    if (!values.phone?.trim()) {
+      errors.phone = 'Phone number is required';
+    }
+    
+    // Emergency contact and phone are now optional
+    // Blood group is also optional (no validation needed)
+    
+    if (values.membershipType === 'indoor' && !values.planType) {
+      errors.planType = 'Plan type is required for indoor membership';
+    }
+    
+    if (values.membershipType === 'outdoor' && !values.location) {
+      errors.location = 'Location is required for outdoor membership';
+    }
+    
+    return errors;
+  };
+
+  const handleFormSubmit = async (values) => {
+    const memberData = {
+      first_name: values.first_name,
+      last_name: values.last_name,
+      email: values.email,
+      phone: values.phone,
+      id_passport_no: values.idPassport,
+      blood_group: values.bloodGroup,
+      membership_type: values.membershipType,
+      plan_type: values.planType,
+      dance_location: values.location,
+      emergency_contact_name: values.emergency_contact_name,
+      emergency_contact_phone: values.emergency_contact_phone,
+      medical_conditions: values.medicalConditions,
+      date_of_birth: values.dateOfBirth,
+      physical_address: values.address,
+      registrationDate: new Date().toISOString(),
+      status: 'active',
+      payment_status: values.paymentStatus
+    };
+    
+    await onSubmit(memberData);
+  };
+
+  const {
+    values: formData,
+    errors,
+    isSubmitting,
+    submitError: serverError,
+    handleChange,
+    handleSubmit,
+    setFieldValue
+  } = useForm(initialValues, validateMemberForm, handleFormSubmit);
+
   const [outdoorRateCards, setOutdoorRateCards] = useState([]);
   const [loadingRateCards, setLoadingRateCards] = useState(false);
 
@@ -41,138 +105,8 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
     }
   }, [formData.membershipType]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
-    
-    // Clear server error when user starts typing
-    if (serverError) {
-      setServerError('');
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (!formData.first_name.trim()) {
-      newErrors.first_name = 'First name is required';
-    }
-
-    if (!formData.last_name.trim()) {
-      newErrors.last_name = 'Last name is required';
-    }
-
-    if (formData.email.trim() && !/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
-    }
-
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required';
-    }
 
 
-    if (!formData.emergencyContact.trim()) {
-      newErrors.emergencyContact = 'Emergency contact is required';
-    }
-
-    if (!formData.emergencyPhone.trim()) {
-      newErrors.emergencyPhone = 'Emergency phone is required';
-    }
-
-    if (formData.membershipType === 'indoor' && !formData.planType) {
-      newErrors.planType = 'Plan type is required for indoor membership';
-    }
-
-    if (formData.membershipType === 'outdoor' && !formData.location) {
-      newErrors.location = 'Location is required for outdoor membership';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    setServerError('');
-    
-    try {
-      // Map frontend field names to backend field names  
-      const memberData = {
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        email: formData.email,
-        phone: formData.phone,
-        idPassport: formData.idPassport,
-        bloodGroup: formData.bloodGroup,
-        membership_type: formData.membershipType,
-        plan_type: formData.planType,
-        location: formData.location,
-        emergencyContact: formData.emergencyContact,
-        emergencyPhone: formData.emergencyPhone,
-        medicalConditions: formData.medicalConditions,
-        dateOfBirth: formData.dateOfBirth,
-        address: formData.address,
-        registrationDate: new Date().toISOString(),
-        status: 'active',
-        payment_status: formData.paymentStatus
-      };
-      
-      console.log('Sending member data:', memberData);
-      await onSubmit(memberData);
-    } catch (error) {
-      console.error('Error registering member:', error);
-      console.error('Error object keys:', Object.keys(error));
-      console.error('Error message:', error.message);
-      console.error('Error fieldErrors:', error.fieldErrors);
-      
-      // Handle field-level errors from backend
-      if (error.fieldErrors) {
-        console.log('Field errors received:', error.fieldErrors);
-        // Map backend field names to frontend field names
-        const mappedErrors = {};
-        Object.keys(error.fieldErrors).forEach(field => {
-          // Map backend field names to frontend form field names
-          let frontendField = field;
-          if (field === 'membership_type') frontendField = 'membershipType';
-          if (field === 'plan_type') frontendField = 'planType';
-          
-          mappedErrors[frontendField] = Array.isArray(error.fieldErrors[field]) 
-            ? error.fieldErrors[field][0] 
-            : error.fieldErrors[field];
-        });
-        
-        console.log('Mapped errors:', mappedErrors);
-        setErrors(mappedErrors);
-      }
-      
-      // Always show the error message, even if we have field errors
-      const errorMessage = error.message || 'Failed to register member. Please check the form and try again.';
-      console.log('Setting server error:', errorMessage);
-      setServerError(errorMessage);
-      
-      // Scroll to top to show error
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   return (
     <div className="w-full max-w-2xl mx-auto bg-white p-4 sm:p-6 lg:p-8 rounded-xl shadow-lg max-h-[90vh] overflow-y-auto">
@@ -296,7 +230,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
 
           <div>
             <label htmlFor="bloodGroup" className="block text-sm font-medium text-gray-700 mb-1">
-              Blood Group
+              Blood Group (Optional)
             </label>
             <select
               id="bloodGroup"
@@ -306,14 +240,14 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select blood group</option>
-              <option value="A-">A(-)</option>
-              <option value="A+">A(+)</option>
-              <option value="B+">B(+)</option>
-              <option value="B-">B(-)</option>
-              <option value="AB+">AB(+)</option>
-              <option value="AB-">AB(-)</option>
-              <option value="O+">O(+)</option>
-              <option value="O-">O(-)</option>
+              <option value="A(-)">A(-)</option>
+              <option value="A(+)">A(+)</option>
+              <option value="B(+)">B(+)</option>
+              <option value="B(-)">B(-)</option>
+              <option value="AB(+)">AB(+)</option>
+              <option value="AB(-)">AB(-)</option>
+              <option value="O(+)">O(+)</option>
+              <option value="O(-)">O(-)</option>
             </select>
           </div>
         </div>
@@ -449,39 +383,39 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="emergencyContact" className="block text-sm font-medium text-gray-700 mb-1">
-                Emergency Contact Name *
+              <label htmlFor="emergency_contact_name" className="block text-sm font-medium text-gray-700 mb-1">
+                Emergency Contact Name (Optional)
               </label>
               <input
                 type="text"
-                id="emergencyContact"
-                name="emergencyContact"
-                value={formData.emergencyContact}
+                id="emergency_contact_name"
+                name="emergency_contact_name"
+                value={formData.emergency_contact_name}
                 onChange={handleChange}
                 className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.emergencyContact ? 'border-red-500' : 'border-gray-300'
+                  errors.emergency_contact_name ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Enter emergency contact name"
               />
-              {errors.emergencyContact && <p className="text-red-500 text-xs mt-1">{errors.emergencyContact}</p>}
+              {errors.emergency_contact_name && <p className="text-red-500 text-xs mt-1">{errors.emergency_contact_name}</p>}
             </div>
 
             <div>
-              <label htmlFor="emergencyPhone" className="block text-sm font-medium text-gray-700 mb-1">
-                Emergency Contact Phone *
+              <label htmlFor="emergency_contact_phone" className="block text-sm font-medium text-gray-700 mb-1">
+                Emergency Contact Phone (Optional)
               </label>
               <input
                 type="tel"
-                id="emergencyPhone"
-                name="emergencyPhone"
-                value={formData.emergencyPhone}
+                id="emergency_contact_phone"
+                name="emergency_contact_phone"
+                value={formData.emergency_contact_phone}
                 onChange={handleChange}
                 className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.emergencyPhone ? 'border-red-500' : 'border-gray-300'
+                  errors.emergency_contact_phone ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Enter emergency contact phone"
               />
-              {errors.emergencyPhone && <p className="text-red-500 text-xs mt-1">{errors.emergencyPhone}</p>}
+              {errors.emergency_contact_phone && <p className="text-red-500 text-xs mt-1">{errors.emergency_contact_phone}</p>}
             </div>
           </div>
         </div>
@@ -505,6 +439,25 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
             />
           </div>
         </div>
+
+        {/* Server Error Display */}
+        {serverError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">Registration Failed</h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>{serverError}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Form Actions */}
         <div className="flex flex-col sm:flex-row justify-end gap-3 sm:gap-4 pt-6 border-t">
