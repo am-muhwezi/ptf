@@ -4,7 +4,7 @@
 import axios from 'axios';
 
 // Define the base URL, preferably from environment variables
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 // API endpoints configuration
 export const API_ENDPOINTS = {
@@ -17,17 +17,20 @@ export const API_ENDPOINTS = {
   
   // Members
   members: {
-    list: 'members/',
-    create: 'members/',
+    list: '/all/',
+    create: '/member/register/',
     detail: (id) => `members/${id}/`,
     update: (id) => `members/${id}/`,
     delete: (id) => `members/${id}/`,
     search: 'members/',
+    indoor: 'members/indoor/',
+    outdoor: 'members/outdoor/',
   },
   
   // Memberships
   memberships: {
     list: 'memberships/',
+    all: 'memberships/all/',
     create: 'memberships/',
     detail: (id) => `memberships/${id}/`,
     update: (id) => `memberships/${id}/`,
@@ -41,7 +44,7 @@ export const API_ENDPOINTS = {
     reactivate: (id) => `memberships/${id}/reactivate/`,
     renew: (id) => `memberships/${id}/renew/`,
     // Membership Plans
-    plans: 'plans/',
+    plans: 'memberships/plans/',
   },
   
   // Dashboard

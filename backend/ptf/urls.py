@@ -31,13 +31,13 @@ urlpatterns = [
     path("redoc/", schema_view.with_ui("redoc", cache_timeout=0), name="schema-redoc"),
     # Admin
     path("admin/", admin.site.urls),
-    # API URLs with /api/ prefix
+    # API URLs with proper prefixes
     path("", include("accounts.urls")),
     path("", include("members.urls")),
     path("", include("bookings.urls")),
     path("", include("memberships.urls")),
-    path("attendance/", include("attendance.urls")),
-    path("payments/", include("payments.urls")),
+    path("", include("attendance.urls")),
+    path("", include("payments.urls")),
     # Dashboard
     path("dashboard/stats/", DashboardStatsView.as_view(), name="dashboard-stats"),
     path(

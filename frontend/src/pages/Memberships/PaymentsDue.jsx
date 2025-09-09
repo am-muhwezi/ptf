@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
 import Card from '../../components/ui/Card';
@@ -7,7 +7,8 @@ import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
 import PaymentForm from '../../components/forms/PaymentForm';
 import Receipt from '../../components/ui/Receipt';
-import authService from '../../services/authService';
+import { usePaymentsDue } from '../../hooks/usePayments';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 
 const PaymentsDue = () => {
   const [payments, setPayments] = useState([]);
@@ -20,145 +21,82 @@ const PaymentsDue = () => {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalPayments, setTotalPayments] = useState(0);
-  const [paginatedPayments, setPaginatedPayments] = useState([]);
 
-
-  // Load payments due data from both indoor and outdoor memberships
-  const loadPaymentsData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Fetch both indoor and outdoor memberships
-      const [indoorResponse, outdoorResponse] = await Promise.all([
-        authService.getIndoorMembers({ limit: 1000 }),
-        authService.getOutdoorMembers({ limit: 1000 })
-      ]);
-      
-      const allMemberships = [
-        ...(indoorResponse.success ? indoorResponse.data : []),
-        ...(outdoorResponse.success ? outdoorResponse.data : [])
-      ];
-      
-      // Transform to payment format and filter overdue/pending payments
-      const paymentsData = allMemberships
-        .map(membership => transformToPaymentData(membership))
-        .filter(payment => payment.status === 'overdue' || payment.status === 'pending')
-        .sort((a, b) => b.daysOverdue - a.daysOverdue);
-      
-      setPayments(paymentsData);
-      setFilteredPayments(paymentsData);
-      setTotalPayments(paymentsData.length);
-      
-      // Apply pagination
-      applyPagination(paymentsData, 1);
-    } catch (err) {
-      setError(err.message);
-      showToast('Failed to load payments data: ' + err.message, 'error');
-    } finally {
-      setLoading(false);
+  // Mock data - replace with API call
+  const mockPayments = [
+    {
+      id: 'PTF001234',
+      firstName: 'John',
+      lastName: 'Doe',
+      email: 'john.doe@email.com',
+      phone: '+256 700 123 456',
+      membershipType: 'indoor',
+      planType: 'Monthly Premium',
+      amount: 150000,
+      dueDate: '2024-01-25',
+      daysOverdue: 5,
+      status: 'overdue',
+      lastPayment: '2023-12-25',
+      paymentMethod: 'Mobile Money',
+      invoiceNumber: 'INV-2024-001',
+      totalOutstanding: 150000
+    },
+    {
+      id: 'PTF001235',
+      firstName: 'Jane',
+      lastName: 'Smith',
+      email: 'jane.smith@email.com',
+      phone: '+256 700 123 457',
+      membershipType: 'outdoor',
+      planType: 'Quarterly Basic',
+      amount: 280000,
+      dueDate: '2024-02-01',
+      daysOverdue: 0,
+      status: 'due_today',
+      lastPayment: '2023-11-01',
+      paymentMethod: 'Bank Transfer',
+      invoiceNumber: 'INV-2024-002',
+      totalOutstanding: 280000
+    },
+    {
+      id: 'PTF001236',
+      firstName: 'Mike',
+      lastName: 'Johnson',
+      email: 'mike.johnson@email.com',
+      phone: '+256 700 123 458',
+      membershipType: 'both',
+      planType: 'Annual Premium',
+      amount: 1800000,
+      dueDate: '2024-02-05',
+      daysOverdue: 0,
+      status: 'due_soon',
+      lastPayment: '2023-02-05',
+      paymentMethod: 'Credit Card',
+      invoiceNumber: 'INV-2024-003',
+      totalOutstanding: 1800000
+    },
+    {
+      id: 'PTF001237',
+      firstName: 'Sarah',
+      lastName: 'Wilson',
+      email: 'sarah.wilson@email.com',
+      phone: '+256 700 123 459',
+      membershipType: 'indoor',
+      planType: 'Monthly Basic',
+      amount: 120000,
+      dueDate: '2024-01-20',
+      daysOverdue: 10,
+      status: 'overdue',
+      lastPayment: '2023-12-20',
+      paymentMethod: 'Cash',
+      invoiceNumber: 'INV-2024-004',
+      totalOutstanding: 240000 // 2 months overdue
     }
-  };
-
-  // Apply pagination to filtered data
-  const applyPagination = (data, page = currentPage) => {
-    const totalPages = Math.ceil(data.length / pageSize);
-    setTotalPages(totalPages);
-    setCurrentPage(page);
-    
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedData = data.slice(startIndex, endIndex);
-    
-    setPaginatedPayments(paginatedData);
-  };
-
-  // Handle page change
-  const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      applyPagination(filteredPayments, newPage);
-    }
-  };
-
-  // Handle page size change
-  const handlePageSizeChange = (newPageSize) => {
-    setPageSize(newPageSize);
-    setCurrentPage(1);
-    applyPagination(filteredPayments, 1);
-  };
-
-  // Transform membership data to payment format
-  const transformToPaymentData = (membership) => {
-    const isOutdoor = membership.membership_type === 'outdoor';
-    const dueDate = membership.end_date || membership.expiryDate;
-    const now = new Date();
-    const dueDateObj = new Date(dueDate);
-    const daysOverdue = Math.floor((now - dueDateObj) / (1000 * 60 * 60 * 24));
-    
-    // Determine payment status
-    let status = 'paid';
-    if (membership.payment_status === 'pending') {
-      status = daysOverdue > 0 ? 'overdue' : 'pending';
-    } else if (membership.payment_status === 'overdue') {
-      status = 'overdue';
-    }
-    
-    return {
-      id: membership.member_id_display || `PTF${String(membership.member || membership.id).padStart(6, '0')}`,
-      membershipId: membership.id,
-      firstName: (membership.member_name || membership.firstName || '').split(' ')[0] || 'N/A',
-      lastName: (membership.member_name || membership.lastName || '').split(' ').slice(1).join(' ') || '',
-      email: membership.member_email || membership.email,
-      phone: membership.member_phone || membership.phone,
-      membershipType: isOutdoor ? 'outdoor' : 'indoor',
-      planType: isOutdoor ? getPlanDisplayName(membership.plan_name, membership.sessions_per_week, membership.weekly_fee) : membership.plan_type || 'Indoor Plan',
-      amount: membership.weekly_fee || membership.amount || 0,
-      dueDate: dueDate,
-      daysOverdue: Math.max(0, daysOverdue),
-      status: status,
-      lastPayment: membership.start_date || membership.joinDate,
-      paymentMethod: 'Not specified',
-      invoiceNumber: `INV-${new Date().getFullYear()}-${String(membership.id).padStart(3, '0')}`,
-      totalOutstanding: membership.weekly_fee || membership.amount || 0,
-      location: isOutdoor ? getLocationDisplayName(membership.location) : 'Indoor'
-    };
-  };
-
-  // Helper functions
-  const getPlanDisplayName = (planName, sessionsPerWeek, weeklyFee) => {
-    const fee = parseFloat(weeklyFee || 0);
-    const sessions = parseInt(sessionsPerWeek || 0);
-    
-    if (fee === 1000) return `Daily Drop-in - KES 1,000`;
-    if (fee === 3000 && sessions === 1) return `1 Session/Week - KES 3,000`;
-    if (fee === 4000 && sessions === 2) return `2 Sessions/Week - KES 4,000`;
-    if (fee === 5000 && sessions === 3) return `3 Sessions/Week - KES 5,000`;
-    if (fee === 6000 && sessions === 4) return `4 Sessions/Week - KES 6,000`;
-    if (fee === 7000 && sessions === 5) return `5 Sessions/Week - KES 7,000`;
-    
-    return planName || `${sessions} Sessions/Week - KES ${fee}`;
-  };
-
-  const getLocationDisplayName = (locationValue) => {
-    const locationMap = {
-      'arboretum': 'Arboretum', 'boxwood': 'Boxwood', 'botanical': 'Botanical',
-      'karura': 'Karura', 'sagret': 'Sagret', 'mushroom': 'Mushroom', 'loreto': 'PCEA Loreto',
-      '1': 'Arboretum', '2': 'Boxwood', '3': 'Botanical', '4': 'Karura',
-      '5': 'Sagret', '6': 'Mushroom', '7': 'PCEA Loreto'
-    };
-    return locationMap[locationValue] || locationValue || 'Not specified';
-  };
+  ];
 
   useEffect(() => {
-    loadPaymentsData();
+    setPayments(mockPayments);
+    setFilteredPayments(mockPayments);
   }, []);
 
   useEffect(() => {
@@ -181,19 +119,7 @@ const PaymentsDue = () => {
     }
 
     setFilteredPayments(filtered);
-    setTotalPayments(filtered.length);
-    
-    // Reset to first page and apply pagination
-    setCurrentPage(1);
-    applyPagination(filtered, 1);
   }, [searchTerm, filterStatus, payments]);
-
-  // Recalculate pagination when page size changes
-  useEffect(() => {
-    if (filteredPayments.length > 0) {
-      applyPagination(filteredPayments, 1);
-    }
-  }, [pageSize]);
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -216,42 +142,19 @@ const PaymentsDue = () => {
     }
   };
 
-  const handlePaymentSuccess = async (paymentResponse) => {
-    try {
-      // Update membership payment status in backend
-      const updateData = {
-        payment_status: 'paid',
-        status: 'active'
-      };
-
-      if (selectedPayment.membershipType === 'outdoor') {
-        await authService.updateOutdoorMember(selectedPayment.membershipId, updateData);
-      } else {
-        // Would need an updateIndoorMember method
-        console.log('Indoor payment update not implemented yet');
-      }
-
-      setPaymentData(paymentResponse);
-      setShowPaymentFormModal(false);
-      setShowReceiptModal(true);
-      
-      // Update local state
-      const updatedPayments = payments.map(payment =>
-        payment.id === selectedPayment.id 
-          ? { ...payment, status: 'paid', paymentStatus: 'paid' }
-          : payment
-      );
-      
-      setPayments(updatedPayments);
-      setFilteredPayments(updatedPayments);
-      
-      showToast(`Payment recorded successfully for ${selectedPayment.firstName} ${selectedPayment.lastName}`, 'success');
-      
-      // Reload data to ensure consistency
-      loadPaymentsData();
-    } catch (err) {
-      showToast('Failed to update payment status: ' + err.message, 'error');
-    }
+  const handlePaymentSuccess = (paymentResponse) => {
+    setPaymentData(paymentResponse);
+    setShowPaymentFormModal(false);
+    setShowReceiptModal(true);
+    
+    // Update payment status
+    const updatedPayments = payments.map(payment =>
+      payment.id === selectedPayment.id 
+        ? { ...payment, status: 'paid', paymentStatus: 'paid' }
+        : payment
+    );
+    setPayments(updatedPayments);
+    setFilteredPayments(updatedPayments);
   };
 
   const handleSendInvoice = (paymentId) => {
@@ -377,7 +280,10 @@ const PaymentsDue = () => {
                     type="text"
                     placeholder="Search members or invoice numbers..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      // Add debounced search logic here
+                    }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -426,35 +332,7 @@ const PaymentsDue = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {loading && (
-                      <tr>
-                        <td colSpan="6" className="px-6 py-12 text-center">
-                          <div className="flex items-center justify-center">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                            <span className="ml-2 text-gray-500">Loading payments...</span>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                    {!loading && paginatedPayments.length === 0 && filteredPayments.length === 0 && (
-                      <tr>
-                        <td colSpan="6" className="px-6 py-12 text-center">
-                          <div className="text-center">
-                            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                            </svg>
-                            <h3 className="mt-4 text-lg font-medium text-gray-900">No payments due</h3>
-                            <p className="mt-1 text-sm text-gray-500">
-                              {searchTerm || filterStatus !== 'all' 
-                                ? 'Try adjusting your search or filter criteria.'
-                                : 'All payments are up to date!'
-                              }
-                            </p>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                    {!loading && paginatedPayments.map((payment) => (
+                    {filteredPayments.map((payment) => (
                       <tr key={payment.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
@@ -525,109 +403,6 @@ const PaymentsDue = () => {
                   </tbody>
                 </table>
               </div>
-              
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center text-sm text-gray-700">
-                    <span>
-                      Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalPayments)} of {totalPayments} payments
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center space-x-4">
-                    {/* Page Size Selector */}
-                    <div className="flex items-center space-x-2">
-                      <label htmlFor="pageSize" className="text-sm text-gray-700">Show:</label>
-                      <select
-                        id="pageSize"
-                        value={pageSize}
-                        onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                        className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value={10}>10</option>
-                        <option value={20}>20</option>
-                        <option value={50}>50</option>
-                        <option value={100}>100</option>
-                      </select>
-                    </div>
-                    
-                    {/* Page Navigation */}
-                    <div className="flex items-center space-x-1">
-                      <button
-                        onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
-                        className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
-                      >
-                        <span>←</span>
-                        <span className="hidden sm:inline">Previous</span>
-                      </button>
-                      
-                      <div className="flex space-x-1">
-                        {/* Show first page if current page is far from start */}
-                        {currentPage > 3 && totalPages > 5 && (
-                          <>
-                            <button
-                              onClick={() => handlePageChange(1)}
-                              className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                            >
-                              1
-                            </button>
-                            {currentPage > 4 && <span className="px-2 py-2 text-sm text-gray-500">...</span>}
-                          </>
-                        )}
-                        
-                        {/* Show page numbers around current page */}
-                        {(() => {
-                          const start = Math.max(1, currentPage - 2);
-                          const end = Math.min(totalPages, currentPage + 2);
-                          const pages = [];
-                          
-                          for (let i = start; i <= end; i++) {
-                            pages.push(
-                              <button
-                                key={i}
-                                onClick={() => handlePageChange(i)}
-                                className={`px-3 py-2 text-sm border rounded-md transition-colors ${
-                                  currentPage === i
-                                    ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
-                                    : 'border-gray-300 hover:bg-gray-50 text-gray-700'
-                                }`}
-                              >
-                                {i}
-                              </button>
-                            );
-                          }
-                          
-                          return pages;
-                        })()}
-                        
-                        {/* Show last page if current page is far from end */}
-                        {currentPage < totalPages - 2 && totalPages > 5 && (
-                          <>
-                            {currentPage < totalPages - 3 && <span className="px-2 py-2 text-sm text-gray-500">...</span>}
-                            <button
-                              onClick={() => handlePageChange(totalPages)}
-                              className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                            >
-                              {totalPages}
-                            </button>
-                          </>
-                        )}
-                      </div>
-                      
-                      <button
-                        onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
-                      >
-                        <span className="hidden sm:inline">Next</span>
-                        <span>→</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </main>

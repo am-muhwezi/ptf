@@ -7,17 +7,17 @@ from django.utils import timezone
 from datetime import timedelta
 from members.models import Member
 from bookings.models import Booking
-from ptf.permissions import IsStaffOrSuperUser
 
 from .services import get_dashboard_statistics
 
 
 class DashboardStatsView(APIView):
     """
-    Dashboard statistics view - Staff and Superuser only
+    Dashboard statistics view with authentication
     """
 
     authentication_classes = [JWTAuthentication, SessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         try:
@@ -32,10 +32,11 @@ class DashboardStatsView(APIView):
 
 class DashboardNotificationsView(APIView):
     """
-    Dashboard notifications view - Staff and Superuser only
+    Dashboard notifications view with authentication
     """
 
     authentication_classes = [JWTAuthentication, SessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         try:
@@ -92,7 +93,7 @@ class DashboardNotificationsView(APIView):
 
             # Check for pending bookings
             pending_bookings = Booking.objects.filter(
-                status="pending", booking_date__date__gte=today
+                status="pending", booking_date__gte=today
             ).order_by("booking_date")[:5]
 
             for booking in pending_bookings:

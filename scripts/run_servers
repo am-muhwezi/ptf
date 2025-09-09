@@ -1,0 +1,18 @@
+#!/usr/bin/bash
+
+set -e
+
+cd backend
+source .venv/bin/activate
+python manage.py runserver &
+DJANGO_PID=$!
+cleanup(){
+    echo "Killing Django(PID $DJANGO_PID)..."
+    kill $DJANGO_PID 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+cd ../frontend
+npm run start
+
+kill -9 $DJANGO_PID

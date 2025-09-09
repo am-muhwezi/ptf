@@ -12,7 +12,6 @@ import CheckInForm from '../../components/forms/CheckInForm';
 import { useApi } from '../../hooks/useApi';
 import { dashboardService } from '../../services/dashboardService';
 import { memberService } from '../../services/memberService';
-import { attendanceService } from '../../services/attendanceService';
 import { useAuthContext } from '@/contexts/AuthContext';
 
 const Dashboard = () => {
@@ -20,11 +19,8 @@ const Dashboard = () => {
 
   const { user, isLoading } = useAuthContext();
 
-  // Debug logging only in development
-  if (import.meta.env.MODE === 'development' && import.meta.env.VITE_DEBUG_AUTH === 'true') {
-    console.log('Dashboard user:', user);
-    console.log('Dashboard - Auth context:', { user: user?.email, isLoading });
-  }
+  console.log('Dashboard user:', user);
+  console.log('Dashboard - Auth context:', { user: user?.email, isLoading });
 
   // API hooks
   const { data: dashboardStats, loading: statsLoading, error: statsError } = useApi(dashboardService.getDashboardStats);
@@ -50,7 +46,9 @@ const Dashboard = () => {
     },
     bookingData: {
       groupSessions: 0,
-      oneOnOneSessions: 0
+      oneOnOneSessions: 0,
+      trainersAvailable: 0,
+      waitlistRequests: 0
     },
     attendanceData: {
       indoorVisits: 0,
@@ -59,10 +57,29 @@ const Dashboard = () => {
     feedbackData: {
       openTickets: 0,
       avgResolutionTime: '0 days'
+    },
+    inventoryData: {
+      availableStock: 0,
+      lowStockAlerts: 0
     }
   };
 
-  const stats = dashboardStats || defaultStats;
+  const stats = {
+    ...defaultStats,
+    ...dashboardStats,
+    bookingData: {
+      ...defaultStats.bookingData,
+      ...(dashboardStats?.bookingData || {})
+    },
+    membershipData: {
+      ...defaultStats.membershipData,
+      ...(dashboardStats?.membershipData || {})
+    },
+    inventoryData: {
+      ...defaultStats.inventoryData,
+      ...(dashboardStats?.inventoryData || {})
+    }
+  };
 
 
   const showToast = (message, type = 'success') => {
@@ -93,15 +110,13 @@ const Dashboard = () => {
 
 const handleCheckInSubmit = async (memberData) => {
   try {
-    const result = await attendanceService.checkIn({
-      memberId: memberData.memberId,
-      visitType: 'indoor', // You can make this dynamic based on member type
-      activities: [],
-      notes: ''
-    });
+    // Check-in is already handled by CheckInForm, just close modal and show success
     setShowCheckInModal(false);
     showToast(`${memberData.memberName} checked in successfully!`, 'success');
-    return result;
+    
+    // Optionally refresh dashboard stats after check-in
+    // You could reload dashboard stats here if needed
+    
   } catch (error) {
     showToast(error.message, 'error');
     throw error;
@@ -240,7 +255,7 @@ const handleCheckInSubmit = async (memberData) => {
             {/* Bookings */}
             <section>
               <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Bookings</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 <Card
                   title="Group Sessions Today"
                   value={stats.bookingData.groupSessions}
@@ -250,6 +265,16 @@ const handleCheckInSubmit = async (memberData) => {
                   title="One-on-One Sessions Today"
                   value={stats.bookingData.oneOnOneSessions}
                   onClick={() => handleCardClick('One-on-One Sessions Today', stats.bookingData.oneOnOneSessions)}
+                />
+                <Card
+                  title="Trainers Available"
+                  value={stats.bookingData.trainersAvailable}
+                  onClick={() => handleCardClick('Trainers Available', stats.bookingData.trainersAvailable)}
+                />
+                <Card
+                  title="Waitlist Requests"
+                  value={stats.bookingData.waitlistRequests}
+                  onClick={() => handleCardClick('Waitlist Requests', stats.bookingData.waitlistRequests)}
                 />
               </div>
             </section>
@@ -261,12 +286,12 @@ const handleCheckInSubmit = async (memberData) => {
                 <Card
                   title="Indoor Visits Today"
                   value={stats?.attendanceData?.indoorVisits || 0}
-                  onClick={() => navigate('/attendance')}
+                  onClick={() => handleCardClick('Indoor Visits Today', stats.attendanceData.indoorVisits)}
                 />
                 <Card
                   title="Outdoor Visits Today"
                   value={stats?.attendanceData?.outdoorVisits || 0}
-                  onClick={() => navigate('/attendance')}
+                  onClick={() => handleCardClick('Outdoor Visits Today', stats.attendanceData.outdoorVisits)}
                 />
               </div>
             </section>
@@ -284,6 +309,37 @@ const handleCheckInSubmit = async (memberData) => {
                   title="Average Resolution Time"
                   value={stats?.feedbackData?.avgResolutionTime || '0 days'}
                   onClick={() => handleCardClick('Average Resolution Time', stats.feedbackData.avgResolutionTime)}
+                />
+              </div>
+            </section>
+
+            {/* Communication & Alerts */}
+            <section>
+              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Communication & Alerts</h2>
+              {notificationsLoading ? (
+                <div className="animate-pulse space-y-4">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="h-16 bg-gray-200 rounded"></div>
+                  ))}
+                </div>
+              ) : (
+                <Notifications notifications={notifications} />
+              )}
+            </section>
+
+            {/* Inventory & Merchandise */}
+            <section>
+              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Inventory & Merchandise</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                <Card
+                  title="Available Stock Levels"
+                  value={stats?.inventoryData?.availableStock || 0}
+                  onClick={() => handleCardClick('Available Stock Levels', stats.inventoryData.availableStock)}
+                />
+                <Card
+                  title="Low Stock Alerts"
+                  value={stats?.inventoryData?.lowStockAlerts || 0}
+                  onClick={() => handleCardClick('Low Stock Alerts', stats.inventoryData.lowStockAlerts)}
                 />
               </div>
             </section>

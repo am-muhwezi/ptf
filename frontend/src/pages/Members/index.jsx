@@ -70,6 +70,12 @@ const Members = () => {
 
   // Simple data processing since Members API now includes membership_type directly
   const processMembers = (membersData) => {
+    // Safety check: ensure membersData is an array
+    if (!Array.isArray(membersData)) {
+      console.error('processMembers: Expected array, got:', typeof membersData, membersData);
+      return [];
+    }
+    
     // Members API now includes membership_type directly, no need for complex combination
     return membersData.map(member => ({
       ...member,
@@ -86,7 +92,14 @@ const Members = () => {
       const allMembersResponse = await memberService.getMembers({ limit: 1000 }); // Large limit to get all
       let allMembersData = [];
       
-      if (allMembersResponse.results) {
+      if (allMembersResponse.data) {
+        // New uniform format: {success: true, data: [...], count: N}
+        allMembersData = allMembersResponse.data;
+      } else if (allMembersResponse.members) {
+        // Old format: {success: true, members: [...], count: N}
+        allMembersData = allMembersResponse.members;
+      } else if (allMembersResponse.results) {
+        // Standard pagination format
         allMembersData = allMembersResponse.results;
       } else {
         allMembersData = allMembersResponse;
@@ -124,15 +137,31 @@ const Members = () => {
       // Fetch members data (now includes membership_type directly)
       const memberResponse = await memberService.getMembers(memberParams);
       
-      // Handle member response (paginated)
+      // Handle member response (uniform structure)
       let membersData = [];
-      if (memberResponse.results) {
+      if (memberResponse.data) {
+        // New uniform format: {success: true, data: [...], count: N}
+        membersData = memberResponse.data;
+        setTotalCount(memberResponse.count);
+        setTotalPages(Math.ceil(memberResponse.count / pageSize));
+      } else if (memberResponse.members) {
+        // Old format: {success: true, members: [...], count: N}
+        membersData = memberResponse.members;
+        setTotalCount(memberResponse.count);
+        setTotalPages(Math.ceil(memberResponse.count / pageSize));
+      } else if (memberResponse.results) {
+        // Standard pagination format
         membersData = memberResponse.results;
         setTotalCount(memberResponse.count);
         setTotalPages(Math.ceil(memberResponse.count / pageSize));
-      } else {
+      } else if (Array.isArray(memberResponse)) {
         membersData = memberResponse;
         setTotalCount(memberResponse.length);
+        setTotalPages(1);
+      } else {
+        // Handle case where response is a single object or has different structure
+        membersData = [memberResponse];
+        setTotalCount(1);
         setTotalPages(1);
       }
 
@@ -165,6 +194,12 @@ const Members = () => {
     fetchAllMembersForStats(); // Fetch all members for stats
     fetchMembers(); // Fetch paginated members for display
   }, []); // Empty dependency - only run on mount, not on every function change
+
+  // Handle filter changes
+  const handleFilterChange = (filters) => {
+    // This function can be used for additional filter logic if needed
+    // Currently the individual filter state changes handle the updates
+  };
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -523,7 +558,10 @@ const Members = () => {
                       type="text"
                       placeholder="Search members..."
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        handleFilterChange({ q: e.target.value || undefined });
+                      }}
                       className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -531,7 +569,10 @@ const Members = () => {
                 <div className="flex space-x-4">
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => setFilterStatus('all')}
+                      onClick={() => {
+                        setFilterStatus('all');
+                        handleFilterChange({ status: undefined });
+                      }}
                       className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                         filterStatus === 'all'
                           ? 'bg-blue-100 text-blue-800 border border-blue-200'
@@ -541,7 +582,10 @@ const Members = () => {
                       All
                     </button>
                     <button
-                      onClick={() => setFilterStatus('active')}
+                      onClick={() => {
+                        setFilterStatus('active');
+                        handleFilterChange({ status: 'active' });
+                      }}
                       className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                         filterStatus === 'active'
                           ? 'bg-green-100 text-green-800 border border-green-200'
@@ -551,7 +595,10 @@ const Members = () => {
                       Active
                     </button>
                     <button
-                      onClick={() => setFilterStatus('inactive')}
+                      onClick={() => {
+                        setFilterStatus('inactive');
+                        handleFilterChange({ status: 'inactive' });
+                      }}
                       className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                         filterStatus === 'inactive'
                           ? 'bg-red-100 text-red-800 border border-red-200'
@@ -563,7 +610,10 @@ const Members = () => {
                   </div>
                   <select
                     value={filterMembershipType}
-                    onChange={(e) => setFilterMembershipType(e.target.value)}
+                    onChange={(e) => {
+                      setFilterMembershipType(e.target.value);
+                      handleFilterChange({ membership_type: e.target.value === 'all' ? undefined : e.target.value });
+                    }}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="all">All Types</option>
@@ -576,7 +626,7 @@ const Members = () => {
 
             {/* Members Table */}
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              {filteredMembers.length === 0 ? (
+              {members.length === 0 ? (
                 <div className="text-center py-12">
                   <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -613,7 +663,7 @@ const Members = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredMembers.map((member) => (
+                      {members.map((member) => (
                         <tr key={member.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
@@ -757,7 +807,7 @@ const Members = () => {
           <div className="space-y-6">
             <div className="flex items-center justify-between"><div className="flex items-center space-x-4"><div className="h-16 w-16 rounded-full bg-gray-300 flex items-center justify-center"><span className="text-xl font-medium text-gray-700">{getMemberInitials(selectedMember)}</span></div><div><h3 className="text-xl font-bold text-gray-900">{getMemberDisplayName(selectedMember)}</h3><p className="text-gray-600">Member ID: {selectedMember.member_id || selectedMember.id}</p></div></div><div className="flex space-x-2"><Button variant="primary" onClick={() => handleEditMember(selectedMember)}>Edit</Button><Button variant="outline" onClick={() => handleDeleteMember(selectedMember)} className="border-red-300 text-red-700 hover:bg-red-50">Delete</Button></div></div>
             <div><h4 className="text-lg font-medium text-gray-900 mb-4">Personal Information</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-4"><div><label className="text-sm font-medium text-gray-500">Name</label><p className="text-sm text-gray-900">{getMemberDisplayName(selectedMember)}</p></div><div><label className="text-sm font-medium text-gray-500">Phone</label><p className="text-sm text-gray-900">{selectedMember.phone || 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Date of Birth</label><p className="text-sm text-gray-900">{selectedMember.dateOfBirth ? formatDate(selectedMember.dateOfBirth) : 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Join Date</label><p className="text-sm text-gray-900">{selectedMember.join_date ? formatDate(selectedMember.join_date) : 'Not provided'}</p></div></div><div className="space-y-4"><div><label className="text-sm font-medium text-gray-500">Email</label><p className="text-sm text-gray-900">{selectedMember.email || 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Address</label><p className="text-sm text-gray-900">{selectedMember.address || 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Membership Type</label><div className="mt-1">{getMembershipTypeBadge(selectedMember.membership_type)}</div></div><div><label className="text-sm font-medium text-gray-500">Status</label><div className="mt-1">{getStatusBadge(selectedMember.status)}</div></div></div></div></div>
-            <div><h4 className="text-lg font-medium text-gray-900 mb-4">Emergency Contact</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="text-sm font-medium text-gray-500">Contact Name</label><p className="text-sm text-gray-900">{selectedMember.emergencyContact || 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Contact Phone</label><p className="text-sm text-gray-900">{selectedMember.emergencyPhone || 'Not provided'}</p></div></div></div>
+            <div><h4 className="text-lg font-medium text-gray-900 mb-4">Emergency Contact</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label className="text-sm font-medium text-gray-500">Contact Name</label><p className="text-sm text-gray-900">{selectedMember.emergency_contact_name || 'Not provided'}</p></div><div><label className="text-sm font-medium text-gray-500">Contact Phone</label><p className="text-sm text-gray-900">{selectedMember.emergency_contact_phone || 'Not provided'}</p></div></div></div>
             <div><h4 className="text-lg font-medium text-gray-900 mb-4">Fitness Information</h4><div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.height ? `${selectedMember.height} cm` : 'N/A'}</div><div className="text-sm text-gray-600">Height</div></div><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.weight ? `${selectedMember.weight} kg` : 'N/A'}</div><div className="text-sm text-gray-600">Weight</div></div><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.bmi || 'N/A'}</div><div className="text-sm text-gray-600">BMI</div>{selectedMember.bmi && (<div className="mt-1"><span className={`px-2 py-1 text-xs font-medium rounded-full ${getBMICategory(selectedMember.bmi).style}`}>{getBMICategory(selectedMember.bmi).label}</span></div>)}</div><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900 capitalize">{selectedMember.fitnessLevel || 'N/A'}</div><div className="text-sm text-gray-600">Fitness Level</div></div></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-sm font-medium text-gray-500">Short-term Goals</label><div className="mt-1 p-3 bg-blue-50 rounded-lg"><p className="text-sm text-blue-900">{selectedMember.short_term_goals || 'No goals set'}</p></div></div><div><label className="text-sm font-medium text-gray-500">Long-term Goals</label><div className="mt-1 p-3 bg-green-50 rounded-lg"><p className="text-sm text-green-900">{selectedMember.long_term_goals || 'No goals set'}</p></div></div></div></div>
             <div><h4 className="text-lg font-medium text-gray-900 mb-4">Activity Summary</h4><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.total_visits || 0}</div><div className="text-sm text-gray-600">Total Visits</div></div><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.last_visit ? formatDate(selectedMember.last_visit) : 'Never'}</div><div className="text-sm text-gray-600">Last Visit</div></div><div className="bg-gray-50 rounded-lg p-4"><div className="text-2xl font-bold text-gray-900">{selectedMember.expiry_date ? Math.max(0, Math.ceil((new Date(selectedMember.expiry_date) - new Date()) / (1000 * 60 * 60 * 24))) : 'N/A'}</div><div className="text-sm text-gray-600">Days Remaining</div></div></div></div>
           </div>

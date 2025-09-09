@@ -6,7 +6,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
-import authService from '../../services/authService';
+import membershipService from '../../services/membershipService';
 
 const OutdoorMemberships = () => {
   const [allMembers, setAllMembers] = useState([]);
@@ -37,7 +37,7 @@ const OutdoorMemberships = () => {
   // Load all outdoor memberships from API (for stats)
   const loadAllOutdoorMembers = async () => {
     try {
-      const response = await authService.getOutdoorMembers({
+      const response = await membershipService.getOutdoorMembers({
         page: 1,
         limit: 1000
       });
@@ -57,7 +57,7 @@ const OutdoorMemberships = () => {
       setLoading(true);
       setError(null);
       
-      const response = await authService.getOutdoorMembers({
+      const response = await membershipService.getOutdoorMembers({
         search: searchTerm,
         status: filterStatus !== 'all' ? filterStatus : undefined,
         page: page,
@@ -92,7 +92,7 @@ const OutdoorMemberships = () => {
   // Load membership statistics
   const loadStats = async () => {
     try {
-      const response = await authService.getOutdoorMembershipStats();
+      const response = await membershipService.getOutdoorMembershipStats();
       if (response.success) {
         setStats(response.data);
       }
@@ -104,7 +104,7 @@ const OutdoorMemberships = () => {
   // Load rate cards
   const loadRateCards = async () => {
     try {
-      const response = await authService.getOutdoorRateCards();
+      const response = await membershipService.getOutdoorRateCards();
       if (response.success) {
         setRateCards(response.data);
       }
@@ -152,7 +152,7 @@ const OutdoorMemberships = () => {
   // Handle session usage (check-in)
   const handleUseSession = async (membershipId, location = '') => {
     try {
-      const response = await authService.useSession(membershipId, { location });
+      const response = await membershipService.useSession(membershipId, { location });
       if (response.success) {
         showToast(response.message, 'success');
         // Refresh the membership list
@@ -171,7 +171,7 @@ const OutdoorMemberships = () => {
     }
     
     try {
-      const response = await authService.deleteOutdoorMember(memberId);
+      const response = await membershipService.deleteOutdoorMember(memberId);
       if (response.success) {
         showToast(response.message, 'success');
         // Refresh the member list
@@ -199,7 +199,7 @@ const OutdoorMemberships = () => {
       const member = members.find(m => m.id === memberId);
       if (member) {
         const updatedData = { ...member, status: 'suspended' };
-        const response = await authService.updateOutdoorMember(memberId, updatedData);
+        const response = await membershipService.updateOutdoorMember(memberId, updatedData);
         if (response.success) {
           showToast(`Member has been suspended`, 'warning');
           loadOutdoorMembers();
@@ -213,7 +213,7 @@ const OutdoorMemberships = () => {
 
   const handleAddOutdoorMember = async (memberData) => {
     try {
-      const response = await authService.createOutdoorMember(memberData);
+      const response = await membershipService.createOutdoorMember(memberData);
       if (response.success) {
         showToast('Outdoor member added successfully!', 'success');
         setShowAddMemberModal(false);
@@ -285,28 +285,6 @@ const OutdoorMemberships = () => {
     return planName || `${sessions} Sessions/Week - KES ${fee}`;
   };
 
-  // Location mapping function
-  const getLocationDisplayName = (locationValue) => {
-    const locationMap = {
-      'arboretum': 'Arboretum',
-      'boxwood': 'Boxwood', 
-      'botanical': 'Botanical',
-      'karura': 'Karura',
-      'sagret': 'Sagret',
-      'mushroom': 'Mushroom',
-      'loreto': 'PCEA Loreto',
-      '1': 'Arboretum',
-      '2': 'Boxwood',
-      '3': 'Botanical', 
-      '4': 'Karura',
-      '5': 'Sagret',
-      '6': 'Mushroom',
-      '7': 'PCEA Loreto'
-    };
-    
-    return locationMap[locationValue] || locationValue || 'Not specified';
-  };
-
   // Transform API data to match component expectations
   const transformMemberData = (apiMembership) => {
     const planDisplayName = getPlanDisplayName(
@@ -331,7 +309,7 @@ const OutdoorMemberships = () => {
       planType: planDisplayName,
       amount: apiMembership.weekly_fee,
       paymentStatus: apiMembership.payment_status,
-      location: getLocationDisplayName(apiMembership.location),
+      location: apiMembership.location_name,
       sessionsPerWeek: apiMembership.sessions_per_week,
       totalSessionsAllowed: apiMembership.total_sessions_allowed,
       sessionsUsed: apiMembership.sessions_used,
@@ -481,12 +459,20 @@ const OutdoorMemberships = () => {
                     {members.map((member) => (
                       <tr key={member.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {member.firstName} {member.lastName}
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10">
+                              <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
+                                <span className="text-sm font-medium text-white">
+                                  {member.firstName?.charAt(0)?.toUpperCase()}{member.lastName?.charAt(0)?.toUpperCase()}
+                                </span>
+                              </div>
                             </div>
-                            <div className="text-sm text-gray-500">{member.email}</div>
-                            <div className="text-xs text-gray-400">{member.id}</div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {member.firstName} {member.lastName}
+                              </div>
+                              <div className="text-sm text-gray-500">{member.email}</div>
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
