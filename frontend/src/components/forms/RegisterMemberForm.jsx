@@ -5,6 +5,7 @@ import { useForm } from '../../hooks/useForm';
 const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoor' }) => {
   const initialValues = {
     first_name: '',
+    other_names: '',
     last_name: '',
     email: '',
     phone: '',
@@ -24,6 +25,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
   const validateMemberForm = (values) => {
     const errors = {};
     
+    // Only validate essential fields: name, phone, and location (for outdoor)
     if (!values.first_name?.trim()) {
       errors.first_name = 'First name is required';
     }
@@ -32,17 +34,16 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
       errors.last_name = 'Last name is required';
     }
     
-    if (values.email?.trim() && !/\S+@\S+\.\S+/.test(values.email)) {
-      errors.email = 'Email is invalid';
-    }
-    
     if (!values.phone?.trim()) {
       errors.phone = 'Phone number is required';
     }
     
-    // Emergency contact and phone are now optional
-    // Blood group is also optional (no validation needed)
+    // Email validation only if provided (optional)
+    if (values.email?.trim() && !/\S+@\S+\.\S+/.test(values.email)) {
+      errors.email = 'Email is invalid';
+    }
     
+    // Plan type validation (still needed for system to work)
     if (values.membershipType === 'indoor' && !values.planType) {
       errors.planType = 'Plan type is required for indoor membership';
     }
@@ -57,6 +58,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
   const handleFormSubmit = async (values) => {
     const memberData = {
       first_name: values.first_name,
+      other_names: values.other_names,
       last_name: values.last_name,
       email: values.email,
       phone: values.phone,
@@ -152,6 +154,23 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
             {errors.first_name && <p className="text-red-500 text-xs mt-1">{errors.first_name}</p>}
           </div>
 
+          <div>
+            <label htmlFor="other_names" className="block text-sm font-medium text-gray-700 mb-1">
+              Other Names
+            </label>
+            <input
+              type="text"
+              id="other_names"
+              name="other_names"
+              value={formData.other_names}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter other names (optional)"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4">
           <div>
             <label htmlFor="last_name" className="block text-sm font-medium text-gray-700 mb-1">
               Last Name *
@@ -326,11 +345,14 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
                 <option value="">Select a location</option>
                 <option value="arboretum">Arboretum</option>
                 <option value="boxwood">Boxwood</option>
-                <option value="botanical">Botanical</option>
                 <option value="karura">Karura</option>
                 <option value="sagret">Sagret</option>
                 <option value="mushroom">Mushroom</option>
-                <option value="loreto">PCEA Loreto</option>
+                <option value="pcea_loreto">PCEA Loreto</option>
+                <option value="bethany">Bethany</option>
+                <option value="5star">5Star</option>
+                <option value="kijani">Kijani</option>
+                <option value="rustique">Rustique</option>
               </select>
               {errors.location && <p className="text-red-500 text-xs mt-1">{errors.location}</p>}
             </div>

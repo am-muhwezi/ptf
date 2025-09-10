@@ -37,6 +37,7 @@ class Member(models.Model):
     
     # Personal information only
     first_name = models.CharField(max_length=100)
+    other_names = models.CharField(max_length=200, blank=True, null=True)
     last_name = models.CharField(max_length=100)
     email = models.EmailField(unique=True, blank=True, null=True)
     phone = models.CharField(max_length=15, blank=True, null=True)
@@ -79,10 +80,14 @@ class Member(models.Model):
         super().save(*args, **kwargs)
     
     def __str__(self):
+        if self.other_names:
+            return f"{self.first_name} {self.other_names} {self.last_name}"
         return f"{self.first_name} {self.last_name}"
 
     @property
     def full_name(self):
+        if self.other_names:
+            return f"{self.first_name} {self.other_names} {self.last_name}"
         return f"{self.first_name} {self.last_name}"
 
     def update_visit_count(self):

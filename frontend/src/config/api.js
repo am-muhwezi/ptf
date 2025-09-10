@@ -81,14 +81,13 @@ export const API_ENDPOINTS = {
 // Create axios instance with default config
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000, // ✅ FIXED: Increased timeout for slower connections
+  timeout: 8000,
   headers: {
     'Content-Type': 'application/json',
   },
   withCredentials: true, // Include credentials for CORS requests
 });
 
-// ✅ FIXED: Enhanced request interceptor with better token handling
 apiClient.interceptors.request.use(
   (config) => {
     // Add auth token if available

@@ -203,7 +203,7 @@ def get_dashboard_summary():
     """
     # Get all individual statistics
     member_stats = get_member_statistics()
-    membership_stats = get_membership_statistics()
+    membership_stats = get_dashboard_statistics()
     attendance_today = get_attendance_today()
     weekly_attendance = get_weekly_attendance()
     booking_stats = get_booking_statistics()
