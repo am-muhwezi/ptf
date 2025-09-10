@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (
-    PaymentMethod, Payment, Invoice, PaymentReminder,
+    PaymentMethod, Payment, PaymentReminder,
     MpesaTransaction, CardTransaction
 )
 
