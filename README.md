@@ -213,6 +213,7 @@ ptf/
 
 ## 🔄 CI/CD Pipeline
 
+
 The application uses Git-based deployment with automatic builds:
 
 1. **Code Push**: Changes pushed to production branch
