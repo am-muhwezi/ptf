@@ -95,11 +95,14 @@ MEMBERSHIP_PLANS = {
 DANCE_LOCATIONS = [
     "arboretum",
     "boxwood",
-    "botanical",
     "karura",
     "sagret",
     "mushroom",
     "pcea_loreto",
+    "bethany",
+    "5star",
+    "kijani",
+    "rustique",
 ]
 
 # Valid blood groups
@@ -113,14 +116,12 @@ def register_member(request):
     """
     try:
         with transaction.atomic():
-            # Validate required fields
+            # Validate required fields - simplified to only essential gym data
             required_fields = [
                 "first_name",
                 "last_name", 
                 "phone",
                 "membership_type",
-                "emergency_contact_name",
-                "emergency_contact_phone",
             ]
 
             for field in required_fields:
@@ -185,13 +186,15 @@ def register_member(request):
                         status=400,
                     )
 
-            # Validate blood group if provided
+            # Validate blood group if provided, default to "nil"
             blood_group = request.data.get("blood_group")
-            if blood_group and blood_group not in BLOOD_GROUPS:
+            if not blood_group or blood_group == "":
+                blood_group = "nil"
+            elif blood_group not in BLOOD_GROUPS + ["nil"]:
                 return Response(
                     {
                         "error": "Invalid blood group",
-                        "valid_blood_groups": BLOOD_GROUPS,
+                        "valid_blood_groups": BLOOD_GROUPS + ["nil"],
                     },
                     status=400,
                 )
@@ -214,17 +217,28 @@ def register_member(request):
                 )
 
             # 1. CREATE MEMBER with all collected information
+            # Handle empty date_of_birth (convert empty string to None)
+            date_of_birth = request.data.get("date_of_birth")
+            if date_of_birth == "":
+                date_of_birth = None
+            
+            # Handle empty email (convert empty string to None for unique constraint)
+            email = request.data.get("email")
+            if email == "":
+                email = None
+            
             member_data = {
                 "first_name": request.data["first_name"],
+                "other_names": request.data.get("other_names"),
                 "last_name": request.data["last_name"],
                 "phone": phone,
-                "email": request.data.get("email"),
+                "email": email,
                 "id_passport": id_passport,
                 "blood_group": blood_group,
-                "date_of_birth": request.data.get("date_of_birth"),
+                "date_of_birth": date_of_birth,
                 "address": request.data.get("physical_address"),
-                "emergency_contact": request.data["emergency_contact_name"],
-                "emergency_phone": request.data["emergency_contact_phone"],
+                "emergency_contact": request.data.get("emergency_contact_name"),
+                "emergency_phone": request.data.get("emergency_contact_phone"),
                 "medical_conditions": request.data.get("medical_conditions"),
                 "status": "active",
             }
