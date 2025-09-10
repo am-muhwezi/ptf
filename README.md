@@ -232,7 +232,7 @@ The application uses Git-based deployment with automatic builds:
 
 For technical support or deployment issues:
 - Repository: `am-muhwezi/ptf`
-- Contact: `contact@paulstropicalfitness.fit`
+- Contact: `admin@paulstropicalfitness.fit`
 
 ## 🔗 Quick Links
 
