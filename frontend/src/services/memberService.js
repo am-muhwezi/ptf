@@ -24,11 +24,34 @@ export const memberService = {
       console.log('Error data received:', errorData);
       
       if (errorData) {
-        // Create an error with the backend message
-        const message = errorData.message || errorData.error || 'Failed to create member';
-        console.log('Creating error with message:', message);
+        let userFriendlyMessage = '';
+        const rawError = errorData.message || errorData.error || '';
         
-        const customError = new Error(message);
+        // Convert specific backend errors to user-friendly messages
+        if (rawError.includes('UNIQUE constraint failed: members_member.email')) {
+          userFriendlyMessage = 'This email address is already registered. Please use a different email address.';
+        } else if (rawError.includes('UNIQUE constraint failed: members_member.phone')) {
+          userFriendlyMessage = 'This phone number is already registered. Please use a different phone number.';
+        } else if (rawError.includes('UNIQUE constraint failed: members_member.id_passport')) {
+          userFriendlyMessage = 'This ID/Passport number is already registered. Please check the number.';
+        } else if (rawError.includes('invalid date format')) {
+          userFriendlyMessage = 'Date of birth must be in YYYY-MM-DD format or left empty.';
+        } else if (rawError.includes('NOT NULL constraint failed')) {
+          userFriendlyMessage = 'A required field is missing. Please check all required fields.';
+        } else if (rawError.includes('membership_type is required')) {
+          userFriendlyMessage = 'Please select a membership type (Indoor or Outdoor).';
+        } else if (rawError.includes('plan_type is required')) {
+          userFriendlyMessage = 'Please select a plan type for your membership.';
+        } else if (rawError.includes('Dance class location is required')) {
+          userFriendlyMessage = 'Please select a dance class location for outdoor membership.';
+        } else {
+          // Use the backend message if we don't have a specific translation
+          userFriendlyMessage = rawError || 'Failed to create member';
+        }
+        
+        console.log('Creating error with user-friendly message:', userFriendlyMessage);
+        
+        const customError = new Error(userFriendlyMessage);
         
         // Attach field errors for form field highlighting
         if (errorData.field_errors || errorData.details) {
@@ -40,7 +63,7 @@ export const memberService = {
       }
       
       // Fallback error
-      throw new Error('Failed to create member - unknown error');
+      throw new Error('Failed to create member - please try again or contact support');
     }
   },
 

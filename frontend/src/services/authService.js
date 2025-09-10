@@ -225,6 +225,42 @@ const getRegistrationErrorMessage = (error) => {
   if (error.response?.status === 400) {
     const errorData = error.response.data;
     
+    // Handle specific validation errors with detailed messages
+    if (errorData.error === 'VALIDATION_FAILED' && errorData.details) {
+      const details = errorData.details;
+      
+      // Check for specific field validation errors
+      if (details.username) {
+        const usernameError = Array.isArray(details.username) ? details.username[0] : details.username;
+        return `👤 Username error: ${usernameError}`;
+      }
+      
+      if (details.first_name) {
+        const firstNameError = Array.isArray(details.first_name) ? details.first_name[0] : details.first_name;
+        return `👤 First name error: ${firstNameError}`;
+      }
+      
+      if (details.last_name) {
+        const lastNameError = Array.isArray(details.last_name) ? details.last_name[0] : details.last_name;
+        return `👤 Last name error: ${lastNameError}`;
+      }
+      
+      if (details.email) {
+        const emailError = Array.isArray(details.email) ? details.email[0] : details.email;
+        return `📧 Email error: ${emailError}`;
+      }
+      
+      if (details.password) {
+        const passwordError = Array.isArray(details.password) ? details.password[0] : details.password;
+        return `🔒 Password error: ${passwordError}`;
+      }
+      
+      // Return the first validation error found
+      const firstField = Object.keys(details)[0];
+      const firstError = Array.isArray(details[firstField]) ? details[firstField][0] : details[firstField];
+      return `❌ ${firstField.replace('_', ' ')}: ${firstError}`;
+    }
+    
     if (errorData.email) {
       const emailError = Array.isArray(errorData.email) ? errorData.email[0] : errorData.email;
       if (emailError.includes('already exists') || emailError.includes('unique')) {
@@ -246,7 +282,8 @@ const getRegistrationErrorMessage = (error) => {
     }
     
     if (errorData.username) {
-      return "👤 This username is already taken. Please try a different one.";
+      const usernameError = Array.isArray(errorData.username) ? errorData.username[0] : errorData.username;
+      return `👤 Username error: ${usernameError}`;
     }
     
     if (errorData.non_field_errors) {
