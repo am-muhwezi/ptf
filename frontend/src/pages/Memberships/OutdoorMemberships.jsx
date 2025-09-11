@@ -34,20 +34,20 @@ const OutdoorMemberships = () => {
   const [hasNext, setHasNext] = useState(false);
   const [hasPrevious, setHasPrevious] = useState(false);
 
-  // Load all outdoor memberships from API (for stats)
+  // Load sample outdoor memberships for stats
   const loadAllOutdoorMembers = async () => {
     try {
       const response = await membershipService.getOutdoorMembers({
         page: 1,
-        limit: 1000
+        limit: 50
       });
       
-      if (response.success) {
+      if (response.success && response.data) {
         const transformedMembers = response.data.map(transformMemberData);
         setAllMembers(transformedMembers);
       }
     } catch (err) {
-      console.error('Failed to load all members for stats:', err);
+      console.error('Failed to load outdoor members for stats:', err);
     }
   };
 

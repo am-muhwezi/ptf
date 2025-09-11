@@ -129,14 +129,14 @@ export const useMembers = (initialParams = {}) => {
   );
 
   const { refetch: refetchStats } = useApi(
-    () => memberService.getMembers({ limit: 1000 }),
+    () => memberService.getMembers({ page: 1, limit: 50 }),
     [],
     {
       immediate: true,
       onSuccess: (result) => {
-        const members = result.results || result;
+        const members = result.data || result.results || result;
         const calculatedStats = {
-          total_members: members.length,
+          total_members: result.pagination?.total_count || members.length,
           active_members: members.filter(m => m.status === 'active').length,
           inactive_members: members.filter(m => m.status === 'inactive').length,
           indoor_members: members.filter(m => m.membership_type === 'indoor').length,

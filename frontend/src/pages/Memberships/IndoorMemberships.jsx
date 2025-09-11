@@ -35,20 +35,20 @@ const IndoorMemberships = () => {
   const [hasNext, setHasNext] = useState(false);
   const [hasPrevious, setHasPrevious] = useState(false);
 
-  // Load all indoor memberships from API (for stats)
+  // Load sample indoor memberships for stats
   const loadAllIndoorMembers = async () => {
     try {
       const response = await authService.getIndoorMembers({
         page: 1,
-        limit: 1000
+        limit: 50
       });
       
-      if (response.success) {
+      if (response.success && response.data) {
         const transformedMembers = response.data.map(transformMemberData);
         setAllMembers(transformedMembers);
       }
     } catch (err) {
-      console.error('Failed to load all indoor members for stats:', err);
+      console.error('Failed to load indoor members for stats:', err);
     }
   };
 
@@ -356,10 +356,10 @@ const IndoorMemberships = () => {
                 <p className="text-red-600">{error}</p>
                 <Button 
                   variant="primary" 
-                  onClick={refetch}
+                  onClick={() => window.location.reload()}
                   className="mt-4"
                 >
-                  Retry
+                  Refresh Page
                 </Button>
               </div>
             </div>

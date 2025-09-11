@@ -85,29 +85,24 @@ const Members = () => {
     }));
   };
 
-  // Fetch all members for stats (separate from paginated data)
+  // Fetch sample of members for stats calculation
   const fetchAllMembersForStats = useCallback(async () => {
     try {
-      // Fetch all members without pagination for stats calculation
-      const allMembersResponse = await memberService.getMembers({ limit: 1000 }); // Large limit to get all
-      let allMembersData = [];
+      // Get first page and use total count from pagination for stats
+      const allMembersResponse = await memberService.getMembers({ page: 1, limit: 50 });
+      let membersData = [];
       
       if (allMembersResponse.data) {
-        // New uniform format: {success: true, data: [...], count: N}
-        allMembersData = allMembersResponse.data;
-      } else if (allMembersResponse.members) {
-        // Old format: {success: true, members: [...], count: N}
-        allMembersData = allMembersResponse.members;
+        membersData = allMembersResponse.data;
       } else if (allMembersResponse.results) {
-        // Standard pagination format
-        allMembersData = allMembersResponse.results;
+        membersData = allMembersResponse.results;
       } else {
-        allMembersData = allMembersResponse;
+        membersData = allMembersResponse;
       }
       
-      // Process all members data for stats
-      const processedAllMembers = processMembers(allMembersData);
-      setCombinedData(processedAllMembers);
+      // Process members data for stats
+      const processedMembers = processMembers(membersData);
+      setCombinedData(processedMembers);
       
     } catch (err) {
       console.error('Error fetching all members for stats:', err);

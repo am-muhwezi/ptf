@@ -3,150 +3,192 @@ from rest_framework.response import Response
 from django.db.models import Q
 from .models import Member
 from memberships.models import Membership
+from ptf.pagination import PaginationHelper, SearchPaginationHelper
+
+
+def serialize_member_data(member):
+    """
+    Serialize member data with membership info for consistent API responses.
+    """
+    active_membership = member.memberships.filter(status="active").first()
+
+    # Base member information - matching the model fields exactly
+    member_info = {
+        "id": member.id,
+        "member_id": f"PTF{member.id:04d}",
+        "first_name": member.first_name,
+        "last_name": member.last_name,
+        "full_name": member.full_name,  # Use the model property
+        "email": member.email,
+        "phone": member.phone,
+        "address": member.address,
+        "date_of_birth": (
+            member.date_of_birth.isoformat() if member.date_of_birth else None
+        ),
+        "id_passport": member.id_passport,
+        "blood_group": member.blood_group,
+        "emergency_contact": member.emergency_contact,
+        "emergency_phone": member.emergency_phone,
+        "medical_conditions": member.medical_conditions,
+        "status": member.status,
+        "registration_date": member.registration_date.isoformat(),
+        "last_visit": (
+            member.last_visit.isoformat() if member.last_visit else None
+        ),
+        "total_visits": member.total_visits,
+    }
+
+    # Add membership information in nested structure
+    if active_membership:
+        member_info["membership"] = {
+            "type": active_membership.plan.membership_type,
+            "plan_name": active_membership.plan.plan_name,
+            "plan_type": (
+                active_membership.plan.plan_type
+                if hasattr(active_membership.plan, "plan_type")
+                else "monthly"
+            ),
+            "amount": (
+                float(active_membership.plan.weekly_fee) if active_membership.plan.weekly_fee > 0
+                else float(active_membership.plan.monthly_fee) if active_membership.plan.monthly_fee > 0  
+                else float(active_membership.plan.per_session_fee)
+            ),
+            "payment_status": active_membership.payment_status,
+            "start_date": (
+                active_membership.start_date.isoformat()
+                if active_membership.start_date
+                else None
+            ),
+            "end_date": (
+                active_membership.end_date.isoformat()
+                if active_membership.end_date
+                else None
+            ),
+            "sessions_remaining": active_membership.total_sessions_allowed
+            - active_membership.sessions_used,
+        }
+        # Add flat fields for backward compatibility
+        member_info.update(
+            {
+                "membership_type": active_membership.plan.membership_type,
+                "plan_type": active_membership.plan.plan_name,
+                "plan_name": active_membership.plan.plan_name,
+                "amount": (
+                float(active_membership.plan.weekly_fee) if active_membership.plan.weekly_fee > 0
+                else float(active_membership.plan.monthly_fee) if active_membership.plan.monthly_fee > 0  
+                else float(active_membership.plan.per_session_fee)
+            ),
+                "payment_status": active_membership.payment_status,
+                "sessions_remaining": active_membership.total_sessions_allowed
+                - active_membership.sessions_used,
+            }
+        )
+    else:
+        member_info["membership"] = None
+        # Add flat fields with defaults for backward compatibility
+        member_info.update(
+            {
+                "membership_type": "unknown",
+                "plan_type": None,
+                "plan_name": None,
+                "amount": 0.0,
+                "payment_status": "pending",
+                "sessions_remaining": 0,
+            }
+        )
+
+    # Add physical profile for indoor members
+    if hasattr(member, "physical_profile"):
+        profile = member.physical_profile
+        member_info["physical_profile"] = {
+            "height": profile.height,
+            "weight": profile.weight,
+            "bmi": profile.bmi,
+            "fitness_level": profile.fitness_level,
+            "short_term_goals": profile.short_term_goals,
+            "long_term_goals": profile.long_term_goals,
+        }
+        # Add flat fields for backward compatibility
+        member_info.update(
+            {
+                "height": profile.height,
+                "weight": profile.weight,
+                "bmi": profile.bmi,
+                "fitness_level": profile.fitness_level,
+                "short_term_goals": profile.short_term_goals,
+                "long_term_goals": profile.long_term_goals,
+            }
+        )
+    else:
+        member_info["physical_profile"] = None
+
+    return member_info
 
 
 @api_view(["GET"])
 def list_all_members(request):
     """
-    DEV NOTE: This shows ALL members with their membership info
+    List all members with their membership info, with pagination and search support.
     """
     try:
-        members = Member.objects.select_related().prefetch_related("memberships__plan")
-
-        members_data = []
-        for member in members:
-            active_membership = member.memberships.filter(status="active").first()
-
-            # Base member information - matching the model fields exactly
-            member_info = {
-                "id": member.id,
-                "member_id": f"PTF{member.id:04d}",
-                "first_name": member.first_name,
-                "last_name": member.last_name,
-                "full_name": member.full_name,  # Use the model property
-                "email": member.email,
-                "phone": member.phone,
-                "address": member.address,
-                "date_of_birth": (
-                    member.date_of_birth.isoformat() if member.date_of_birth else None
-                ),
-                "id_passport": member.id_passport,
-                "blood_group": member.blood_group,
-                "emergency_contact": member.emergency_contact,
-                "emergency_phone": member.emergency_phone,
-                "medical_conditions": member.medical_conditions,
-                "status": member.status,
-                "registration_date": member.registration_date.isoformat(),
-                "last_visit": (
-                    member.last_visit.isoformat() if member.last_visit else None
-                ),
-                "total_visits": member.total_visits,
-            }
-
-            # Add membership information in nested structure
-            if active_membership:
-                member_info["membership"] = {
-                    "type": active_membership.plan.membership_type,
-                    "plan_name": active_membership.plan.plan_name,
-                    "plan_type": (
-                        active_membership.plan.plan_type
-                        if hasattr(active_membership.plan, "plan_type")
-                        else "monthly"
-                    ),
-                    "amount": (
-                        float(active_membership.plan.weekly_fee) if active_membership.plan.weekly_fee > 0
-                        else float(active_membership.plan.monthly_fee) if active_membership.plan.monthly_fee > 0  
-                        else float(active_membership.plan.per_session_fee)
-                    ),
-                    "payment_status": active_membership.payment_status,
-                    "start_date": (
-                        active_membership.start_date.isoformat()
-                        if active_membership.start_date
-                        else None
-                    ),
-                    "end_date": (
-                        active_membership.end_date.isoformat()
-                        if active_membership.end_date
-                        else None
-                    ),
-                    "sessions_remaining": active_membership.total_sessions_allowed
-                    - active_membership.sessions_used,
-                }
-                # Add flat fields for backward compatibility
-                member_info.update(
-                    {
-                        "membership_type": active_membership.plan.membership_type,
-                        "plan_type": active_membership.plan.plan_name,
-                        "plan_name": active_membership.plan.plan_name,
-                        "amount": (
-                        float(active_membership.plan.weekly_fee) if active_membership.plan.weekly_fee > 0
-                        else float(active_membership.plan.monthly_fee) if active_membership.plan.monthly_fee > 0  
-                        else float(active_membership.plan.per_session_fee)
-                    ),
-                        "payment_status": active_membership.payment_status,
-                        "sessions_remaining": active_membership.total_sessions_allowed
-                        - active_membership.sessions_used,
-                    }
-                )
-            else:
-                member_info["membership"] = None
-                # Add flat fields with defaults for backward compatibility
-                member_info.update(
-                    {
-                        "membership_type": "unknown",
-                        "plan_type": None,
-                        "plan_name": None,
-                        "amount": 0.0,
-                        "payment_status": "pending",
-                        "sessions_remaining": 0,
-                    }
-                )
-
-            # Add physical profile for indoor members
-            if hasattr(member, "physical_profile"):
-                profile = member.physical_profile
-                member_info["physical_profile"] = {
-                    "height": profile.height,
-                    "weight": profile.weight,
-                    "bmi": profile.bmi,
-                    "fitness_level": profile.fitness_level,
-                    "short_term_goals": profile.short_term_goals,
-                    "long_term_goals": profile.long_term_goals,
-                }
-                # Add flat fields for backward compatibility
-                member_info.update(
-                    {
-                        "height": profile.height,
-                        "weight": profile.weight,
-                        "bmi": profile.bmi,
-                        "fitness_level": profile.fitness_level,
-                        "short_term_goals": profile.short_term_goals,
-                        "long_term_goals": profile.long_term_goals,
-                    }
-                )
-            else:
-                member_info["physical_profile"] = None
-
-            members_data.append(member_info)
-
-        return Response(
-            {
-                "success": True,
-                "data": members_data,
-                "count": len(members_data),
-                "message": f"Retrieved {len(members_data)} members successfully",
-            }
+        # Get queryset with optimized queries
+        queryset = Member.objects.select_related().prefetch_related("memberships__plan")
+        
+        # Define searchable fields
+        search_fields = ['first_name', 'last_name', 'email', 'phone', 'member_id']
+        
+        # Use pagination helper with search functionality
+        return SearchPaginationHelper.search_and_paginate(
+            request=request,
+            queryset=queryset,
+            search_fields=search_fields,
+            data_serializer_func=serialize_member_data,
+            success_message=None,  # Will auto-generate
+            default_page_size=20
         )
 
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
 
+def serialize_indoor_member_data(member):
+    """Serialize indoor member data for API responses."""
+    membership = member.memberships.filter(status="active").first()
+
+    member_info = {
+        "id": member.id,
+        "name": f"{member.first_name} {member.last_name}",
+        "phone": member.phone,
+        "email": member.email,
+        "plan_name": membership.plan.plan_name if membership else None,
+        "payment_status": membership.payment_status if membership else None,
+        "sessions_remaining": (
+            (membership.total_sessions_allowed - membership.sessions_used)
+            if membership
+            else 0
+        ),
+        "has_physical_profile": hasattr(member, "physical_profile"),
+    }
+
+    # Add physical profile info if exists
+    if hasattr(member, "physical_profile"):
+        profile = member.physical_profile
+        member_info.update(
+            {
+                "height": profile.height,
+                "weight": profile.weight,
+                "fitness_level": profile.fitness_level,
+            }
+        )
+
+    return member_info
+
+
 @api_view(["GET"])
 def list_indoor_members(request):
-    """List only indoor members"""
+    """List only indoor members with pagination and search"""
     try:
-        indoor_members = (
+        queryset = (
             Member.objects.filter(
                 memberships__plan__membership_type="indoor",
                 memberships__status="active",
@@ -156,55 +198,57 @@ def list_indoor_members(request):
             .prefetch_related("memberships__plan", "physical_profile")
         )
 
-        members_data = []
-        for member in indoor_members:
-            membership = member.memberships.filter(status="active").first()
-
-            member_info = {
-                "id": member.id,
-                "name": f"{member.first_name} {member.last_name}",
-                "phone": member.phone,
-                "email": member.email,
-                "plan_name": membership.plan.plan_name if membership else None,
-                "payment_status": membership.payment_status if membership else None,
-                "sessions_remaining": (
-                    (membership.total_sessions_allowed - membership.sessions_used)
-                    if membership
-                    else 0
-                ),
-                "has_physical_profile": hasattr(member, "physical_profile"),
-            }
-
-            # Add physical profile info if exists
-            if hasattr(member, "physical_profile"):
-                profile = member.physical_profile
-                member_info.update(
-                    {
-                        "height": profile.height,
-                        "weight": profile.weight,
-                        "fitness_level": profile.fitness_level,
-                    }
-                )
-
-            members_data.append(member_info)
-
-        return Response(
-            {
-                "success": True,
-                "indoor_members": members_data,
-                "count": len(members_data),
-            }
+        search_fields = ['first_name', 'last_name', 'email', 'phone']
+        
+        response = SearchPaginationHelper.search_and_paginate(
+            request=request,
+            queryset=queryset,
+            search_fields=search_fields,
+            data_serializer_func=serialize_indoor_member_data,
+            success_message="Retrieved indoor members successfully",
+            default_page_size=20
         )
+        
+        # Add backward compatibility field
+        response.data['indoor_members'] = response.data['data']
+        
+        return response
 
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
 
+def serialize_outdoor_member_data(member):
+    """Serialize outdoor member data for API responses."""
+    membership = member.memberships.filter(status="active").first()
+
+    member_info = {
+        "id": member.id,
+        "name": f"{member.first_name} {member.last_name}",
+        "phone": member.phone,
+        "email": member.email,
+        "plan_name": membership.plan.plan_name if membership else None,
+        "payment_status": membership.payment_status if membership else None,
+        "sessions_remaining": (
+            (membership.total_sessions_allowed - membership.sessions_used)
+            if membership
+            else 0
+        ),
+        "location": (
+            membership.location.name
+            if membership and membership.location
+            else None
+        ),
+    }
+
+    return member_info
+
+
 @api_view(["GET"])
 def list_outdoor_members(request):
-    """List only outdoor members"""
+    """List only outdoor members with pagination and search"""
     try:
-        outdoor_members = (
+        queryset = (
             Member.objects.filter(
                 memberships__plan__membership_type="outdoor",
                 memberships__status="active",
@@ -214,38 +258,21 @@ def list_outdoor_members(request):
             .prefetch_related("memberships__plan")
         )
 
-        members_data = []
-        for member in outdoor_members:
-            membership = member.memberships.filter(status="active").first()
-
-            member_info = {
-                "id": member.id,
-                "name": f"{member.first_name} {member.last_name}",
-                "phone": member.phone,
-                "email": member.email,
-                "plan_name": membership.plan.plan_name if membership else None,
-                "payment_status": membership.payment_status if membership else None,
-                "sessions_remaining": (
-                    (membership.total_sessions_allowed - membership.sessions_used)
-                    if membership
-                    else 0
-                ),
-                "location": (
-                    membership.location.name
-                    if membership and membership.location
-                    else None
-                ),
-            }
-
-            members_data.append(member_info)
-
-        return Response(
-            {
-                "success": True,
-                "outdoor_members": members_data,
-                "count": len(members_data),
-            }
+        search_fields = ['first_name', 'last_name', 'email', 'phone']
+        
+        response = SearchPaginationHelper.search_and_paginate(
+            request=request,
+            queryset=queryset,
+            search_fields=search_fields,
+            data_serializer_func=serialize_outdoor_member_data,
+            success_message="Retrieved outdoor members successfully",
+            default_page_size=20
         )
+        
+        # Add backward compatibility field
+        response.data['outdoor_members'] = response.data['data']
+        
+        return response
 
     except Exception as e:
         return Response({"error": str(e)}, status=500)
