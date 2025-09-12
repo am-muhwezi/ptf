@@ -3,7 +3,7 @@ name: CI - Backend & Frontend
 on:
   push:
     branches:
-      - main
+      - prod
 
 jobs:
   test-backend:
