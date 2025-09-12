@@ -21,6 +21,37 @@ export const membershipService = {
     }
   },
 
+  // Indoor Members (alias for compatibility)
+  getIndoorMembers: async (params = {}) => {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.memberships.indoor, { params });
+      
+      // Transform to expected format
+      return {
+        success: true,
+        data: response.data.results || response.data,
+        count: response.data.count || 0,
+        next: response.data.next,
+        previous: response.data.previous
+      };
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch indoor members');
+    }
+  },
+
+  // Indoor Membership Stats
+  getIndoorMembershipStats: async () => {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.memberships.indoor_stats);
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch indoor membership stats');
+    }
+  },
+
   // Outdoor Memberships
   getOutdoorMemberships: async (params = {}) => {
     try {
