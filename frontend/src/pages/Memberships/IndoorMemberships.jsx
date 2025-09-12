@@ -9,6 +9,7 @@ import UpdateMemberProfileForm from '../../components/forms/UpdateMemberProfileF
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import authService from '../../services/authService';
 import { memberService } from '../../services/memberService';
+import membershipService from '../../services/membershipService';
 
 const IndoorMemberships = () => {
   const [allMembers, setAllMembers] = useState([]);
@@ -38,7 +39,7 @@ const IndoorMemberships = () => {
   // Load sample indoor memberships for stats
   const loadAllIndoorMembers = async () => {
     try {
-      const response = await authService.getIndoorMembers({
+      const response = await membershipService.getIndoorMembers({
         page: 1,
         limit: 50
       });
@@ -60,7 +61,7 @@ const IndoorMemberships = () => {
       }
       setError(null);
       
-      const response = await authService.getIndoorMembers({
+      const response = await membershipService.getIndoorMembers({
         search: searchTerm,
         status: filterStatus !== 'all' ? filterStatus : undefined,
         page: page,
@@ -96,7 +97,7 @@ const IndoorMemberships = () => {
   // Load membership statistics
   const loadStats = async () => {
     try {
-      const response = await authService.getIndoorMembershipStats();
+      const response = await membershipService.getIndoorMembershipStats();
       if (response.success) {
         setStats(response.data);
       }
