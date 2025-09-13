@@ -1,6 +1,34 @@
 import apiClient, { API_ENDPOINTS } from '../config/api';
 
 export const memberService = {
+  // Get members summary stats (fast, lightweight - following dashboard pattern)
+  getSummary: async () => {
+    try {
+      const response = await apiClient.get('/summary/');
+      return {
+        success: true,
+        stats: response.data
+      };
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch members summary');
+    }
+  },
+
+  // Get stats only from hybrid endpoint
+  getStatsOnly: async () => {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.members.list, {
+        params: { stats: 'true' }
+      });
+      return {
+        success: true,
+        stats: response.data
+      };
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch members stats');
+    }
+  },
+
   // Get all members with pagination
   getMembers: async (params = {}) => {
     try {
