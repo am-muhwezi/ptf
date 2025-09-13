@@ -1,5 +1,5 @@
 // frontend/src/pages/Members/index.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
 import Card from '../../components/ui/Card';
@@ -12,14 +12,11 @@ import PaymentReminder from '../../components/ui/PaymentReminder';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import UpdateMemberProfileForm from '../../components/forms/UpdateMemberProfileForm';
 import { memberService } from '../../services/memberService';
-import { membershipService } from '../../services/membershipService';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 
 const Members = () => {
   // State management
   const [members, setMembers] = useState([]);
-  const [memberships, setMemberships] = useState([]);
-  const [combinedData, setCombinedData] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -30,6 +27,9 @@ const Members = () => {
     indoor_members: 0,
     outdoor_members: 0
   });
+  
+  // Cleanup ref for AbortController
+  const abortControllerRef = useRef(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -41,6 +41,9 @@ const Members = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterMembershipType, setFilterMembershipType] = useState('all');
+  
+  // Refresh trigger for post-operation updates
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Modal states
   const [selectedMember, setSelectedMember] = useState(null);
@@ -68,174 +71,135 @@ const Members = () => {
     return `${firstInitial}${lastInitial}`;
   };
 
-  // Simple data processing since Members API now includes membership_type directly
-  const processMembers = (membersData) => {
-    // Safety check: ensure membersData is an array
-    if (!Array.isArray(membersData)) {
-      console.error('processMembers: Expected array, got:', typeof membersData, membersData);
-      return [];
-    }
-    
-    // Members API now includes membership_type directly, no need for complex combination
-    return membersData.map(member => ({
-      ...member,
-      // membership_type is now included in the member object from the API
-      // Fallback to 'unknown' if not present (for members without memberships)
-      membership_type: member.membership_type || 'unknown'
-    }));
-  };
-
-  // Fetch sample of members for stats calculation
-  const fetchAllMembersForStats = useCallback(async () => {
-    try {
-      // Get first page and use total count from pagination for stats
-      const allMembersResponse = await memberService.getMembers({ page: 1, limit: 50 });
-      let membersData = [];
-      
-      if (allMembersResponse.data) {
-        membersData = allMembersResponse.data;
-      } else if (allMembersResponse.results) {
-        membersData = allMembersResponse.results;
-      } else {
-        membersData = allMembersResponse;
-      }
-      
-      // Process members data for stats
-      const processedMembers = processMembers(membersData);
-      setCombinedData(processedMembers);
-      
-    } catch (err) {
-      console.error('Error fetching all members for stats:', err);
-    }
-  }, []);
-
-  // Fetch members and memberships data (paginated)
-  const fetchMembers = useCallback(async (page = currentPage) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Prepare member params
-      const memberParams = { 
-        page: page,
-        limit: pageSize
-      };
-      if (searchTerm && searchTerm.trim() !== '') memberParams.q = searchTerm;
-      if (filterStatus !== 'all') memberParams.status = filterStatus;
-
-      // Prepare membership params for filtering
-      const membershipParams = {};
-      if (filterMembershipType !== 'all') {
-        membershipParams.membership_type = filterMembershipType;
-      }
-
-      // Fetch members data (now includes membership_type directly)
-      const memberResponse = await memberService.getMembers(memberParams);
-      
-      // Handle member response (uniform structure)
-      let membersData = [];
-      if (memberResponse.data) {
-        // New uniform format: {success: true, data: [...], count: N}
-        membersData = memberResponse.data;
-        setTotalCount(memberResponse.count);
-        setTotalPages(Math.ceil(memberResponse.count / pageSize));
-      } else if (memberResponse.members) {
-        // Old format: {success: true, members: [...], count: N}
-        membersData = memberResponse.members;
-        setTotalCount(memberResponse.count);
-        setTotalPages(Math.ceil(memberResponse.count / pageSize));
-      } else if (memberResponse.results) {
-        // Standard pagination format
-        membersData = memberResponse.results;
-        setTotalCount(memberResponse.count);
-        setTotalPages(Math.ceil(memberResponse.count / pageSize));
-      } else if (Array.isArray(memberResponse)) {
-        membersData = memberResponse;
-        setTotalCount(memberResponse.length);
-        setTotalPages(1);
-      } else {
-        // Handle case where response is a single object or has different structure
-        membersData = [memberResponse];
-        setTotalCount(1);
-        setTotalPages(1);
-      }
-
-      // Process the members data (simple processing since membership_type is included)
-      const processed = processMembers(membersData);
-      
-      // Apply membership type filtering if needed  
-      let filtered = processed;
-      if (filterMembershipType !== 'all') {
-        filtered = processed.filter(member => 
-          member.membership_type === filterMembershipType
-        );
-      }
-
-      setMembers(processed);
-      setFilteredMembers(filtered);
-
-    } catch (err) {
-      setError(err.message);
-      showToast(err.message, 'error');
-      console.error('Error fetching data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentPage, pageSize, searchTerm, filterStatus, filterMembershipType]);
-
-
-  // Initial data fetch
+  // ✅ Unified useEffect pattern - Load members data and calculate stats in one coordinated approach
   useEffect(() => {
-    fetchAllMembersForStats(); // Fetch all members for stats
-    fetchMembers(); // Fetch paginated members for display
-  }, []); // Empty dependency - only run on mount, not on every function change
+    const loadData = async () => {
+      // Cancel any existing request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
 
-  // Handle filter changes
+      // Create new abort controller for this request
+      abortControllerRef.current = new AbortController();
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Prepare member params for paginated display
+        const memberParams = { 
+          page: currentPage,
+          limit: pageSize
+        };
+        if (searchTerm && searchTerm.trim() !== '') memberParams.q = searchTerm;
+        if (filterStatus !== 'all') memberParams.status = filterStatus;
+
+        // Make single API call for both display and stats calculation
+        const response = await memberService.getMembers(memberParams);
+
+        // Only update state if request wasn't aborted
+        if (!abortControllerRef.current?.signal.aborted) {
+          // Handle response for display
+          let membersData = [];
+          let totalMembers = 0;
+          
+          if (response.data) {
+            membersData = response.data;
+            totalMembers = response.count || response.pagination?.total_count || 0;
+            setTotalCount(totalMembers);
+            setTotalPages(Math.ceil(totalMembers / pageSize));
+          } else if (response.results) {
+            membersData = response.results;
+            totalMembers = response.count || membersData.length;
+            setTotalCount(totalMembers);
+            setTotalPages(Math.ceil(totalMembers / pageSize));
+          } else if (Array.isArray(response)) {
+            membersData = response;
+            totalMembers = response.length;
+            setTotalCount(totalMembers);
+            setTotalPages(1);
+          }
+
+          // Process the members data
+          const processedMembers = membersData.map(member => ({
+            ...member,
+            membership_type: member.membership_type || 'unknown'
+          }));
+
+          // Apply membership type filtering if needed  
+          let filtered = processedMembers;
+          if (filterMembershipType !== 'all') {
+            filtered = processedMembers.filter(member => 
+              member.membership_type === filterMembershipType
+            );
+          }
+
+          setMembers(processedMembers);
+          setFilteredMembers(filtered);
+
+          // Calculate stats from current page data and total count
+          // For accurate stats across all pages, we use the total count from API
+          // and estimate distribution based on current page sample
+          const currentPageSample = processedMembers;
+          const sampleSize = currentPageSample.length;
+          
+          if (sampleSize > 0 && totalMembers > 0) {
+            // Calculate percentages from current sample and apply to total
+            const activeRatio = currentPageSample.filter(m => m.status === 'active').length / sampleSize;
+            const inactiveRatio = currentPageSample.filter(m => m.status === 'inactive').length / sampleSize;
+            const indoorRatio = currentPageSample.filter(m => m.membership_type === 'indoor').length / sampleSize;
+            const outdoorRatio = currentPageSample.filter(m => m.membership_type === 'outdoor').length / sampleSize;
+
+            setStats({
+              total_members: totalMembers,
+              active_members: Math.round(totalMembers * activeRatio),
+              inactive_members: Math.round(totalMembers * inactiveRatio),
+              indoor_members: Math.round(totalMembers * indoorRatio),
+              outdoor_members: Math.round(totalMembers * outdoorRatio)
+            });
+          } else {
+            // Fallback for empty data
+            setStats({
+              total_members: totalMembers,
+              active_members: 0,
+              inactive_members: 0,
+              indoor_members: 0,
+              outdoor_members: 0
+            });
+          }
+        }
+      } catch (error) {
+        // Only handle error if request wasn't aborted
+        if (!abortControllerRef.current?.signal.aborted) {
+          console.error('Error loading members data:', error);
+          setError(error.message);
+        }
+      } finally {
+        // Only update loading state if request wasn't aborted
+        if (!abortControllerRef.current?.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadData();
+
+    // Cleanup function
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [currentPage, pageSize, searchTerm, filterStatus, filterMembershipType, refreshTrigger]);
+
+
+  // Handle filter changes - reset to page 1 when filters change
   const handleFilterChange = (filters) => {
-    // This function can be used for additional filter logic if needed
-    // Currently the individual filter state changes handle the updates
+    // Reset to page 1 when filters change - this will trigger the unified useEffect
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    }
   };
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    const delayedSearch = setTimeout(() => {
-      if (searchTerm !== undefined || filterStatus !== undefined || filterMembershipType !== undefined) {
-        setCurrentPage(1);
-        fetchMembers(1); // Consistent with indoor/outdoor pattern
-      }
-    }, 300); // Add debounce like indoor/outdoor pages
-
-    return () => clearTimeout(delayedSearch);
-    // Don't refetch all members for stats when filtering, stats should remain constant
-  }, [searchTerm, filterStatus, filterMembershipType]);
-
-  // Calculate stats from combined data
-  const calculateStats = useCallback(() => {
-    if (combinedData.length === 0) return;
-
-    const total_members = combinedData.length;
-    const active_members = combinedData.filter(m => m.status === 'active').length;
-    const inactive_members = combinedData.filter(m => m.status === 'inactive').length;
-    const indoor_members = combinedData.filter(m => m.membership_type === 'indoor').length;
-    const outdoor_members = combinedData.filter(m => m.membership_type === 'outdoor').length;
-
-    setStats({
-      total_members,
-      active_members,
-      inactive_members,
-      indoor_members,
-      outdoor_members
-    });
-  }, [combinedData]);
-
-  useEffect(() => {
-    calculateStats();
-  }, [calculateStats]);
-
-  // Update filtered members when members change
-  useEffect(() => {
-    setFilteredMembers(members);
-  }, [members]);
 
   // Toast helper functions
   const showToast = (message, type = 'success') => {
@@ -246,22 +210,21 @@ const Members = () => {
     setToast({ show: false, message: '', type: 'success' });
   };
   
-  const refreshData = async () => {
-      await fetchAllMembersForStats(); // Refresh all members for stats
-      await fetchMembers(); // Refresh paginated members for display
-      // Stats will be calculated automatically via useEffect
+  const refreshData = () => {
+    // Trigger refresh by updating the refreshTrigger
+    setRefreshTrigger(prev => prev + 1);
   };
 
   // Pagination handlers
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
-    fetchMembers(newPage);
+    // The unified useEffect will handle the data fetching
   };
 
   const handlePageSizeChange = (newSize) => {
     setPageSize(newSize);
     setCurrentPage(1);
-    fetchMembers(1);
+    // The unified useEffect will handle the data fetching
   };
 
   // Member action handlers
@@ -279,7 +242,7 @@ const Members = () => {
     try {
       await memberService.updateMemberStatus(memberId, newStatus);
       showToast(`Member status updated to ${newStatus}`, 'success');
-      await refreshData();
+      refreshData();
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -290,7 +253,7 @@ const Members = () => {
       const response = await memberService.createMember(memberData);
       showToast(response.message || 'Member registered successfully!', 'success');
       setShowRegisterModal(false);
-      await refreshData();
+      refreshData();
     } catch (error) {
       // Re-throw the error so the form can handle it
       // This preserves the error details for form field errors
@@ -303,7 +266,7 @@ const Members = () => {
       const response = await memberService.updateMemberProfile(selectedMember.id, updatedData);
       showToast(response.message || 'Profile updated successfully', 'success');
       setShowUpdateModal(false);
-      await refreshData();
+      refreshData();
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -321,7 +284,7 @@ const Members = () => {
       setShowPaymentModal(false);
       setShowReceiptModal(true);
       showToast(response.message || 'Payment processed successfully', 'success');
-      await refreshData();
+      refreshData();
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -352,7 +315,7 @@ const Members = () => {
       const response = await memberService.deleteMember(member.id);
       showToast(response.message || 'Member deleted successfully', 'success');
       setShowMemberModal(false);
-      await refreshData();
+      refreshData();
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -465,7 +428,7 @@ const Members = () => {
                 <p className="text-red-600">{error}</p>
                 <Button 
                   variant="primary" 
-                  onClick={fetchMembers}
+                  onClick={refreshData}
                   className="mt-4"
                 >
                   Retry

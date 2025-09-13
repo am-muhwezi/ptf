@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
@@ -9,7 +9,6 @@ import Toast from '../../components/ui/Toast';
 import Notifications from '../../components/ui/Notifications';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import CheckInForm from '../../components/forms/CheckInForm';
-import { useApi } from '../../hooks/useApi';
 import { dashboardService } from '../../services/dashboardService';
 import { memberService } from '../../services/memberService';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -22,11 +21,15 @@ const Dashboard = () => {
   console.log('Dashboard user:', user);
   console.log('Dashboard - Auth context:', { user: user?.email, isLoading });
 
-  // API hooks
-  const { data: dashboardStats, loading: statsLoading, error: statsError } = useApi(dashboardService.getDashboardStats);
-  const { data: notificationsData, loading: notificationsLoading } = useApi(dashboardService.getNotifications);
+  // Data state
+  const [dashboardStats, setDashboardStats] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const notifications = Array.isArray(notificationsData) ? notificationsData : [];
+  // Cleanup ref
+  const abortControllerRef = useRef(null);
 
   // Mobile sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -35,6 +38,54 @@ const Dashboard = () => {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  // ✅ Unified useEffect pattern - Load dashboard data (stats + notifications) in one call
+  useEffect(() => {
+    const loadData = async () => {
+      // Cancel any existing request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      // Create new abort controller for this request
+      abortControllerRef.current = new AbortController();
+
+      try {
+        setStatsLoading(true);
+        setStatsError(null);
+
+        const response = await dashboardService.getAll();
+
+        // Only update state if request wasn't aborted
+        if (!abortControllerRef.current?.signal.aborted) {
+          if (response.success) {
+            setDashboardStats(response.stats);
+            setNotifications(Array.isArray(response.notifications) ? response.notifications : []);
+          }
+        }
+      } catch (error) {
+        // Only handle error if request wasn't aborted
+        if (!abortControllerRef.current?.signal.aborted) {
+          console.error('Error loading dashboard data:', error);
+          setStatsError(error.message);
+        }
+      } finally {
+        // Only update loading state if request wasn't aborted
+        if (!abortControllerRef.current?.signal.aborted) {
+          setStatsLoading(false);
+        }
+      }
+    };
+
+    loadData();
+
+    // Cleanup function
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [refreshTrigger]); // Only depend on refreshTrigger
 
   // Default data structure for when API is loading or fails
   const defaultStats = {
@@ -103,25 +154,27 @@ const Dashboard = () => {
       await memberService.createMember(memberData);
       setShowRegisterModal(false);
       showToast(`${memberData.first_name} ${memberData.last_name} registered successfully!`, 'success');
+      
+      // Refresh dashboard data after successful registration
+      setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       showToast(error.message, 'error');
     }
   };
 
-const handleCheckInSubmit = async (memberData) => {
-  try {
-    // Check-in is already handled by CheckInForm, just close modal and show success
-    setShowCheckInModal(false);
-    showToast(`${memberData.memberName} checked in successfully!`, 'success');
-    
-    // Optionally refresh dashboard stats after check-in
-    // You could reload dashboard stats here if needed
-    
-  } catch (error) {
-    showToast(error.message, 'error');
-    throw error;
-  }
-};
+  const handleCheckInSubmit = async (memberData) => {
+    try {
+      setShowCheckInModal(false);
+      showToast(`${memberData.memberName} checked in successfully!`, 'success');
+      
+      // Refresh dashboard data after successful check-in
+      setRefreshTrigger(prev => prev + 1);
+      
+    } catch (error) {
+      showToast(error.message, 'error');
+      throw error;
+    }
+  };
   const handleCardClick = (cardType, value, route) => {
     if (route) {
       navigate(route);
@@ -316,7 +369,7 @@ const handleCheckInSubmit = async (memberData) => {
             {/* Communication & Alerts */}
             <section>
               <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Communication & Alerts</h2>
-              {notificationsLoading ? (
+              {statsLoading ? (
                 <div className="animate-pulse space-y-4">
                   {[...Array(3)].map((_, i) => (
                     <div key={i} className="h-16 bg-gray-200 rounded"></div>

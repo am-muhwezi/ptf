@@ -11,17 +11,7 @@ export const membershipService = {
     }
   },
 
-  // Indoor Memberships
-  getIndoorMemberships: async (params = {}) => {
-    try {
-      const response = await apiClient.get(API_ENDPOINTS.memberships.indoor, { params });
-      return response.data;
-    } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch indoor memberships');
-    }
-  },
-
-  // Indoor Members (alias for compatibility)
+  // Indoor Members
   getIndoorMembers: async (params = {}) => {
     try {
       const response = await apiClient.get(API_ENDPOINTS.memberships.indoor, { params });

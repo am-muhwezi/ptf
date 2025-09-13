@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
 import Card from '../../components/ui/Card';
@@ -6,9 +6,11 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
-import membershipService from '../../services/membershipService';
+import outdoorMembershipService from '../../services/outdoorMembershipService';
 
 const OutdoorMemberships = () => {
+  const abortControllerRef = useRef(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [allMembers, setAllMembers] = useState([]);
   const [members, setMembers] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
@@ -37,7 +39,7 @@ const OutdoorMemberships = () => {
   // Load sample outdoor memberships for stats
   const loadAllOutdoorMembers = async () => {
     try {
-      const response = await membershipService.getOutdoorMembers({
+      const response = await outdoorMembershipService.getMembers({
         page: 1,
         limit: 50
       });
@@ -57,7 +59,7 @@ const OutdoorMemberships = () => {
       setLoading(true);
       setError(null);
       
-      const response = await membershipService.getOutdoorMembers({
+      const response = await outdoorMembershipService.getAll({
         search: searchTerm,
         status: filterStatus !== 'all' ? filterStatus : undefined,
         page: page,
@@ -65,18 +67,18 @@ const OutdoorMemberships = () => {
       });
       
       if (response.success) {
-        const transformedMembers = response.data.map(transformMemberData);
+        const transformedMembers = response.members.data.map(transformMemberData);
         setMembers(transformedMembers);
         setFilteredMembers(transformedMembers);
         
         // Handle pagination
         setCurrentPage(page);
-        setHasNext(!!response.next);
-        setHasPrevious(!!response.previous);
+        setHasNext(!!response.members.next);
+        setHasPrevious(!!response.members.previous);
         
         // Calculate total pages from count
-        if (response.count) {
-          setTotalPages(Math.ceil(response.count / 20));
+        if (response.members.count) {
+          setTotalPages(Math.ceil(response.members.count / 20));
         }
       } else {
         throw new Error('Failed to load outdoor memberships');
@@ -92,7 +94,7 @@ const OutdoorMemberships = () => {
   // Load membership statistics
   const loadStats = async () => {
     try {
-      const response = await membershipService.getOutdoorMembershipStats();
+      const response = await outdoorMembershipService.getStats();
       if (response.success) {
         setStats(response.data);
       }
@@ -101,41 +103,76 @@ const OutdoorMemberships = () => {
     }
   };
 
-  // Load rate cards
-  const loadRateCards = async () => {
-    try {
-      const response = await membershipService.getOutdoorRateCards();
-      if (response.success) {
-        setRateCards(response.data);
-      }
-    } catch (err) {
-      console.error('Failed to load rate cards:', err);
-    }
-  };
-
+  // Load outdoor membership data with proper cleanup (unified pattern)
   useEffect(() => {
-    loadAllOutdoorMembers();
-    loadOutdoorMembers();
-    loadStats();
-    loadRateCards();
-  }, []);
-
-  // Reload data when search term or filter changes
-  useEffect(() => {
-    const delayedSearch = setTimeout(() => {
-      if (searchTerm !== undefined || filterStatus !== undefined) {
-        setCurrentPage(1); // Reset to first page
-        loadOutdoorMembers(1);
+    console.log('🟠 OutdoorMemberships useEffect mounted');
+    
+    const loadData = async () => {
+      // Cancel previous request if still pending
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
-    }, 300); // Debounce search
-
-    return () => clearTimeout(delayedSearch);
-  }, [searchTerm, filterStatus]);
+      
+      abortControllerRef.current = new AbortController();
+      const signal = abortControllerRef.current.signal;
+      
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const params = {
+          page: currentPage,
+          limit: 50,
+          ...(searchTerm && { search: searchTerm }),
+          ...(filterStatus !== 'all' && { status: filterStatus })
+        };
+        
+        const response = await outdoorMembershipService.getAll(params);
+        
+        // Check if request was aborted
+        if (signal.aborted) return;
+        
+        if (response.success) {
+          const transformedMembers = response.members.data.map(transformMemberData);
+          setAllMembers(transformedMembers);
+          setMembers(transformedMembers.slice(0, 20)); // Display first 20
+          setFilteredMembers(transformedMembers); // For local filtering
+          setStats(response.stats);
+          
+          // Handle pagination
+          setHasNext(!!response.members.next);
+          setHasPrevious(!!response.members.previous);
+          if (response.members.count) {
+            setTotalPages(Math.ceil(response.members.count / 20));
+          }
+        }
+      } catch (err) {
+        if (!signal.aborted) {
+          setError(err.message);
+          showToast('Error loading outdoor memberships: ' + err.message, 'error');
+        }
+      } finally {
+        if (!signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+    
+    // Debounce search/filter changes
+    const timeoutId = setTimeout(loadData, searchTerm || filterStatus !== 'all' ? 300 : 0);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [currentPage, searchTerm, filterStatus, refreshTrigger]); // Proper dependency array
 
   // Handle pagination
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
-      loadOutdoorMembers(newPage);
+      setCurrentPage(newPage); // useEffect will handle the API call
     }
   };
 
@@ -155,9 +192,8 @@ const OutdoorMemberships = () => {
       const response = await membershipService.useSession(membershipId, { location });
       if (response.success) {
         showToast(response.message, 'success');
-        // Refresh the membership list
-        loadOutdoorMembers(currentPage);
-        loadStats();
+        // Trigger refresh via useEffect
+        setRefreshTrigger(prev => prev + 1);
       }
     } catch (err) {
       showToast('Failed to use session: ' + err.message, 'error');
@@ -175,7 +211,7 @@ const OutdoorMemberships = () => {
       if (response.success) {
         showToast(response.message, 'success');
         // Refresh the member list
-        loadOutdoorMembers();
+        setRefreshTrigger(prev => prev + 1);
         loadStats();
       }
     } catch (err) {
@@ -202,7 +238,7 @@ const OutdoorMemberships = () => {
         const response = await membershipService.updateOutdoorMember(memberId, updatedData);
         if (response.success) {
           showToast(`Member has been suspended`, 'warning');
-          loadOutdoorMembers();
+          setRefreshTrigger(prev => prev + 1);
           loadStats();
         }
       }
@@ -217,7 +253,7 @@ const OutdoorMemberships = () => {
       if (response.success) {
         showToast('Outdoor member added successfully!', 'success');
         setShowAddMemberModal(false);
-        loadOutdoorMembers(currentPage);
+        setRefreshTrigger(prev => prev + 1);
         loadAllOutdoorMembers();
         loadStats();
       }

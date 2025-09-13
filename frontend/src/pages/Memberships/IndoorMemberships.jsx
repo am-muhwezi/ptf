@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
 import Card from '../../components/ui/Card';
@@ -9,10 +9,11 @@ import UpdateMemberProfileForm from '../../components/forms/UpdateMemberProfileF
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import authService from '../../services/authService';
 import { memberService } from '../../services/memberService';
-import membershipService from '../../services/membershipService';
+import indoorMembershipService from '../../services/indoorMembershipService';
 
 const IndoorMemberships = () => {
-  const [allMembers, setAllMembers] = useState([]);
+  const abortControllerRef = useRef(null);
+  const [totalCount, setTotalCount] = useState(0);
   const [members, setMembers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -36,109 +37,73 @@ const IndoorMemberships = () => {
   const [hasNext, setHasNext] = useState(false);
   const [hasPrevious, setHasPrevious] = useState(false);
 
-  // Load sample indoor memberships for stats
-  const loadAllIndoorMembers = async () => {
-    try {
-      const response = await membershipService.getIndoorMembers({
-        page: 1,
-        limit: 50
-      });
-      
-      if (response.success && response.data) {
-        const transformedMembers = response.data.map(transformMemberData);
-        setAllMembers(transformedMembers);
-      }
-    } catch (err) {
-      console.error('Failed to load indoor members for stats:', err);
-    }
-  };
 
-  // Load indoor memberships from API (for display)
-  const loadIndoorMembers = async (page = 1, updateLoading = false) => {
-    try {
-      if (updateLoading) {
-        setLoading(true);
+
+  // Load indoor membership data with proper cleanup
+  useEffect(() => {
+    console.log('🔵 IndoorMemberships useEffect mounted');
+    
+    const loadData = async () => {
+      // Cancel previous request if still pending
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
+      
+      abortControllerRef.current = new AbortController();
+      const signal = abortControllerRef.current.signal;
+      
+      setLoading(true);
       setError(null);
       
-      const response = await membershipService.getIndoorMembers({
-        search: searchTerm,
-        status: filterStatus !== 'all' ? filterStatus : undefined,
-        page: page,
-        limit: 20
-      });
-      
-      if (response.success) {
-        const transformedMembers = response.data.map(transformMemberData);
-        setMembers(transformedMembers);
-        
-        // Handle pagination
-        setCurrentPage(page);
-        setHasNext(!!response.next);
-        setHasPrevious(!!response.previous);
-        
-        // Calculate total pages from count
-        if (response.count) {
-          setTotalPages(Math.ceil(response.count / 20));
-        }
-      } else {
-        throw new Error('Failed to load indoor memberships');
-      }
-    } catch (err) {
-      setError(err.message);
-      showToast('Error loading indoor memberships: ' + err.message, 'error');
-    } finally {
-      if (updateLoading) {
-        setLoading(false);
-      }
-    }
-  };
-
-  // Load membership statistics
-  const loadStats = async () => {
-    try {
-      const response = await membershipService.getIndoorMembershipStats();
-      if (response.success) {
-        setStats(response.data);
-      }
-    } catch (err) {
-      console.error('Failed to load stats:', err);
-    }
-  };
-
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
       try {
-        await Promise.all([
-          loadAllIndoorMembers(),
-          loadIndoorMembers(),
-          loadStats()
-        ]);
+        const params = {
+          page: currentPage,
+          limit: 20,
+          ...(searchTerm && { search: searchTerm }),
+          ...(filterStatus !== 'all' && { status: filterStatus })
+        };
+        
+        const response = await indoorMembershipService.getAll(params);
+        
+        // Check if request was aborted
+        if (signal.aborted) return;
+        
+        if (response.success) {
+          const transformedMembers = response.members.data.map(transformMemberData);
+          setMembers(transformedMembers);
+          setTotalCount(response.members.count);
+          setTotalPages(Math.ceil(response.members.count / 20));
+          setHasNext(!!response.members.next);
+          setHasPrevious(!!response.members.previous);
+          setStats(response.stats);
+        }
+      } catch (err) {
+        if (!signal.aborted) {
+          setError(err.message);
+          showToast('Error loading indoor memberships: ' + err.message, 'error');
+        }
       } finally {
-        setLoading(false);
+        if (!signal.aborted) {
+          setLoading(false);
+        }
       }
     };
     
-    loadData();
-  }, []);
-
-  // Reload data when search term or filter changes
-  useEffect(() => {
-    const delayedSearch = setTimeout(() => {
-      if (searchTerm !== undefined || filterStatus !== undefined) {
-        setCurrentPage(1); // Reset to first page
-        loadIndoorMembers(1); // Consistent with outdoor implementation
+    // Debounce search/filter changes
+    const timeoutId = setTimeout(loadData, searchTerm || filterStatus !== 'all' ? 300 : 0);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
-    }, 300); // Debounce search
-
-    return () => clearTimeout(delayedSearch);
-  }, [searchTerm, filterStatus]);
+    };
+  }, [currentPage, searchTerm, filterStatus]); // Proper dependency array
 
   // Handle pagination
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
-      loadIndoorMembers(newPage, true); // Enable loading state for pagination
+      setCurrentPage(newPage); // useEffect will handle the API call
     }
   };
 
@@ -204,10 +169,8 @@ const IndoorMemberships = () => {
       setShowAddMemberModal(false);
       showToast(`${memberData.first_name} ${memberData.last_name} added successfully!`, 'success');
       
-      // Refresh the member lists
-      await loadAllIndoorMembers();
-      await loadIndoorMembers(currentPage);
-      await loadStats();
+      // Trigger refresh by updating currentPage (useEffect will handle the API call)
+      setCurrentPage(1); // Reset to first page to see new member
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -395,22 +358,22 @@ const IndoorMemberships = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <Card
                 title="Total Indoor Members"
-                value={allMembers.length}
-                subtitle="Active memberships"
+                value={stats.total_memberships || 0}
+                subtitle="All memberships"
               />
               <Card
                 title="Active Members"
-                value={allMembers.filter(m => m.status === 'active').length}
+                value={stats.active_memberships || 0}
                 subtitle="Currently active"
               />
               <Card
                 title="Expiring Soon"
-                value={allMembers.filter(m => isExpiringSoon(m.expiryDate)).length}
+                value={stats.expiring_soon || 0}
                 subtitle="Within 30 days"
               />
               <Card
                 title="Monthly Revenue"
-                value={formatCurrency(allMembers.reduce((sum, m) => sum + (m.status === 'active' ? m.amount : 0), 0))}
+                value={formatCurrency(stats.total_revenue || 0)}
                 subtitle="From indoor memberships"
               />
             </div>
@@ -560,7 +523,7 @@ const IndoorMemberships = () => {
                 <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center text-sm text-gray-700">
                     <span>
-                      Showing {((currentPage - 1) * 20) + 1} to {Math.min(currentPage * 20, members.length + ((currentPage - 1) * 20))} of {allMembers.length} indoor members
+                      Showing {((currentPage - 1) * 20) + 1} to {Math.min(currentPage * 20, members.length + ((currentPage - 1) * 20))} of {totalCount} indoor members
                     </span>
                   </div>
                   <div className="flex items-center space-x-1">

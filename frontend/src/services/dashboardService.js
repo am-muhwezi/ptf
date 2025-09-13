@@ -1,25 +1,40 @@
 import apiClient, { API_ENDPOINTS } from '../config/api';
 
+/**
+ * Dashboard Service - Handles all dashboard data operations
+ * Single responsibility: Dashboard stats and notifications
+ * 
+ * @typedef {Object} DashboardData
+ * @property {boolean} success - Operation success status
+ * @property {Object} stats - Dashboard statistics
+ * @property {Array} notifications - Notification array
+ */
 export const dashboardService = {
-  // Get dashboard statistics
-  getDashboardStats: async () => {
+  /**
+   * Get all dashboard data (stats + notifications) in one call
+   * @returns {Promise<DashboardData>} Combined stats and notifications data
+   */
+  getAll: async () => {
+    console.count('📊 DashboardService.getAll() called');
+    console.log('📊 DashboardService.getAll() - fetching dashboard data');
+    
     try {
-      const response = await apiClient.get(API_ENDPOINTS.dashboard.stats);
-      return response.data;
+      // Fetch essential data only (stats + notifications)
+      const [statsResponse, notificationsResponse] = await Promise.all([
+        apiClient.get(API_ENDPOINTS.dashboard.stats),
+        apiClient.get(API_ENDPOINTS.dashboard.notifications)
+      ]);
+      
+      return {
+        success: true,
+        stats: statsResponse.data,
+        notifications: notificationsResponse.data
+      };
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch dashboard statistics');
+      console.error('📊 DashboardService.getAll() error:', error);
+      throw new Error(error.response?.data?.message || 'Failed to fetch dashboard data');
     }
-  },
-
-  // Get notifications
-  getNotifications: async () => {
-    try {
-      const response = await apiClient.get(API_ENDPOINTS.dashboard.notifications);
-      return response.data;
-    } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch notifications');
-    }
-  },
+  }
 };
 
 export default dashboardService;
