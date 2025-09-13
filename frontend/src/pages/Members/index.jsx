@@ -671,7 +671,7 @@ const Members = () => {
               )}
               
               {/* Pagination Controls */}
-              {totalPages > 1 && (
+              {totalCount > 0 && (
                 <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center text-sm text-gray-700">
                     <span>
