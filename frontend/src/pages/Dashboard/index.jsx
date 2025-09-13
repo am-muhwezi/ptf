@@ -6,7 +6,6 @@ import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
-import Notifications from '../../components/ui/Notifications';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import CheckInForm from '../../components/forms/CheckInForm';
 import { dashboardService } from '../../services/dashboardService';
@@ -18,12 +17,9 @@ const Dashboard = () => {
 
   const { user, isLoading } = useAuthContext();
 
-  console.log('Dashboard user:', user);
-  console.log('Dashboard - Auth context:', { user: user?.email, isLoading });
 
   // Data state
   const [dashboardStats, setDashboardStats] = useState(null);
-  const [notifications, setNotifications] = useState([]);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -39,7 +35,7 @@ const Dashboard = () => {
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  // ✅ Unified useEffect pattern - Load dashboard data (stats + notifications) in one call
+  // ✅ Unified useEffect pattern - Load dashboard statistics
   useEffect(() => {
     const loadData = async () => {
       // Cancel any existing request
@@ -60,13 +56,11 @@ const Dashboard = () => {
         if (!abortControllerRef.current?.signal.aborted) {
           if (response.success) {
             setDashboardStats(response.stats);
-            setNotifications(Array.isArray(response.notifications) ? response.notifications : []);
           }
         }
       } catch (error) {
         // Only handle error if request wasn't aborted
         if (!abortControllerRef.current?.signal.aborted) {
-          console.error('Error loading dashboard data:', error);
           setStatsError(error.message);
         }
       } finally {
@@ -86,6 +80,38 @@ const Dashboard = () => {
       }
     };
   }, [refreshTrigger]); // Only depend on refreshTrigger
+
+  // Transform backend data structure to frontend format
+  const transformStats = (backendStats) => {
+    if (!backendStats) return null;
+
+    return {
+      membershipData: {
+        indoor: backendStats.memberships?.indoor_count || 0,
+        outdoor: backendStats.memberships?.outdoor_count || 0,
+        renewalsDue: backendStats.memberships?.expiring_soon || 0,
+        paymentOverdue: backendStats.memberships?.overdue_payment || 0
+      },
+      bookingData: {
+        groupSessions: backendStats.bookings?.today || 0,
+        oneOnOneSessions: 0, // Not available in current backend
+        trainersAvailable: 0, // Not available in current backend
+        waitlistRequests: backendStats.bookings?.pending || 0
+      },
+      attendanceData: {
+        indoorVisits: backendStats.attendance_today?.indoor_visits || 0,
+        outdoorVisits: backendStats.attendance_today?.outdoor_visits || 0
+      },
+      feedbackData: {
+        openTickets: 0, // Not available in current backend
+        avgResolutionTime: '0 days' // Not available in current backend
+      },
+      inventoryData: {
+        availableStock: 0, // Not available in current backend
+        lowStockAlerts: 0 // Not available in current backend
+      }
+    };
+  };
 
   // Default data structure for when API is loading or fails
   const defaultStats = {
@@ -115,22 +141,7 @@ const Dashboard = () => {
     }
   };
 
-  const stats = {
-    ...defaultStats,
-    ...dashboardStats,
-    bookingData: {
-      ...defaultStats.bookingData,
-      ...(dashboardStats?.bookingData || {})
-    },
-    membershipData: {
-      ...defaultStats.membershipData,
-      ...(dashboardStats?.membershipData || {})
-    },
-    inventoryData: {
-      ...defaultStats.inventoryData,
-      ...(dashboardStats?.inventoryData || {})
-    }
-  };
+  const stats = transformStats(dashboardStats) || defaultStats;
 
 
   const showToast = (message, type = 'success') => {
@@ -281,7 +292,12 @@ const Dashboard = () => {
             {/* Membership Management */}
             <section>
               <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Membership Management</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6">
+                <Card
+                  title="All Members"
+                  value={stats.membershipData?.indoor + stats.membershipData?.outdoor || 0}
+                  onClick={() => handleCardClick('All Members', stats.membershipData?.indoor + stats.membershipData?.outdoor || 0, '/members')}
+                />
                 <Card
                   title="Indoor Memberships"
                   value={stats.membershipData?.indoor ?? 0}
@@ -366,19 +382,6 @@ const Dashboard = () => {
               </div>
             </section>
 
-            {/* Communication & Alerts */}
-            <section>
-              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Communication & Alerts</h2>
-              {statsLoading ? (
-                <div className="animate-pulse space-y-4">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-16 bg-gray-200 rounded"></div>
-                  ))}
-                </div>
-              ) : (
-                <Notifications notifications={notifications} />
-              )}
-            </section>
 
             {/* Inventory & Merchandise */}
             <section>

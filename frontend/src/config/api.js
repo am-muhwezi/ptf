@@ -50,7 +50,6 @@ export const API_ENDPOINTS = {
   // Dashboard
   dashboard: {
     stats: 'dashboard/stats/',
-    notifications: 'dashboard/notifications/',
   },
   
   // Bookings
@@ -102,17 +101,10 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
-    // Log request for debugging (remove in production)
-    console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
-      data: config.data,
-      headers: config.headers
-    });
-    
+
     return config;
   },
   (error) => {
-    console.error('❌ Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -120,34 +112,13 @@ apiClient.interceptors.request.use(
 // ✅ FIXED: Enhanced response interceptor with comprehensive error handling
 apiClient.interceptors.response.use(
   (response) => {
-    // Log successful responses (remove in production)
-    console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
-      status: response.status,
-      data: response.data
-    });
-    
     return response;
   },
   async (error) => {
     const original = error.config;
-    
-    console.error('❌ API Error:', {
-      url: original?.url,
-      method: original?.method,
-      status: error.response?.status,
-      message: error.message,
-      data: error.response?.data
-    });
 
     // ✅ FIXED: Better network error handling
     if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
-      console.error('🌐 Network Error Details:', {
-        baseURL: API_BASE_URL,
-        url: original?.url,
-        timeout: original?.timeout,
-        online: navigator.onLine
-      });
-      
       // Create user-friendly network error
       const networkError = new Error('Unable to connect to the server. Please check your internet connection and try again.');
       networkError.isNetworkError = true;
@@ -170,23 +141,20 @@ apiClient.interceptors.response.use(
       try {
         const refreshToken = localStorage.getItem('refresh_token');
         if (refreshToken) {
-          console.log('🔄 Attempting token refresh...');
-          
           const response = await axios.post(`${API_BASE_URL}auth/token/refresh/`, {
             refresh: refreshToken,
           }, {
             withCredentials: true,
             timeout: 10000 // Separate timeout for refresh requests
           });
-          
+
           if (response.data?.access) {
             const newToken = response.data.access;
             localStorage.setItem('access_token', newToken);
-            
+
             // Retry the original request with new token
             original.headers.Authorization = `Bearer ${newToken}`;
-            
-            console.log('✅ Token refreshed, retrying original request');
+
             return apiClient(original);
           } else {
             throw new Error('Invalid refresh response');
@@ -195,7 +163,6 @@ apiClient.interceptors.response.use(
           throw new Error('No refresh token available');
         }
       } catch (refreshError) {
-        console.error('❌ Token refresh failed:', refreshError);
         
         // Clear all auth data
         localStorage.removeItem('access_token');
@@ -297,15 +264,12 @@ apiClient.interceptors.response.use(
 // ✅ NEW: Helper function to check if backend is reachable
 export const checkBackendHealth = async () => {
   try {
-    console.log('🔄 Checking backend health...');
-    const response = await axios.get(`${API_BASE_URL}`, { 
+    const response = await axios.get(`${API_BASE_URL}`, {
       timeout: 5000,
-      withCredentials: false 
+      withCredentials: false
     });
-    console.log('✅ Backend is reachable');
     return true;
   } catch (error) {
-    console.error('❌ Backend health check failed:', error.message);
     return false;
   }
 };

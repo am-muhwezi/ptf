@@ -28,15 +28,22 @@ export const indoorMembershipService = {
    * @returns {Promise<IndoorMembershipData>} Combined members and stats data
    */
   getAll: async (params = {}) => {
+    const requestId = Math.random().toString(36).substr(2, 9);
+    const startTime = performance.now();
+    console.log(`🔵 [${requestId}] IndoorService.getAll() REQUEST STARTED at ${new Date().toISOString()}`);
     console.count('🔵 IndoorService.getAll() called');
     console.log('🔵 IndoorService.getAll() params:', params);
-    
+
     try {
       const [membersResponse, statsResponse] = await Promise.all([
         apiClient.get(API_ENDPOINTS.memberships.indoor, { params }),
         apiClient.get(API_ENDPOINTS.memberships.indoor_stats)
       ]);
-      
+
+      const endTime = performance.now();
+      const duration = Math.round(endTime - startTime);
+      console.log(`🔵 [${requestId}] IndoorService.getAll() RESPONSE RECEIVED at ${new Date().toISOString()} (took ${duration}ms)`);
+
       return {
         success: true,
         members: {
@@ -48,7 +55,9 @@ export const indoorMembershipService = {
         stats: statsResponse.data
       };
     } catch (error) {
-      console.error('🔵 IndoorService.getAll() error:', error);
+      const endTime = performance.now();
+      const duration = Math.round(endTime - startTime);
+      console.error(`🔵 [${requestId}] IndoorService.getAll() ERROR at ${new Date().toISOString()} after ${duration}ms:`, error);
       throw new Error(error.response?.data?.message || 'Failed to fetch indoor membership data');
     }
   },

@@ -84,54 +84,85 @@ class MembershipViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def outdoor(self, request):
         """Get outdoor memberships with pagination and search"""
+        import time
+        start_time = time.time()
+
         # Filter for outdoor memberships only
         queryset = self.filter_queryset(self.get_queryset().filter(plan__membership_type='outdoor'))
-        
+
         # Apply pagination
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({
-            'success': True,
-            'data': serializer.data,
-            'count': queryset.count()
-        })
+            response = self.get_paginated_response(serializer.data)
+        else:
+            serializer = self.get_serializer(queryset, many=True)
+            response = Response({
+                'success': True,
+                'data': serializer.data,
+                'count': queryset.count()
+            })
+
+        end_time = time.time()
+        duration_ms = round((end_time - start_time) * 1000, 2)
+        page_num = request.query_params.get('page', 1)
+        limit = request.query_params.get('limit', 20)
+        print(f"[Outdoor API] query took {duration_ms}ms (page={page_num}, limit={limit})")
+
+        return response
 
     @action(detail=False, methods=['get'])
     def indoor(self, request):
         """Get indoor memberships with pagination and search"""
+        import time
+        start_time = time.time()
+
         # Filter for indoor memberships only
         queryset = self.filter_queryset(self.get_queryset().filter(plan__membership_type='indoor'))
-        
+
         # Apply pagination
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({
-            'success': True,
-            'data': serializer.data,
-            'count': queryset.count()
-        })
+            response = self.get_paginated_response(serializer.data)
+        else:
+            serializer = self.get_serializer(queryset, many=True)
+            response = Response({
+                'success': True,
+                'data': serializer.data,
+                'count': queryset.count()
+            })
+
+        end_time = time.time()
+        duration_ms = round((end_time - start_time) * 1000, 2)
+        page_num = request.query_params.get('page', 1)
+        limit = request.query_params.get('limit', 20)
+        print(f"[Indoor API] query took {duration_ms}ms (page={page_num}, limit={limit})")
+
+        return response
 
     @action(detail=False, methods=['get'])
     def indoor_stats(self, request):
         """Get indoor membership statistics"""
+        import time
+        start_time = time.time()
+
         try:
             stats = MembershipService.get_membership_statistics(membership_type='indoor')
-            
+
+            end_time = time.time()
+            duration_ms = round((end_time - start_time) * 1000, 2)
+            print(f"[Indoor Stats API] query took {duration_ms}ms")
+
             return Response({
                 'success': True,
                 'data': stats
             })
-            
+
         except Exception as e:
-            logger.error(f"Error calculating indoor stats: {e}")
+            end_time = time.time()
+            duration_ms = round((end_time - start_time) * 1000, 2)
+            logger.error(f"Error calculating indoor stats after {duration_ms}ms: {e}")
             return Response({
                 'success': False,
                 'error': 'Failed to calculate statistics'
@@ -140,16 +171,25 @@ class MembershipViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def outdoor_stats(self, request):
         """Get outdoor membership statistics"""
+        import time
+        start_time = time.time()
+
         try:
             stats = MembershipService.get_membership_statistics(membership_type='outdoor')
-            
+
+            end_time = time.time()
+            duration_ms = round((end_time - start_time) * 1000, 2)
+            print(f"[Outdoor Stats API] query took {duration_ms}ms")
+
             return Response({
                 'success': True,
                 'data': stats
             })
-            
+
         except Exception as e:
-            logger.error(f"Error calculating outdoor stats: {e}")
+            end_time = time.time()
+            duration_ms = round((end_time - start_time) * 1000, 2)
+            logger.error(f"Error calculating outdoor stats after {duration_ms}ms: {e}")
             return Response({
                 'success': False,
                 'error': 'Failed to calculate statistics'

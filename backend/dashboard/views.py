@@ -8,7 +8,7 @@ from datetime import timedelta
 from members.models import Member
 from bookings.models import Booking
 
-from .services import get_dashboard_statistics
+from .services import get_dashboard_summary
 
 
 class DashboardStatsView(APIView):
@@ -21,7 +21,7 @@ class DashboardStatsView(APIView):
 
     def get(self, request):
         try:
-            stats = get_dashboard_statistics()
+            stats = get_dashboard_summary()
             return Response(stats, status=status.HTTP_200_OK)
         except Exception as e:
             return Response(
