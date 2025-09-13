@@ -1,4 +1,4 @@
-;"""
+"""
 Member business logic services
 
 This module contains all business logic related to members,
@@ -13,6 +13,8 @@ from typing import Dict, Any, Optional, List, Tuple
 from decimal import Decimal
 
 from .models import Member, Location, PhysicalProfile
+from memberships.models import Membership
+from attendance.models import AttendanceLog
 
 logger = logging.getLogger(__name__)
 
@@ -414,3 +416,151 @@ class LocationService:
             query = query.exclude(id=exclude_id)
         
         return not query.exists()
+
+
+# Dashboard-style service functions (following dashboard/services.py pattern)
+def get_members_statistics():
+    """
+    Get basic member counts and statistics (like dashboard stats)
+    Returns: dict with member counts by status and type
+    """
+    today = timezone.now().date()
+    start_of_month = today.replace(day=1)
+
+    # Basic member counts using aggregation (like dashboard stats)
+    member_stats = Member.objects.aggregate(
+        total_members=Count('id'),
+        active_members=Count('id', filter=Q(status='active')),
+        inactive_members=Count('id', filter=Q(status='inactive')),
+        suspended_members=Count('id', filter=Q(status='suspended')),
+        new_members_this_month=Count('id', filter=Q(registration_date__gte=start_of_month))
+    )
+
+    return member_stats
+
+
+def get_membership_breakdown():
+    """
+    Get membership type statistics for members
+    Returns: dict with membership breakdown by type
+    """
+    # Membership type counts using aggregation
+    membership_stats = Member.objects.aggregate(
+        indoor_members=Count('id', filter=Q(
+            memberships__plan__membership_type='indoor',
+            memberships__status='active'
+        )),
+        outdoor_members=Count('id', filter=Q(
+            memberships__plan__membership_type='outdoor',
+            memberships__status='active'
+        )),
+        no_active_membership=Count('id', filter=Q(
+            memberships__isnull=True
+        ) | ~Q(memberships__status='active'))
+    )
+
+    return membership_stats
+
+
+def get_payment_status_breakdown():
+    """
+    Get payment status statistics for members
+    Returns: dict with payment status counts
+    """
+    # Payment status from active memberships
+    payment_stats = Member.objects.filter(
+        memberships__status='active'
+    ).aggregate(
+        paid_members=Count('id', filter=Q(memberships__payment_status='paid')),
+        pending_payment_members=Count('id', filter=Q(memberships__payment_status='pending')),
+        overdue_payment_members=Count('id', filter=Q(memberships__payment_status='overdue'))
+    )
+
+    return payment_stats
+
+
+def get_recent_member_activity():
+    """
+    Get recent member activity statistics
+    Returns: dict with recent activity data
+    """
+    today = timezone.now().date()
+    week_ago = today - timezone.timedelta(days=7)
+
+    activity_stats = {
+        "new_registrations_this_week": Member.objects.filter(
+            registration_date__gte=week_ago
+        ).count(),
+        "members_visited_today": AttendanceLog.objects.filter(
+            check_in_time__date=today
+        ).values('member').distinct().count(),
+        "total_visits_today": AttendanceLog.objects.filter(
+            check_in_time__date=today
+        ).count()
+    }
+
+    return activity_stats
+
+
+def get_members_alerts():
+    """
+    Get member-related alerts and notifications
+    Returns: dict with alert counts
+    """
+    today = timezone.now().date()
+
+    # Get alert counts
+    alerts = {
+        "expiring_memberships": Membership.objects.filter(
+            end_date__lte=today + timezone.timedelta(days=30),
+            end_date__gt=today,
+            status='active'
+        ).count(),
+        "overdue_payments": Membership.objects.filter(
+            payment_status='overdue',
+            status='active'
+        ).count(),
+        "inactive_members": Member.objects.filter(status='inactive').count(),
+        "members_no_visits_30_days": Member.objects.filter(
+            last_visit__lt=today - timezone.timedelta(days=30)
+        ).exclude(last_visit__isnull=True).count()
+    }
+
+    return alerts
+
+
+def get_members_summary():
+    """
+    Lightweight members summary - only essential stats for UI cards
+    Returns: minimal data structure for fast loading
+    """
+    # Get only essential statistics
+    member_stats = get_members_statistics()
+    membership_breakdown = get_membership_breakdown()
+    payment_breakdown = get_payment_status_breakdown()
+
+    return {
+        # Member overview (essential stats only)
+        "members": {
+            "total": member_stats["total_members"],
+            "active": member_stats["active_members"],
+            "inactive": member_stats["inactive_members"],
+            "suspended": member_stats["suspended_members"],
+            "new_this_month": member_stats["new_members_this_month"],
+        },
+        # Membership type breakdown
+        "membership_types": {
+            "indoor": membership_breakdown["indoor_members"],
+            "outdoor": membership_breakdown["outdoor_members"],
+            "no_active_membership": membership_breakdown["no_active_membership"],
+        },
+        # Payment status breakdown
+        "payment_status": {
+            "paid": payment_breakdown["paid_members"],
+            "pending": payment_breakdown["pending_payment_members"],
+            "overdue": payment_breakdown["overdue_payment_members"],
+        },
+        # Metadata
+        "generated_at": timezone.now().isoformat(),
+        "date": timezone.now().date().isoformat(),
+    }

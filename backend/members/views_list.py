@@ -1,9 +1,33 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import status, permissions
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.authentication import SessionAuthentication
 from django.db.models import Q
 from .models import Member
 from memberships.models import Membership
 from ptf.pagination import PaginationHelper, SearchPaginationHelper
+from .services import get_members_summary
+
+
+class MembersSummaryView(APIView):
+    """
+    Members summary view with authentication (following dashboard pattern)
+    """
+
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            summary = get_members_summary()
+            return Response(summary, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {"error": "Could not retrieve members summary", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 def serialize_member_data(member):
@@ -128,17 +152,27 @@ def serialize_member_data(member):
 @api_view(["GET"])
 def list_all_members(request):
     """
-    List all members with their membership info, with pagination and search support.
+    Hybrid endpoint - returns summary stats or paginated list based on 'stats' parameter
+    Following dashboard pattern for stats, keeping list functionality for detailed data
     """
     try:
+        # Check if requesting stats only (following dashboard pattern)
+        stats_only = request.GET.get('stats', 'false').lower() == 'true'
+
+        if stats_only:
+            # Return dashboard-style stats only (like dashboard/views.py pattern)
+            summary = get_members_summary()
+            return Response(summary, status=200)
+
+        # Otherwise, return paginated member list (existing functionality)
         # Get queryset with optimized queries
         queryset = Member.objects.select_related().prefetch_related("memberships__plan")
-        
+
         # Define searchable fields
         search_fields = ['first_name', 'last_name', 'email', 'phone', 'member_id']
-        
+
         # Use pagination helper with search functionality
-        return SearchPaginationHelper.search_and_paginate(
+        response = SearchPaginationHelper.search_and_paginate(
             request=request,
             queryset=queryset,
             search_fields=search_fields,
@@ -146,6 +180,12 @@ def list_all_members(request):
             success_message=None,  # Will auto-generate
             default_page_size=20
         )
+
+        # Add summary stats to the paginated response for dashboard-style UI
+        summary = get_members_summary()
+        response.data['summary'] = summary
+
+        return response
 
     except Exception as e:
         return Response({"error": str(e)}, status=500)

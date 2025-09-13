@@ -71,9 +71,48 @@ const Members = () => {
     return `${firstInitial}${lastInitial}`;
   };
 
-  // ✅ Unified useEffect pattern - Load members data and calculate stats in one coordinated approach
+  // ✅ Optimized useEffect pattern - Separate stats and member data loading
   useEffect(() => {
-    const loadData = async () => {
+    const loadStats = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Load lightweight stats first (dashboard pattern)
+        const summaryResponse = await memberService.getSummary();
+
+        if (summaryResponse.success && summaryResponse.stats) {
+          const statsData = summaryResponse.stats;
+
+          // Extract stats in the format expected by UI
+          const totalFromSummary = statsData.members?.total || 0;
+          setStats({
+            total_members: totalFromSummary,
+            active_members: statsData.members?.active || 0,
+            inactive_members: statsData.members?.inactive || 0,
+            indoor_members: statsData.membership_types?.indoor || 0,
+            outdoor_members: statsData.membership_types?.outdoor || 0
+          });
+
+          // Set pagination totals from summary ONLY (dashboard pattern)
+          setTotalCount(totalFromSummary);
+          setTotalPages(Math.ceil(totalFromSummary / pageSize));
+        }
+
+      } catch (error) {
+        console.error('Error loading stats:', error);
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadStats();
+  }, [refreshTrigger]);
+
+  // Separate useEffect for member data (only when needed for display)
+  useEffect(() => {
+    const loadMemberData = async () => {
       // Cancel any existing request
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -83,42 +122,31 @@ const Members = () => {
       abortControllerRef.current = new AbortController();
 
       try {
-        setLoading(true);
-        setError(null);
-
-        // Prepare member params for paginated display
-        const memberParams = { 
+        // Only load member data if we're not on the stats-only view
+        // For now, keep member list functionality but optimize it
+        const memberParams = {
           page: currentPage,
           limit: pageSize
         };
         if (searchTerm && searchTerm.trim() !== '') memberParams.q = searchTerm;
         if (filterStatus !== 'all') memberParams.status = filterStatus;
 
-        // Make single API call for both display and stats calculation
         const response = await memberService.getMembers(memberParams);
 
         // Only update state if request wasn't aborted
         if (!abortControllerRef.current?.signal.aborted) {
           // Handle response for display
           let membersData = [];
-          let totalMembers = 0;
-          
+
           if (response.data) {
             membersData = response.data;
-            totalMembers = response.count || response.pagination?.total_count || 0;
-            setTotalCount(totalMembers);
-            setTotalPages(Math.ceil(totalMembers / pageSize));
           } else if (response.results) {
             membersData = response.results;
-            totalMembers = response.count || membersData.length;
-            setTotalCount(totalMembers);
-            setTotalPages(Math.ceil(totalMembers / pageSize));
           } else if (Array.isArray(response)) {
             membersData = response;
-            totalMembers = response.length;
-            setTotalCount(totalMembers);
-            setTotalPages(1);
           }
+
+          // Don't set totalCount here - it comes from summary endpoint only
 
           // Process the members data
           const processedMembers = membersData.map(member => ({
@@ -126,52 +154,21 @@ const Members = () => {
             membership_type: member.membership_type || 'unknown'
           }));
 
-          // Apply membership type filtering if needed  
+          // Apply membership type filtering if needed
           let filtered = processedMembers;
           if (filterMembershipType !== 'all') {
-            filtered = processedMembers.filter(member => 
+            filtered = processedMembers.filter(member =>
               member.membership_type === filterMembershipType
             );
           }
 
           setMembers(processedMembers);
           setFilteredMembers(filtered);
-
-          // Calculate stats from current page data and total count
-          // For accurate stats across all pages, we use the total count from API
-          // and estimate distribution based on current page sample
-          const currentPageSample = processedMembers;
-          const sampleSize = currentPageSample.length;
-          
-          if (sampleSize > 0 && totalMembers > 0) {
-            // Calculate percentages from current sample and apply to total
-            const activeRatio = currentPageSample.filter(m => m.status === 'active').length / sampleSize;
-            const inactiveRatio = currentPageSample.filter(m => m.status === 'inactive').length / sampleSize;
-            const indoorRatio = currentPageSample.filter(m => m.membership_type === 'indoor').length / sampleSize;
-            const outdoorRatio = currentPageSample.filter(m => m.membership_type === 'outdoor').length / sampleSize;
-
-            setStats({
-              total_members: totalMembers,
-              active_members: Math.round(totalMembers * activeRatio),
-              inactive_members: Math.round(totalMembers * inactiveRatio),
-              indoor_members: Math.round(totalMembers * indoorRatio),
-              outdoor_members: Math.round(totalMembers * outdoorRatio)
-            });
-          } else {
-            // Fallback for empty data
-            setStats({
-              total_members: totalMembers,
-              active_members: 0,
-              inactive_members: 0,
-              indoor_members: 0,
-              outdoor_members: 0
-            });
-          }
         }
       } catch (error) {
         // Only handle error if request wasn't aborted
         if (!abortControllerRef.current?.signal.aborted) {
-          console.error('Error loading members data:', error);
+          console.error('Error loading member data:', error);
           setError(error.message);
         }
       } finally {
@@ -182,7 +179,7 @@ const Members = () => {
       }
     };
 
-    loadData();
+    loadMemberData();
 
     // Cleanup function
     return () => {
