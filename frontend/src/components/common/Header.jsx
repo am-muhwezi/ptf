@@ -23,7 +23,7 @@ const Header = ({ onMenuClick }) => {
       setShowUserMenu(false);
       await logout();
     } catch (error) {
-      console.error('Logout error:', error);
+      // Handle logout error silently or show user feedback
     }
   };
 
@@ -37,7 +37,6 @@ const Header = ({ onMenuClick }) => {
   const getUserDisplayName = () => {
     if (!user) return 'User';
     if (user.firstName && user.lastName) {
-      console.log('Header user:', user);
       return `${user.firstName} ${user.lastName}`;
     }
     return user.email || 'User';
@@ -137,7 +136,6 @@ const Header = ({ onMenuClick }) => {
                     onClick={() => {
                       setShowUserMenu(false);
                       // Navigate to profile page when implemented
-                      console.log('Navigate to profile');
                     }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
                   >
@@ -151,7 +149,6 @@ const Header = ({ onMenuClick }) => {
                     onClick={() => {
                       setShowUserMenu(false);
                       // Navigate to settings when implemented
-                      console.log('Navigate to settings');
                     }}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
                   >
