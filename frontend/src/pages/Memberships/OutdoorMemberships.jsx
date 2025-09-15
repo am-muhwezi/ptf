@@ -12,9 +12,7 @@ import { membershipService } from '../../services/membershipService';
 const OutdoorMemberships = () => {
   const abortControllerRef = useRef(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [allMembers, setAllMembers] = useState([]);
   const [members, setMembers] = useState([]);
-  const [filteredMembers, setFilteredMembers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedMember, setSelectedMember] = useState(null);
@@ -22,6 +20,8 @@ const OutdoorMemberships = () => {
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({
     total_memberships: 0,
@@ -31,59 +31,78 @@ const OutdoorMemberships = () => {
     total_revenue: 0,
     sessions_used_today: 0
   });
-  const [rateCards, setRateCards] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [hasNext, setHasNext] = useState(false);
   const [hasPrevious, setHasPrevious] = useState(false);
+  const [allMembersLoaded, setAllMembersLoaded] = useState(false);
+
 
   // Mobile sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Load sample outdoor memberships for stats
-  const loadAllOutdoorMembers = async () => {
+  // Load outdoor membership statistics separately
+  const loadStats = async () => {
     try {
-      const response = await outdoorMembershipService.getMembers({
-        page: 1,
-        limit: 50
-      });
-      
+      setStatsLoading(true);
+      const response = await outdoorMembershipService.getStats();
+
       if (response.success && response.data) {
-        const transformedMembers = response.data.map(transformMemberData);
-        setAllMembers(transformedMembers);
+        setStats(response.data);
       }
     } catch (err) {
-      console.error('Failed to load outdoor members for stats:', err);
+      console.error('Failed to load outdoor membership stats:', err);
+      setError('Failed to load statistics');
+    } finally {
+      setStatsLoading(false);
     }
   };
 
-  // Load outdoor memberships from API (for display)
-  const loadOutdoorMembers = async (page = 1) => {
+  // Load outdoor memberships from API with caching and lazy loading
+  const loadOutdoorMembers = async (page = 1, isLoadMore = false) => {
     try {
-      setLoading(true);
+      if (isLoadMore) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
-      
-      const response = await outdoorMembershipService.getAll({
+
+      const response = await outdoorMembershipService.getMembers({
         search: searchTerm,
         status: filterStatus !== 'all' ? filterStatus : undefined,
         page: page,
         limit: 20
       });
-      
+
       if (response.success) {
         const transformedMembers = response.members.data.map(transformMemberData);
-        setMembers(transformedMembers);
-        setFilteredMembers(transformedMembers);
-        
+        const totalCount = response.members.count || 0;
+        const totalPages = Math.ceil(totalCount / 20);
+
+        // Calculate if there are more pages based on current loaded members vs total
+        let newMembersLength;
+        if (isLoadMore) {
+          // When loading more, check if combined length is less than total
+          newMembersLength = members.length + transformedMembers.length;
+          setMembers(prevMembers => [...prevMembers, ...transformedMembers]);
+        } else {
+          // When replacing, check if current page's data length is less than total
+          newMembersLength = transformedMembers.length;
+          setMembers(transformedMembers);
+        }
+
+        const hasNext = newMembersLength < totalCount;
+        const hasPrevious = page > 1;
+
         // Handle pagination
         setCurrentPage(page);
-        setHasNext(!!response.members.next);
-        setHasPrevious(!!response.members.previous);
-        
-        // Calculate total pages from count
-        if (response.members.count) {
-          setTotalPages(Math.ceil(response.members.count / 20));
-        }
+        setHasNext(hasNext);
+        setHasPrevious(hasPrevious);
+        setTotalCount(totalCount);
+        setTotalPages(totalPages);
+        setAllMembersLoaded(!hasNext);
       } else {
         throw new Error('Failed to load outdoor memberships');
       }
@@ -91,94 +110,89 @@ const OutdoorMemberships = () => {
       setError(err.message);
       showToast('Error loading outdoor memberships: ' + err.message, 'error');
     } finally {
-      setLoading(false);
-    }
-  };
-
-  // Load membership statistics
-  const loadStats = async () => {
-    try {
-      const response = await outdoorMembershipService.getStats();
-      if (response.success) {
-        setStats(response.data);
+      if (isLoadMore) {
+        setLoadingMore(false);
+      } else {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to load stats:', err);
     }
   };
 
-  // Load outdoor membership data with proper cleanup (unified pattern)
+  // Clear cache when filters change or data is modified
+  const clearCache = () => {
+    outdoorMembershipService.clearCache();
+  };
+
+  // Load stats separately - only when component mounts or refreshTrigger changes
+  useEffect(() => {
+    console.log('🟠 Loading outdoor membership stats');
+    loadStats();
+  }, [refreshTrigger]);
+
+  // Load member data with proper cleanup and debouncing
   useEffect(() => {
     console.log('🟠 OutdoorMemberships useEffect mounted');
-    
+
     const loadData = async () => {
       // Cancel previous request if still pending
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
-      
+
       abortControllerRef.current = new AbortController();
-      const signal = abortControllerRef.current.signal;
-      
-      setLoading(true);
-      setError(null);
-      
+
       try {
-        const params = {
-          page: currentPage,
-          limit: 50,
-          ...(searchTerm && { search: searchTerm }),
-          ...(filterStatus !== 'all' && { status: filterStatus })
-        };
-        
-        const response = await outdoorMembershipService.getAll(params);
-        
-        // Check if request was aborted
-        if (signal.aborted) return;
-        
-        if (response.success) {
-          const transformedMembers = response.members.data.map(transformMemberData);
-          setAllMembers(transformedMembers);
-          setMembers(transformedMembers.slice(0, 20)); // Display first 20
-          setFilteredMembers(transformedMembers); // For local filtering
-          setStats(response.stats);
-          
-          // Handle pagination
-          setHasNext(!!response.members.next);
-          setHasPrevious(!!response.members.previous);
-          if (response.members.count) {
-            setTotalPages(Math.ceil(response.members.count / 20));
-          }
-        }
+        // Reset pagination state when filters change
+        setCurrentPage(1);
+        setAllMembersLoaded(false);
+
+        // Clear cache when search/filter changes
+        clearCache();
+
+        await loadOutdoorMembers(1, false);
       } catch (err) {
-        if (!signal.aborted) {
+        if (!abortControllerRef.current?.signal?.aborted) {
           setError(err.message);
           showToast('Error loading outdoor memberships: ' + err.message, 'error');
         }
-      } finally {
-        if (!signal.aborted) {
-          setLoading(false);
-        }
       }
     };
-    
+
     // Debounce search/filter changes
     const timeoutId = setTimeout(loadData, searchTerm || filterStatus !== 'all' ? 300 : 0);
-    
+
     return () => {
       clearTimeout(timeoutId);
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
     };
-  }, [currentPage, searchTerm, filterStatus, refreshTrigger]); // Proper dependency array
+  }, [searchTerm, filterStatus]); // Removed currentPage from dependencies
 
-  // Handle pagination
-  const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setCurrentPage(newPage); // useEffect will handle the API call
+  // Handle load more functionality for lazy loading
+  const handleLoadMore = () => {
+    if (!loadingMore && hasNext && !allMembersLoaded) {
+      const nextPage = currentPage + 1;
+      console.log(`🟠 Loading more members - page ${nextPage}`);
+      loadOutdoorMembers(nextPage, true); // true = append to existing members
     }
   };
+
+  // Handle infinite scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+
+      // Trigger load more when user scrolls to 80% of the page
+      if (scrollTop + clientHeight >= scrollHeight * 0.8 &&
+          !loadingMore && hasNext && !allMembersLoaded) {
+        handleLoadMore();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [loadingMore, hasNext, allMembersLoaded, currentPage]);
 
 
   const showToast = (message, type = 'success') => {
@@ -196,7 +210,8 @@ const OutdoorMemberships = () => {
       const response = await membershipService.useSession(membershipId, { location });
       if (response.success) {
         showToast(response.message, 'success');
-        // Trigger refresh via useEffect
+        // Clear cache and trigger refresh
+        clearCache();
         setRefreshTrigger(prev => prev + 1);
       }
     } catch (err) {
@@ -214,9 +229,9 @@ const OutdoorMemberships = () => {
       const response = await membershipService.deleteOutdoorMember(memberId);
       if (response.success) {
         showToast(response.message, 'success');
-        // Refresh the member list
+        // Clear cache and refresh the member list
+        clearCache();
         setRefreshTrigger(prev => prev + 1);
-        loadStats();
       }
     } catch (err) {
       showToast('Failed to delete member: ' + err.message, 'error');
@@ -242,8 +257,8 @@ const OutdoorMemberships = () => {
         const response = await membershipService.updateOutdoorMember(memberId, updatedData);
         if (response.success) {
           showToast(`Member has been suspended`, 'warning');
+          clearCache();
           setRefreshTrigger(prev => prev + 1);
-          loadStats();
         }
       }
     } catch (err) {
@@ -257,9 +272,8 @@ const OutdoorMemberships = () => {
       if (response.success) {
         showToast('Outdoor member added successfully!', 'success');
         setShowAddMemberModal(false);
+        clearCache();
         setRefreshTrigger(prev => prev + 1);
-        loadAllOutdoorMembers();
-        loadStats();
       }
     } catch (err) {
       showToast('Failed to add member: ' + err.message, 'error');
@@ -396,22 +410,22 @@ const OutdoorMemberships = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <Card
                 title="Total Outdoor Members"
-                value={allMembers.length}
+                value={statsLoading ? '...' : stats.total_memberships || 0}
                 subtitle="Active memberships"
               />
               <Card
                 title="Active Members"
-                value={allMembers.filter(m => m.status === 'active').length}
+                value={statsLoading ? '...' : stats.active_memberships || 0}
                 subtitle="Currently active"
               />
               <Card
                 title="Expiring Soon"
-                value={allMembers.filter(m => isExpiringSoon(m.expiryDate)).length}
+                value={statsLoading ? '...' : stats.expiring_soon || 0}
                 subtitle="Within 30 days"
               />
               <Card
                 title="Monthly Revenue"
-                value={formatCurrency(allMembers.reduce((sum, m) => sum + (m.status === 'active' ? m.amount : 0), 0))}
+                value={statsLoading ? '...' : formatCurrency(stats.total_revenue || 0)}
                 subtitle="From outdoor memberships"
               />
             </div>
@@ -572,86 +586,39 @@ const OutdoorMemberships = () => {
                 </table>
               </div>
               
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center text-sm text-gray-700">
+              {/* Load More and Pagination Controls */}
+              {members.length > 0 && (
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                  <div className="flex items-center justify-center text-sm text-gray-600 mb-3">
                     <span>
-                      Showing {((currentPage - 1) * 20) + 1} to {Math.min(currentPage * 20, members.length + ((currentPage - 1) * 20))} of {allMembers.length} outdoor members
+                      Showing {members.length} {totalCount > 0 && `of ${totalCount}`} outdoor members
                     </span>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <button
-                      onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                      disabled={currentPage === 1}
-                      className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
-                    >
-                      <span>←</span>
-                      <span className="hidden sm:inline">Previous</span>
-                    </button>
-                    
-                    <div className="flex space-x-1">
-                      {/* Show first page if current page is far from start */}
-                      {currentPage > 3 && totalPages > 5 && (
-                        <>
-                          <button
-                            onClick={() => handlePageChange(1)}
-                            className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                          >
-                            1
-                          </button>
-                          {currentPage > 4 && <span className="px-2 py-2 text-sm text-gray-500">...</span>}
-                        </>
-                      )}
-                      
-                      {/* Show page numbers around current page */}
-                      {(() => {
-                        const start = Math.max(1, currentPage - 2);
-                        const end = Math.min(totalPages, currentPage + 2);
-                        const pages = [];
-                        
-                        for (let i = start; i <= end; i++) {
-                          pages.push(
-                            <button
-                              key={i}
-                              onClick={() => handlePageChange(i)}
-                              className={`px-3 py-2 text-sm border rounded-md transition-colors ${
-                                currentPage === i
-                                  ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
-                                  : 'border-gray-300 hover:bg-gray-50 text-gray-700'
-                              }`}
-                            >
-                              {i}
-                            </button>
-                          );
-                        }
-                        
-                        return pages;
-                      })()}
-                      
-                      {/* Show last page if current page is far from end */}
-                      {currentPage < totalPages - 2 && totalPages > 5 && (
-                        <>
-                          {currentPage < totalPages - 3 && <span className="px-2 py-2 text-sm text-gray-500">...</span>}
-                          <button
-                            onClick={() => handlePageChange(totalPages)}
-                            className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                          >
-                            {totalPages}
-                          </button>
-                        </>
-                      )}
+
+                  {loadingMore && (
+                    <div className="flex items-center justify-center space-x-2 mb-3">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
+                      <span className="text-sm text-gray-600">Loading more members...</span>
                     </div>
-                    
-                    <button
-                      onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                      disabled={currentPage === totalPages}
-                      className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
-                    >
-                      <span className="hidden sm:inline">Next</span>
-                      <span>→</span>
-                    </button>
-                  </div>
+                  )}
+
+                  {!loadingMore && hasNext && !allMembersLoaded && (
+                    <div className="text-center">
+                      <button
+                        onClick={handleLoadMore}
+                        className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                        disabled={loadingMore}
+                      >
+                        Load More Members
+                      </button>
+                    </div>
+                  )}
+
+                  {(allMembersLoaded || (!hasNext && members.length > 0)) && (
+                    <div className="text-center text-sm text-gray-500 italic">
+                      All outdoor members loaded
+                    </div>
+                  )}
                 </div>
               )}
             </div>

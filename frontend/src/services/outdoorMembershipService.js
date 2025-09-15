@@ -1,4 +1,5 @@
 import apiClient, { API_ENDPOINTS } from '../config/api';
+import { memberCache, statsCache, CACHE_KEYS, CACHE_TTL } from '../utils/cache';
 
 /**
  * Outdoor Membership Service - Handles all outdoor membership operations
@@ -15,35 +16,118 @@ import apiClient, { API_ENDPOINTS } from '../config/api';
  */
 export const outdoorMembershipService = {
   /**
-   * Get all outdoor membership data (members + stats) in one call
+   * Get outdoor members with pagination and filtering (members only)
    * @param {Object} params - Query parameters for pagination/filtering
    * @param {number} [params.page=1] - Page number
    * @param {number} [params.limit=20] - Items per page
    * @param {string} [params.search] - Search term
    * @param {string} [params.status] - Filter by status
-   * @returns {Promise<OutdoorMembershipData>} Combined members and stats data
+   * @returns {Promise<Object>} Paginated members data
    */
-  getAll: async (params = {}) => {
-    console.count('🟠 OutdoorService.getAll() called');
-    console.log('🟠 OutdoorService.getAll() params:', params);
-    
+  getMembers: async (params = {}) => {
+    console.count('🟠 OutdoorService.getMembers() called');
+    console.log('🟠 OutdoorService.getMembers() params:', params);
+
+    // Generate cache key
+    const cacheKey = CACHE_KEYS.OUTDOOR_MEMBERS(
+      params.page || 1,
+      params.search,
+      params.status
+    );
+
+    // Check cache first
+    const cached = memberCache.get(cacheKey);
+    if (cached) {
+      console.log('📄 Using cached outdoor members data');
+      return cached;
+    }
+
     try {
-      // Fetch essential data only (members + stats)
-      const [membersResponse, statsResponse] = await Promise.all([
-        apiClient.get(API_ENDPOINTS.memberships.outdoor, { params }),
-        apiClient.get(API_ENDPOINTS.memberships.outdoor_stats)
-      ]);
-      
-      return {
+      const response = await apiClient.get(API_ENDPOINTS.memberships.outdoor, { params });
+
+      const result = {
         success: true,
         members: {
-          data: membersResponse.data.results || membersResponse.data,
-          count: membersResponse.data.count || 0,
-          next: membersResponse.data.next,
-          previous: membersResponse.data.previous
-        },
+          data: response.data.results || response.data,
+          count: response.data.pagination?.total_count || response.data.count || 0,
+          next: response.data.pagination?.has_next ? `page=${(response.data.pagination?.page || 1) + 1}` : null,
+          previous: response.data.pagination?.has_previous ? `page=${(response.data.pagination?.page || 1) - 1}` : null
+        }
+      };
+
+      // Cache the result
+      const ttl = params.search ? CACHE_TTL.SEARCH : CACHE_TTL.MEMBERS;
+      memberCache.set(cacheKey, result, ttl);
+      console.log('📄 Outdoor members data cached');
+
+      return result;
+    } catch (error) {
+      console.error('🟠 OutdoorService.getMembers() error:', error);
+      throw new Error(error.response?.data?.message || 'Failed to fetch outdoor members');
+    }
+  },
+
+  /**
+   * Get outdoor membership statistics (stats only)
+   * @returns {Promise<Object>} Stats data
+   */
+  getStats: async () => {
+    console.count('🟠 OutdoorService.getStats() called');
+
+    // Check cache first
+    const cached = statsCache.get(CACHE_KEYS.OUTDOOR_STATS);
+    if (cached) {
+      console.log('📊 Using cached outdoor stats');
+      return cached;
+    }
+
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.memberships.outdoor_stats);
+
+      const result = {
+        success: true,
+        data: response.data?.data || response.data
+      };
+
+      // Cache the stats
+      statsCache.set(CACHE_KEYS.OUTDOOR_STATS, result, CACHE_TTL.STATS);
+      console.log('📊 Outdoor stats cached');
+
+      return result;
+    } catch (error) {
+      console.error('🟠 OutdoorService.getStats() error:', error);
+      throw new Error(error.response?.data?.message || 'Failed to fetch outdoor membership stats');
+    }
+  },
+
+  /**
+   * Clear all cached data for outdoor memberships
+   */
+  clearCache: () => {
+    memberCache.clear();
+    statsCache.delete(CACHE_KEYS.OUTDOOR_STATS);
+    console.log('🗑️ Outdoor membership cache cleared');
+  },
+
+  /**
+   * DEPRECATED: Get all outdoor membership data (members + stats) in one call
+   * Use getMembers() and getStats() separately instead
+   * @deprecated
+   */
+  getAll: async (params = {}) => {
+    console.warn('🟠 OutdoorService.getAll() is deprecated. Use getMembers() and getStats() separately.');
+
+    try {
+      // Fetch data separately for better performance and caching
+      const [membersResponse, statsResponse] = await Promise.all([
+        this.getMembers(params),
+        this.getStats()
+      ]);
+
+      return {
+        success: true,
+        members: membersResponse.members,
         stats: statsResponse.data
-        // Note: Rate cards are hardcoded and not fetched from API
       };
     } catch (error) {
       console.error('🟠 OutdoorService.getAll() error:', error);

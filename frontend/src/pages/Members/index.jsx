@@ -20,6 +20,7 @@ const Members = () => {
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({
     total_members: 0,
@@ -84,7 +85,7 @@ const Members = () => {
   useEffect(() => {
     const loadStats = async () => {
       try {
-        setLoading(true);
+        setStatsLoading(true);
         setError(null);
 
         // Load lightweight stats first (dashboard pattern)
@@ -112,7 +113,7 @@ const Members = () => {
         console.error('Error loading stats:', error);
         setError(error.message);
       } finally {
-        setLoading(false);
+        setStatsLoading(false);
       }
     };
 
@@ -184,9 +185,18 @@ const Members = () => {
           setFilteredMembers(filtered);
         }
 
-        // Check if there are more pages
-        const hasMore = response.pagination?.has_next ||
-                       (response.count && response.count > memberParams.page * pageSize);
+        // Check if there are more pages - improved logic
+        let hasMore = false;
+        if (response.pagination) {
+          hasMore = response.pagination.has_next || false;
+        } else if (response.count) {
+          // Calculate if there are more pages based on total count vs loaded members
+          const totalLoadedAfterThis = isLoadMore ?
+            (members.length + processedMembers.length) :
+            processedMembers.length;
+          hasMore = totalLoadedAfterThis < response.count;
+        }
+
         setHasNextPage(hasMore);
         setAllMembersLoaded(!hasMore);
 
@@ -220,6 +230,11 @@ const Members = () => {
     setFilteredMembers([]);
     setAllMembersLoaded(false);
     setHasNextPage(true);
+
+    // Clear cache when search/filter changes
+    if (searchTerm || filterStatus !== 'all' || filterMembershipType !== 'all') {
+      memberService.clearCache();
+    }
 
     loadMemberData(false);
 
@@ -277,6 +292,8 @@ const Members = () => {
   };
   
   const refreshData = () => {
+    // Clear cache when data is modified
+    memberService.clearCache();
     // Trigger refresh by updating the refreshTrigger
     setRefreshTrigger(prev => prev + 1);
   };
@@ -528,30 +545,30 @@ const Members = () => {
             <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
               <Card
                 title="Total Members"
-                value={stats.total_members}
+                value={statsLoading ? '...' : stats.total_members}
                 subtitle="All registered"
               />
               <Card
                 title="Active Members"
-                value={stats.active_members}
+                value={statsLoading ? '...' : stats.active_members}
                 subtitle="Currently active"
                 className="border-green-200"
               />
               <Card
                 title="Inactive Members"
-                value={stats.inactive_members}
+                value={statsLoading ? '...' : stats.inactive_members}
                 subtitle="Need attention"
                 className="border-red-200"
               />
               <Card
                 title="Indoor Members"
-                value={stats.indoor_members}
+                value={statsLoading ? '...' : stats.indoor_members}
                 subtitle="Indoor access"
                 className="border-blue-200"
               />
               <Card
                 title="Outdoor Members"
-                value={stats.outdoor_members}
+                value={statsLoading ? '...' : stats.outdoor_members}
                 subtitle="Outdoor access"
                 className="border-green-200"
               />
@@ -639,21 +656,27 @@ const Members = () => {
 
             {/* Members Table */}
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              {members.length === 0 ? (
+              {loading && members.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto"></div>
+                  <h3 className="mt-4 text-lg font-medium text-gray-900">Loading members...</h3>
+                  <p className="mt-1 text-sm text-gray-500">Please wait while we fetch the member data.</p>
+                </div>
+              ) : members.length === 0 && !loading ? (
                 <div className="text-center py-12">
                   <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
                   <h3 className="mt-4 text-lg font-medium text-gray-900">No members found</h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    {searchTerm || filterStatus !== 'all' || filterMembershipType !== 'all' 
+                    {searchTerm || filterStatus !== 'all' || filterMembershipType !== 'all'
                       ? 'Try adjusting your search or filter criteria.'
                       : 'Get started by adding your first member.'
                     }
                   </p>
                   {(!searchTerm && filterStatus === 'all' && filterMembershipType === 'all') && (
-                    <Button 
-                      variant="primary" 
+                    <Button
+                      variant="primary"
                       onClick={() => setShowRegisterModal(true)}
                       className="mt-4"
                     >
@@ -662,7 +685,17 @@ const Members = () => {
                   )}
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto relative">
+                  {/* Loading overlay for when data is being fetched */}
+                  {loading && members.length > 0 && (
+                    <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-500 border-t-transparent"></div>
+                        <span className="text-sm text-gray-600">Refreshing members...</span>
+                      </div>
+                    </div>
+                  )}
+
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
@@ -725,9 +758,9 @@ const Members = () => {
                 </div>
               )}
               
-              {/* Lazy Loading Controls */}
+              {/* Load More and Pagination Controls */}
               {members.length > 0 && (
-                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 text-center">
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
                   <div className="flex items-center justify-center text-sm text-gray-600 mb-3">
                     <span>
                       Showing {members.length} {totalCount > 0 && `of ${totalCount}`} members
@@ -735,26 +768,27 @@ const Members = () => {
                   </div>
 
                   {loadingMore && (
-                    <div className="flex items-center justify-center space-x-2">
+                    <div className="flex items-center justify-center space-x-2 mb-3">
                       <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
                       <span className="text-sm text-gray-600">Loading more members...</span>
                     </div>
                   )}
 
                   {!loadingMore && hasNextPage && !allMembersLoaded && (
-                    <Button
-                      variant="outline"
-                      onClick={loadMoreMembers}
-                      disabled={loadingMore}
-                      className="px-4 py-2"
-                    >
-                      Load More Members
-                    </Button>
+                    <div className="text-center">
+                      <button
+                        onClick={loadMoreMembers}
+                        className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                        disabled={loadingMore}
+                      >
+                        Load More Members
+                      </button>
+                    </div>
                   )}
 
-                  {allMembersLoaded && members.length > 0 && (
-                    <div className="text-sm text-gray-500 italic">
-                      All members have been loaded
+                  {(allMembersLoaded || (!hasNextPage && members.length > 0)) && (
+                    <div className="text-center text-sm text-gray-500 italic">
+                      All members loaded
                     </div>
                   )}
                 </div>
