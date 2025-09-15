@@ -1,5 +1,5 @@
 // frontend/src/pages/Members/index.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
 import Card from '../../components/ui/Card';
@@ -19,6 +19,7 @@ const Members = () => {
   const [members, setMembers] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({
     total_members: 0,
@@ -39,6 +40,11 @@ const Members = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [pageSize, setPageSize] = useState(20);
+  const [hasNextPage, setHasNextPage] = useState(true);
+
+  // Lazy loading state
+  const [isLazyLoading, setIsLazyLoading] = useState(true);
+  const [allMembersLoaded, setAllMembersLoaded] = useState(false);
 
   // Filter and search states
   const [searchTerm, setSearchTerm] = useState('');
@@ -113,76 +119,109 @@ const Members = () => {
     loadStats();
   }, [refreshTrigger]);
 
-  // Separate useEffect for member data (only when needed for display)
-  useEffect(() => {
-    const loadMemberData = async () => {
-      // Cancel any existing request
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+  // Load initial members data and support lazy loading
+  const loadMemberData = useCallback(async (isLoadMore = false) => {
+    // Cancel any existing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller for this request
+    abortControllerRef.current = new AbortController();
+
+    try {
+      if (isLoadMore) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
       }
 
-      // Create new abort controller for this request
-      abortControllerRef.current = new AbortController();
+      const memberParams = {
+        page: isLoadMore ? currentPage + 1 : currentPage,
+        limit: pageSize
+      };
 
-      try {
-        // Only load member data if we're not on the stats-only view
-        // For now, keep member list functionality but optimize it
-        const memberParams = {
-          page: currentPage,
-          limit: pageSize
-        };
-        if (searchTerm && searchTerm.trim() !== '') memberParams.q = searchTerm;
-        if (filterStatus !== 'all') memberParams.status = filterStatus;
+      if (searchTerm && searchTerm.trim() !== '') memberParams.q = searchTerm;
+      if (filterStatus !== 'all') memberParams.status = filterStatus;
 
-        const response = await memberService.getMembers(memberParams);
+      const response = await memberService.getMembers(memberParams);
 
-        // Only update state if request wasn't aborted
-        if (!abortControllerRef.current?.signal.aborted) {
-          // Handle response for display
-          let membersData = [];
+      // Only update state if request wasn't aborted
+      if (!abortControllerRef.current?.signal.aborted) {
+        // Handle response for display
+        let membersData = [];
 
-          if (response.data) {
-            membersData = response.data;
-          } else if (response.results) {
-            membersData = response.results;
-          } else if (Array.isArray(response)) {
-            membersData = response;
-          }
+        if (response.data) {
+          membersData = response.data;
+        } else if (response.results) {
+          membersData = response.results;
+        } else if (Array.isArray(response)) {
+          membersData = response;
+        }
 
-          // Don't set totalCount here - it comes from summary endpoint only
+        // Process the members data
+        const processedMembers = membersData.map(member => ({
+          ...member,
+          membership_type: member.membership_type || 'unknown'
+        }));
 
-          // Process the members data
-          const processedMembers = membersData.map(member => ({
-            ...member,
-            membership_type: member.membership_type || 'unknown'
-          }));
+        // Apply membership type filtering if needed
+        let filtered = processedMembers;
+        if (filterMembershipType !== 'all') {
+          filtered = processedMembers.filter(member =>
+            member.membership_type === filterMembershipType
+          );
+        }
 
-          // Apply membership type filtering if needed
-          let filtered = processedMembers;
-          if (filterMembershipType !== 'all') {
-            filtered = processedMembers.filter(member =>
-              member.membership_type === filterMembershipType
-            );
-          }
-
+        if (isLoadMore) {
+          // Append new members to existing list
+          setMembers(prevMembers => [...prevMembers, ...processedMembers]);
+          setFilteredMembers(prevFiltered => [...prevFiltered, ...filtered]);
+          setCurrentPage(prev => prev + 1);
+        } else {
+          // Replace existing members
           setMembers(processedMembers);
           setFilteredMembers(filtered);
         }
-      } catch (error) {
-        // Only handle error if request wasn't aborted
-        if (!abortControllerRef.current?.signal.aborted) {
-          console.error('Error loading member data:', error);
-          setError(error.message);
+
+        // Check if there are more pages
+        const hasMore = response.pagination?.has_next ||
+                       (response.count && response.count > memberParams.page * pageSize);
+        setHasNextPage(hasMore);
+        setAllMembersLoaded(!hasMore);
+
+        if (response.pagination) {
+          setTotalPages(response.pagination.total_pages);
         }
-      } finally {
-        // Only update loading state if request wasn't aborted
-        if (!abortControllerRef.current?.signal.aborted) {
+      }
+    } catch (error) {
+      // Only handle error if request wasn't aborted
+      if (!abortControllerRef.current?.signal.aborted) {
+        console.error('Error loading member data:', error);
+        setError(error.message);
+      }
+    } finally {
+      // Only update loading state if request wasn't aborted
+      if (!abortControllerRef.current?.signal.aborted) {
+        if (isLoadMore) {
+          setLoadingMore(false);
+        } else {
           setLoading(false);
         }
       }
-    };
+    }
+  }, [currentPage, pageSize, searchTerm, filterStatus, filterMembershipType]);
 
-    loadMemberData();
+  // Initial load and when filters change
+  useEffect(() => {
+    // Reset state when filters change
+    setCurrentPage(1);
+    setMembers([]);
+    setFilteredMembers([]);
+    setAllMembersLoaded(false);
+    setHasNextPage(true);
+
+    loadMemberData(false);
 
     // Cleanup function
     return () => {
@@ -190,7 +229,34 @@ const Members = () => {
         abortControllerRef.current.abort();
       }
     };
-  }, [currentPage, pageSize, searchTerm, filterStatus, filterMembershipType, refreshTrigger]);
+  }, [searchTerm, filterStatus, filterMembershipType, refreshTrigger]);
+
+  // Load more data function for lazy loading
+  const loadMoreMembers = useCallback(() => {
+    if (!loadingMore && hasNextPage && !allMembersLoaded) {
+      loadMemberData(true);
+    }
+  }, [loadingMore, hasNextPage, allMembersLoaded, loadMemberData]);
+
+  // Scroll detection for infinite scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+
+      // Trigger load more when user scrolls to 80% of the page
+      if (scrollTop + clientHeight >= scrollHeight * 0.8 && !loadingMore && hasNextPage && !allMembersLoaded) {
+        loadMoreMembers();
+      }
+    };
+
+    if (isLazyLoading) {
+      window.addEventListener('scroll', handleScroll, { passive: true });
+
+      return () => {
+        window.removeEventListener('scroll', handleScroll);
+      };
+    }
+  }, [loadMoreMembers, loadingMore, hasNextPage, allMembersLoaded, isLazyLoading]);
 
 
   // Handle filter changes - reset to page 1 when filters change
@@ -215,17 +281,6 @@ const Members = () => {
     setRefreshTrigger(prev => prev + 1);
   };
 
-  // Pagination handlers
-  const handlePageChange = (newPage) => {
-    setCurrentPage(newPage);
-    // The unified useEffect will handle the data fetching
-  };
-
-  const handlePageSizeChange = (newSize) => {
-    setPageSize(newSize);
-    setCurrentPage(1);
-    // The unified useEffect will handle the data fetching
-  };
 
   // Member action handlers
   const handleViewMember = (member) => {
@@ -460,7 +515,7 @@ const Members = () => {
                 <Button variant="outline" onClick={handleExportMembers}>
                   Export Members
                 </Button>
-                <Button 
+                <Button
                   variant="primary"
                   onClick={() => setShowRegisterModal(true)}
                 >
@@ -670,86 +725,38 @@ const Members = () => {
                 </div>
               )}
               
-              {/* Pagination Controls */}
-              {totalCount > 0 && (
-                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center text-sm text-gray-700">
+              {/* Lazy Loading Controls */}
+              {members.length > 0 && (
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 text-center">
+                  <div className="flex items-center justify-center text-sm text-gray-600 mb-3">
                     <span>
-                      Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} members
+                      Showing {members.length} {totalCount > 0 && `of ${totalCount}`} members
                     </span>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <button
-                      onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                      disabled={currentPage === 1}
-                      className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
-                    >
-                      <span>←</span>
-                      <span className="hidden sm:inline">Previous</span>
-                    </button>
-                    
-                    <div className="flex space-x-1">
-                      {/* Show first page if current page is far from start */}
-                      {currentPage > 3 && totalPages > 5 && (
-                        <>
-                          <button
-                            onClick={() => handlePageChange(1)}
-                            className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                          >
-                            1
-                          </button>
-                          {currentPage > 4 && <span className="px-2 py-2 text-sm text-gray-500">...</span>}
-                        </>
-                      )}
-                      
-                      {/* Show page numbers around current page */}
-                      {(() => {
-                        const start = Math.max(1, currentPage - 2);
-                        const end = Math.min(totalPages, currentPage + 2);
-                        const pages = [];
-                        
-                        for (let i = start; i <= end; i++) {
-                          pages.push(
-                            <button
-                              key={i}
-                              onClick={() => handlePageChange(i)}
-                              className={`px-3 py-2 text-sm border rounded-md transition-colors ${
-                                currentPage === i
-                                  ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
-                                  : 'border-gray-300 hover:bg-gray-50 text-gray-700'
-                              }`}
-                            >
-                              {i}
-                            </button>
-                          );
-                        }
-                        
-                        return pages;
-                      })()}
-                      
-                      {/* Show last page if current page is far from end */}
-                      {currentPage < totalPages - 2 && totalPages > 5 && (
-                        <>
-                          {currentPage < totalPages - 3 && <span className="px-2 py-2 text-sm text-gray-500">...</span>}
-                          <button
-                            onClick={() => handlePageChange(totalPages)}
-                            className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                          >
-                            {totalPages}
-                          </button>
-                        </>
-                      )}
+
+                  {loadingMore && (
+                    <div className="flex items-center justify-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
+                      <span className="text-sm text-gray-600">Loading more members...</span>
                     </div>
-                    
-                    <button
-                      onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                      disabled={currentPage === totalPages}
-                      className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                  )}
+
+                  {!loadingMore && hasNextPage && !allMembersLoaded && (
+                    <Button
+                      variant="outline"
+                      onClick={loadMoreMembers}
+                      disabled={loadingMore}
+                      className="px-4 py-2"
                     >
-                      <span className="hidden sm:inline">Next</span>
-                      <span>→</span>
-                    </button>
-                  </div>
+                      Load More Members
+                    </Button>
+                  )}
+
+                  {allMembersLoaded && members.length > 0 && (
+                    <div className="text-sm text-gray-500 italic">
+                      All members have been loaded
+                    </div>
+                  )}
                 </div>
               )}
             </div>

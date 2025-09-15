@@ -85,30 +85,14 @@ const Dashboard = () => {
   const transformStats = (backendStats) => {
     if (!backendStats) return null;
 
+    // Backend now returns simplified structure with only membership stats
     return {
       membershipData: {
         indoor: backendStats.memberships?.indoor_count || 0,
         outdoor: backendStats.memberships?.outdoor_count || 0,
         renewalsDue: backendStats.memberships?.expiring_soon || 0,
-        paymentOverdue: backendStats.memberships?.overdue_payment || 0
-      },
-      bookingData: {
-        groupSessions: backendStats.bookings?.today || 0,
-        oneOnOneSessions: 0, // Not available in current backend
-        trainersAvailable: 0, // Not available in current backend
-        waitlistRequests: backendStats.bookings?.pending || 0
-      },
-      attendanceData: {
-        indoorVisits: backendStats.attendance_today?.indoor_visits || 0,
-        outdoorVisits: backendStats.attendance_today?.outdoor_visits || 0
-      },
-      feedbackData: {
-        openTickets: 0, // Not available in current backend
-        avgResolutionTime: '0 days' // Not available in current backend
-      },
-      inventoryData: {
-        availableStock: 0, // Not available in current backend
-        lowStockAlerts: 0 // Not available in current backend
+        paymentOverdue: backendStats.memberships?.overdue_payment || 0,
+        pendingPayment: backendStats.memberships?.pending_payment || 0
       }
     };
   };
@@ -119,25 +103,8 @@ const Dashboard = () => {
       indoor: 0,
       outdoor: 0,
       renewalsDue: 0,
-      paymentOverdue: 0
-    },
-    bookingData: {
-      groupSessions: 0,
-      oneOnOneSessions: 0,
-      trainersAvailable: 0,
-      waitlistRequests: 0
-    },
-    attendanceData: {
-      indoorVisits: 0,
-      outdoorVisits: 0
-    },
-    feedbackData: {
-      openTickets: 0,
-      avgResolutionTime: '0 days'
-    },
-    inventoryData: {
-      availableStock: 0,
-      lowStockAlerts: 0
+      paymentOverdue: 0,
+      pendingPayment: 0
     }
   };
 
@@ -321,84 +288,6 @@ const Dashboard = () => {
               </div>
             </section>
 
-            {/* Bookings */}
-            <section>
-              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Bookings</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                <Card
-                  title="Group Sessions Today"
-                  value={stats.bookingData.groupSessions}
-                  onClick={() => handleCardClick('Group Sessions Today', stats.bookingData.groupSessions)}
-                />
-                <Card
-                  title="One-on-One Sessions Today"
-                  value={stats.bookingData.oneOnOneSessions}
-                  onClick={() => handleCardClick('One-on-One Sessions Today', stats.bookingData.oneOnOneSessions)}
-                />
-                <Card
-                  title="Trainers Available"
-                  value={stats.bookingData.trainersAvailable}
-                  onClick={() => handleCardClick('Trainers Available', stats.bookingData.trainersAvailable)}
-                />
-                <Card
-                  title="Waitlist Requests"
-                  value={stats.bookingData.waitlistRequests}
-                  onClick={() => handleCardClick('Waitlist Requests', stats.bookingData.waitlistRequests)}
-                />
-              </div>
-            </section>
-
-            {/* Attendance Logs */}
-            <section>
-              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Attendance Logs</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                <Card
-                  title="Indoor Visits Today"
-                  value={stats?.attendanceData?.indoorVisits || 0}
-                  onClick={() => handleCardClick('Indoor Visits Today', stats.attendanceData.indoorVisits)}
-                />
-                <Card
-                  title="Outdoor Visits Today"
-                  value={stats?.attendanceData?.outdoorVisits || 0}
-                  onClick={() => handleCardClick('Outdoor Visits Today', stats.attendanceData.outdoorVisits)}
-                />
-              </div>
-            </section>
-
-            {/* Complaints & Feedback */}
-            <section>
-              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Complaints & Feedback</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                <Card
-                  title="Open Tickets"
-                  value={stats?.feedbackData?.openTickets || 0}
-                  onClick={() => handleCardClick('Open Tickets', stats.feedbackData.openTickets)}
-                />
-                <Card
-                  title="Average Resolution Time"
-                  value={stats?.feedbackData?.avgResolutionTime || '0 days'}
-                  onClick={() => handleCardClick('Average Resolution Time', stats.feedbackData.avgResolutionTime)}
-                />
-              </div>
-            </section>
-
-
-            {/* Inventory & Merchandise */}
-            <section>
-              <h2 className="text-lg sm:text-xl font-bold text-emerald-900 mb-4 sm:mb-6">Inventory & Merchandise</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                <Card
-                  title="Available Stock Levels"
-                  value={stats?.inventoryData?.availableStock || 0}
-                  onClick={() => handleCardClick('Available Stock Levels', stats.inventoryData.availableStock)}
-                />
-                <Card
-                  title="Low Stock Alerts"
-                  value={stats?.inventoryData?.lowStockAlerts || 0}
-                  onClick={() => handleCardClick('Low Stock Alerts', stats.inventoryData.lowStockAlerts)}
-                />
-              </div>
-            </section>
           </div>
         </main>
       </div>
