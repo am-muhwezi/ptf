@@ -9,6 +9,7 @@ import logging
 from django.utils import timezone
 from django.db.models import Q, Count, Avg
 from django.core.exceptions import ValidationError
+from django.core.cache import cache
 from typing import Dict, Any, Optional, List, Tuple
 from decimal import Decimal
 
@@ -531,15 +532,22 @@ def get_members_alerts():
 
 def get_members_summary():
     """
-    Lightweight members summary - only essential stats for UI cards
+    Lightweight members summary - only essential stats for UI cards with caching
     Returns: minimal data structure for fast loading
     """
+    # Cache key for members summary (valid for 5 minutes)
+    cache_key = "members_summary"
+    cached_data = cache.get(cache_key)
+
+    if cached_data is not None:
+        return cached_data
+
     # Get only essential statistics
     member_stats = get_members_statistics()
     membership_breakdown = get_membership_breakdown()
     payment_breakdown = get_payment_status_breakdown()
 
-    return {
+    result = {
         # Member overview (essential stats only)
         "members": {
             "total": member_stats["total_members"],
@@ -564,3 +572,8 @@ def get_members_summary():
         "generated_at": timezone.now().isoformat(),
         "date": timezone.now().date().isoformat(),
     }
+
+    # Cache for 5 minutes (300 seconds)
+    cache.set(cache_key, result, 300)
+
+    return result

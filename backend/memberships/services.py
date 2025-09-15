@@ -138,22 +138,30 @@ class MembershipService:
 
     @staticmethod
     def get_membership_statistics(membership_type=None):
-        """Get membership statistics"""
+        """Get membership statistics with caching"""
         from django.db.models import Count, Sum
         from django.utils import timezone
+        from django.core.cache import cache
         from datetime import timedelta
-        
+
+        # Create cache key based on membership type
+        cache_key = f"membership_stats_{membership_type or 'all'}"
+        cached_data = cache.get(cache_key)
+
+        if cached_data is not None:
+            return cached_data
+
         # Base queryset
         memberships = Membership.objects.all()
-        
+
         # Filter by type if specified
         if membership_type:
             memberships = memberships.filter(plan__membership_type=membership_type)
-        
+
         # Calculate stats
         total_memberships = memberships.count()
         active_memberships = memberships.filter(status='active').count()
-        
+
         # Expiring soon (within 7 days)
         week_from_now = timezone.now().date() + timedelta(days=7)
         expiring_soon = memberships.filter(
@@ -161,7 +169,7 @@ class MembershipService:
             end_date__gt=timezone.now().date(),
             status='active'
         ).count()
-        
+
         # Revenue calculation
         total_revenue = memberships.filter(
             status='active'
@@ -170,8 +178,9 @@ class MembershipService:
         # Sessions used today
         today = timezone.now().date()
         sessions_used_today = 0  # TODO: Calculate from session logs when implemented
-        
-        return {
+
+        # Prepare result
+        result = {
             'total_memberships': total_memberships,
             'active_memberships': active_memberships,
             'expiring_soon': expiring_soon,
@@ -182,6 +191,11 @@ class MembershipService:
             'total_revenue': float(total_revenue),
             'sessions_used_today': sessions_used_today
         }
+
+        # Cache for 5 minutes (300 seconds)
+        cache.set(cache_key, result, 300)
+
+        return result
 
 
 class MembershipPlanService:

@@ -1,5 +1,6 @@
 from django.db.models import Count, Sum
 from django.utils import timezone
+from django.core.cache import cache
 from datetime import timedelta, date
 from members.models import Member
 from memberships.models import Membership
@@ -196,9 +197,79 @@ def get_revenue_statistics():
     }
 
 
+def get_dashboard_cards_stats():
+    """
+    Lightweight dashboard stats for the 5 main cards only
+    Returns: simplified stats structure for dashboard cards
+    """
+    # Get membership type counts
+    indoor_memberships = Membership.objects.filter(
+        plan__membership_type="indoor", status="active"
+    ).count()
+
+    outdoor_memberships = Membership.objects.filter(
+        plan__membership_type="outdoor", status="active"
+    ).count()
+
+    # Get payment status counts
+    pending_payments = Membership.objects.filter(payment_status="pending").count()
+    overdue_payments = Membership.objects.filter(payment_status="overdue").count()
+
+    # Get renewals due (expiring within 30 days)
+    today = timezone.now().date()
+    renewals_due = Membership.objects.filter(
+        end_date__lte=today + timedelta(days=30),
+        end_date__gt=today,
+        status="active"
+    ).count()
+
+    return {
+        "all_members": indoor_memberships + outdoor_memberships,
+        "indoor_memberships": indoor_memberships,
+        "outdoor_memberships": outdoor_memberships,
+        "renewals_due": renewals_due,
+        "payment_overdue": overdue_payments,
+        "generated_at": timezone.now().isoformat(),
+    }
+
+
 def get_dashboard_summary():
     """
-    Main dashboard function - combines all statistics
+    Simplified dashboard function - returns only the 5 essential metrics for dashboard cards
+    Returns: lightweight dashboard data structure with caching
+    """
+    # Cache key for dashboard stats (valid for 5 minutes)
+    cache_key = "dashboard_summary"
+    cached_data = cache.get(cache_key)
+
+    if cached_data is not None:
+        return cached_data
+
+    # Get only essential membership statistics (fast query)
+    membership_stats = get_dashboard_statistics()
+
+    # Prepare response data
+    result = {
+        "memberships": {
+            "indoor_count": membership_stats["indoor_memberships"],
+            "outdoor_count": membership_stats["outdoor_memberships"],
+            "pending_payment": membership_stats["pending_payments"],
+            "overdue_payment": membership_stats["overdue_payments"],
+            "expiring_soon": membership_stats["expiring_soon"],
+        },
+        "generated_at": timezone.now().isoformat(),
+        "date": timezone.now().date().isoformat(),
+    }
+
+    # Cache for 5 minutes (300 seconds)
+    cache.set(cache_key, result, 300)
+
+    return result
+
+
+def get_dashboard_summary_full():
+    """
+    Complete dashboard function - combines all statistics (for detailed views)
     Returns: complete dashboard data structure
     """
     # Get all individual statistics
