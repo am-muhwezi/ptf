@@ -168,8 +168,8 @@ def list_all_members(request):
         # Get queryset with optimized queries
         queryset = Member.objects.select_related().prefetch_related("memberships__plan")
 
-        # Define searchable fields
-        search_fields = ['first_name', 'last_name', 'email', 'phone', 'member_id']
+        # Define searchable fields - removed 'member_id' as it doesn't exist on Member model
+        search_fields = ['first_name', 'last_name', 'email', 'phone']
 
         # Use pagination helper with search functionality
         response = SearchPaginationHelper.search_and_paginate(

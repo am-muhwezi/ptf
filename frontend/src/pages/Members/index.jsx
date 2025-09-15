@@ -281,17 +281,6 @@ const Members = () => {
     setRefreshTrigger(prev => prev + 1);
   };
 
-  // Toggle between pagination and lazy loading modes
-  const toggleLazyLoading = () => {
-    setIsLazyLoading(!isLazyLoading);
-    // Reset state when toggling modes
-    setCurrentPage(1);
-    setMembers([]);
-    setFilteredMembers([]);
-    setAllMembersLoaded(false);
-    setHasNextPage(true);
-    loadMemberData(false);
-  };
 
   // Member action handlers
   const handleViewMember = (member) => {
@@ -523,13 +512,6 @@ const Members = () => {
                 <p className="text-gray-600 mt-1">Manage all gym members and their information</p>
               </div>
               <div className="flex space-x-3">
-                <Button
-                  variant="ghost"
-                  onClick={toggleLazyLoading}
-                  className="text-sm"
-                >
-                  {isLazyLoading ? '📄 Pagination' : '🔄 Lazy Load'}
-                </Button>
                 <Button variant="outline" onClick={handleExportMembers}>
                   Export Members
                 </Button>
@@ -578,14 +560,6 @@ const Members = () => {
             {/* Filters and Search */}
             <div className="bg-white rounded-xl p-6 shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-                {/* Loading Mode Indicator */}
-                <div className="flex items-center space-x-2 text-sm text-gray-600 mb-4 md:mb-0">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    {isLazyLoading ? '🔄 Lazy Loading Mode' : '📄 Pagination Mode'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 mt-4">
                 <div className="flex-1 max-w-md">
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

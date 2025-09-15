@@ -7,6 +7,7 @@ import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import outdoorMembershipService from '../../services/outdoorMembershipService';
+import { membershipService } from '../../services/membershipService';
 
 const OutdoorMemberships = () => {
   const abortControllerRef = useRef(null);

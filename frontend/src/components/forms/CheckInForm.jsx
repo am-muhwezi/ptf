@@ -42,13 +42,19 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
     };
   }, []);
 
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  const debouncedSearchQuery = useDebounce(searchQuery, 500); // Increased debounce for better performance
 
   // Handle search input changes
   const handleSearchChange = (e) => {
-    setSearchQuery(e.target.value);
+    const value = e.target.value;
+    setSearchQuery(value);
     setError('');
     setSuccessMessage('');
+
+    // Clear selected member when typing to allow new search
+    if (selectedMember) {
+      setSelectedMember(null);
+    }
   };
 
   // Handle member selection from dropdown
@@ -68,30 +74,32 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
     setSuccessMessage('');
   };
 
-  // FIXED: Proper search function with error handling
+  // Optimized search function with better error handling and loading states
   const performSearch = useCallback(async (query) => {
     if (!query.trim()) {
       setSearchResults([]);
+      setError('');
       return;
     }
 
+    // Clear previous results and errors
+    setError('');
+    setSearchResults([]);
+
     try {
-      
       const response = await searchMembers(query);
-      
 
       // Handle the response from your Django backend
       const results = response?.results || [];
       setSearchResults(results);
 
       if (results.length === 0) {
-        setError(`No members found matching "${query}"`);
+        setError(`No members found matching "${query}". Try searching by name, email, or phone.`);
       }
 
     } catch (error) {
-      console.error('Search error:', error);
       setSearchResults([]);
-      setError('Search failed. Please try again.');
+      setError('Search failed. Please check your connection and try again.');
     }
   }, [searchMembers]);
 
@@ -99,6 +107,12 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
   const handleCheckIn = async () => {
     if (!selectedMember) {
       setError('Please select a member to check in');
+      return;
+    }
+
+    // Check payment status before allowing check-in
+    if (selectedMember.payment_status !== 'paid') {
+      setError(`Cannot check in ${selectedMember.first_name} ${selectedMember.last_name}. Payment status: ${selectedMember.payment_status}. Please update payment before check-in.`);
       return;
     }
 
@@ -136,30 +150,26 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
       }, 3000);
       
     } catch (error) {
-      console.error('Check-in error:', error);
-      
-      // Handle specific error cases
-      if (error.message && error.message.includes('already checked in')) {
-        setError(`${selectedMember.first_name} ${selectedMember.last_name} is already checked in today.`);
-      } else {
-        setError(error.message || 'Failed to check in member. Please try again.');
-      }
+      // Always use the specific backend error message when available
+      const errorMessage = error.message || error.response?.data?.error || 'Failed to check in member. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // FIXED: Debounced search effect with proper cleanup and minimum 2 characters
+  // Optimized debounced search effect
   useEffect(() => {
     if (debouncedSearchQuery && debouncedSearchQuery.length >= 2 && !selectedMember) {
       performSearch(debouncedSearchQuery);
-    } else if (!debouncedSearchQuery || debouncedSearchQuery.length < 2) {
+    } else if (!debouncedSearchQuery) {
+      // Clear everything when search is empty
       setSearchResults([]);
-      if (debouncedSearchQuery && debouncedSearchQuery.length < 2) {
-        setError('Please enter at least 2 characters to search');
-      } else {
-        setError('');
-      }
+      setError('');
+    } else if (debouncedSearchQuery.length > 0 && debouncedSearchQuery.length < 2) {
+      // Show hint for minimum characters
+      setSearchResults([]);
+      setError('Type at least 2 characters to search');
     }
   }, [debouncedSearchQuery, selectedMember, performSearch]);
 
@@ -214,8 +224,9 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
             value={searchQuery}
             onChange={handleSearchChange}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter name, email, or member ID"
+            placeholder={isSearching ? "Searching..." : "Search by name, email, or phone (min 2 chars)"}
             disabled={isSubmitting}
+            autoFocus
           />
           
           {/* Search Results Dropdown */}
@@ -259,7 +270,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
 
           {/* Loading indicator */}
           {(isSearching || isSubmitting) && (
-            <div className="absolute right-3 top-11 transform -translate-y-1/2">
+            <div className="absolute right-3 top-11 transform -translate-y-1/2" title={isSearching ? "Searching members..." : "Processing check-in..."}>
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
             </div>
           )}
@@ -340,7 +351,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
         )}
 
         {/* Ready to Check-in Message */}
-        {selectedMember && selectedMember.status === 'active' && !successMessage && (
+        {selectedMember && selectedMember.status === 'active' && selectedMember.payment_status === 'paid' && !successMessage && !error && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex">
               <div className="flex-shrink-0">
@@ -351,6 +362,42 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
               <div className="ml-3">
                 <p className="text-sm text-green-800">
                   Ready to check in <strong>{selectedMember.first_name} {selectedMember.last_name}</strong>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Inactive Member Warning */}
+        {selectedMember && selectedMember.status !== 'active' && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-yellow-800">
+                  <strong>{selectedMember.first_name} {selectedMember.last_name}</strong> has an inactive membership. Please contact administration.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Payment Status Warning */}
+        {selectedMember && selectedMember.status === 'active' && selectedMember.payment_status !== 'paid' && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-800">
+                  <strong>{selectedMember.first_name} {selectedMember.last_name}</strong> cannot check in. Payment status: <strong>{selectedMember.payment_status}</strong>. Please update payment before check-in.
                 </p>
               </div>
             </div>
@@ -371,7 +418,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
             type="button"
             variant="primary"
             onClick={handleCheckIn}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !selectedMember || selectedMember.status !== 'active' || selectedMember.payment_status !== 'paid'}
             className="min-w-32"
           >
             {isSubmitting ? 'Checking In...' : 'Check In Member'}

@@ -190,7 +190,7 @@ apiClient.interceptors.response.use(
         case 400:
           // For validation errors, preserve the original error structure
           // Don't transform these - let the individual services handle them
-          if (data && (data.field_errors || data.details || data.message)) {
+          if (data && (data.field_errors || data.details || data.message || data.error)) {
             // This is likely a validation error, pass it through unchanged
             return Promise.reject(error);
           } else if (data && typeof data === 'object') {

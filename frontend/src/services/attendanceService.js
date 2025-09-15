@@ -14,8 +14,14 @@ export const attendanceService = {
       const response = await api.post(`/member/checkin/${data.memberId}/`);
       return response.data;
     } catch (error) {
-      console.error('Check-in failed:', error);
-      throw new Error(error.response?.data?.error || 'Check-in failed');
+      // Extract the specific error message from the backend
+      const backendError = error.response?.data?.error;
+      if (backendError) {
+        throw new Error(backendError);
+      }
+
+      // Fallback to generic error
+      throw new Error('Check-in failed');
     }
   },
 
@@ -29,7 +35,6 @@ export const attendanceService = {
       });
       return response.data;
     } catch (error) {
-      console.error('Check-out failed:', error);
       throw new Error(error.response?.data?.error || 'Check-out failed');
     }
   },
@@ -42,7 +47,6 @@ export const attendanceService = {
       });
       return response.data;
     } catch (error) {
-      console.error('Failed to get member status:', error);
       throw new Error(error.response?.data?.error || 'Failed to get member status');
     }
   },
@@ -53,7 +57,6 @@ export const attendanceService = {
       const response = await api.get(ENDPOINTS.TODAY);
       return response.data;
     } catch (error) {
-      console.error('Failed to get today\'s attendance:', error);
       throw new Error(error.response?.data?.error || 'Failed to get attendance data');
     }
   },
@@ -134,7 +137,6 @@ export const attendanceService = {
 
       return filteredLogs.map(log => this.formatAttendanceLog(log));
     } catch (error) {
-      console.error('Failed to get attendance logs:', error);
       throw new Error('Failed to get attendance logs');
     }
   }

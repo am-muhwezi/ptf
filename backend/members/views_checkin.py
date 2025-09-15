@@ -14,13 +14,17 @@ def checkin(request, member_id):
 
         member = Member.objects.get(id=member_id, status="active")
 
-        # Check if already checked in
+        # Check if already checked in today (allow one check-in per day)
+        from django.utils import timezone
+        today = timezone.now().date()
+
         if AttendanceLog.objects.filter(
-            member=member, check_out_time__isnull=True
+            member=member,
+            check_in_time__date=today
         ).exists():
             return Response(
                 {
-                    "error": f"{member.first_name} {member.last_name} is already checked in"
+                    "error": f"{member.first_name} {member.last_name} has already checked in today"
                 },
                 status=400,
             )
