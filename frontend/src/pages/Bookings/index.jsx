@@ -18,6 +18,9 @@ const Bookings = () => {
   const [showNewBookingModal, setShowNewBookingModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
+  // Mobile sidebar state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   // Mock data - replace with API call
   const mockBookings = [
     {
@@ -234,10 +237,10 @@ const Bookings = () => {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar />
-      
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
+        <Header onMenuClick={() => setSidebarOpen(true)} />
         
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-7xl mx-auto space-y-6">

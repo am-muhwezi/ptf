@@ -17,6 +17,9 @@ const IndoorMemberships = () => {
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
+  // Mobile sidebar state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   // API hooks
   const { data: members = [], loading, error, refetch } = useApi(
     () => membershipService.getIndoorMemberships({ 
@@ -98,9 +101,9 @@ const IndoorMemberships = () => {
   if (loading) {
     return (
       <div className="flex h-screen bg-gray-50">
-        <Sidebar />
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex-1 flex flex-col overflow-hidden">
-          <Header />
+          <Header onMenuClick={() => setSidebarOpen(true)} />
           <main className="flex-1 overflow-y-auto p-6">
             <div className="max-w-7xl mx-auto">
               <div className="animate-pulse space-y-6">
@@ -123,9 +126,9 @@ const IndoorMemberships = () => {
   if (error) {
     return (
       <div className="flex h-screen bg-gray-50">
-        <Sidebar />
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex-1 flex flex-col overflow-hidden">
-          <Header />
+          <Header onMenuClick={() => setSidebarOpen(true)} />
           <main className="flex-1 overflow-y-auto p-6">
             <div className="max-w-7xl mx-auto">
               <div className="bg-red-50 border border-red-200 rounded-lg p-6">
@@ -148,10 +151,10 @@ const IndoorMemberships = () => {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar />
-      
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
+        <Header onMenuClick={() => setSidebarOpen(true)} />
         
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-7xl mx-auto space-y-6">
