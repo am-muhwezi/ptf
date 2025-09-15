@@ -1,14 +1,30 @@
 import apiClient, { API_ENDPOINTS } from '../config/api';
+import { memberCache, statsCache, CACHE_KEYS, CACHE_TTL } from '../utils/cache';
 
 export const memberService = {
   // Get members summary stats (fast, lightweight - following dashboard pattern)
   getSummary: async () => {
+    console.count('🟠 MemberService.getSummary() called');
+
+    // Check cache first
+    const cached = statsCache.get(CACHE_KEYS.ALL_MEMBERS_STATS);
+    if (cached) {
+      console.log('📊 Using cached all members stats');
+      return cached;
+    }
+
     try {
       const response = await apiClient.get('/summary/');
-      return {
+      const result = {
         success: true,
         stats: response.data
       };
+
+      // Cache the stats
+      statsCache.set(CACHE_KEYS.ALL_MEMBERS_STATS, result, CACHE_TTL.STATS);
+      console.log('📊 All members stats cached');
+
+      return result;
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Failed to fetch members summary');
     }
@@ -31,8 +47,32 @@ export const memberService = {
 
   // Get all members with pagination
   getMembers: async (params = {}) => {
+    console.count('🟠 MemberService.getMembers() called');
+    console.log('🟠 MemberService.getMembers() params:', params);
+
+    // Generate cache key
+    const cacheKey = CACHE_KEYS.ALL_MEMBERS(
+      params.page || 1,
+      params.q,
+      params.status,
+      params.membership_type
+    );
+
+    // Check cache first
+    const cached = memberCache.get(cacheKey);
+    if (cached) {
+      console.log('📄 Using cached all members data');
+      return cached;
+    }
+
     try {
       const response = await apiClient.get(API_ENDPOINTS.members.list, { params });
+
+      // Cache the result
+      const ttl = params.q ? CACHE_TTL.SEARCH : CACHE_TTL.MEMBERS;
+      memberCache.set(cacheKey, response.data, ttl);
+      console.log('📄 All members data cached');
+
       return response.data;
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Failed to fetch members');
@@ -245,6 +285,15 @@ updateMemberStatus: async (memberId, status) => {
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Failed to update member profile');
     }
+  },
+
+  /**
+   * Clear all cached data for members
+   */
+  clearCache: () => {
+    memberCache.clear();
+    statsCache.delete(CACHE_KEYS.ALL_MEMBERS_STATS);
+    console.log('🗑️ All members cache cleared');
   },
 
 };
