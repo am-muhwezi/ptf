@@ -69,6 +69,7 @@ export const attendanceService = {
       memberName: log.member_name || (log.member ? `${log.member.first_name} ${log.member.last_name}` : 'Unknown'),
       memberEmail: log.member_email || log.member?.email,
       memberPhone: log.member_phone || log.member?.phone,
+      membershipType: log.member_type || 'unknown', // Added membershipType
       visitType: log.visit_type,
       checkInTime: log.check_in_time,
       checkOutTime: log.check_out_time,
@@ -97,18 +98,18 @@ export const attendanceService = {
     return `${minutes}m`;
   },
 
-  // Get attendance logs with filtering (mock for now, replace with real API)
-  async getAttendanceLogs(filters = {}) {
+  // Get attendance logs with filtering - now uses cached data to avoid redundant calls
+  async getAttendanceLogs(filters = {}, cachedTodaysData = null) {
     try {
-      // For now, we'll use today's attendance and extend it
-      // In the future, you'd have a dedicated endpoint for historical logs
-      const todaysData = await this.getTodaysAttendance();
-      
+      // Use cached data if provided, otherwise fetch fresh data
+      const todaysData = cachedTodaysData || await this.getTodaysAttendance();
+
       // Convert the active members data to attendance log format
       const logs = todaysData.active_members.map(member => ({
         id: member.id,
         member_id: member.id,
         member_name: member.name,
+        member_type: member.member_type, // Added member_type
         visit_type: member.visit_type,
         check_in_time: member.check_in_time,
         check_out_time: null, // Active members don't have checkout time
@@ -120,12 +121,12 @@ export const attendanceService = {
 
       // Apply filters
       let filteredLogs = logs;
-      
+
       if (filters.searchTerm) {
         const searchTerm = filters.searchTerm.toLowerCase();
         filteredLogs = filteredLogs.filter(log =>
           log.member_name.toLowerCase().includes(searchTerm) ||
-          log.activities.some(activity => 
+          log.activities.some(activity =>
             activity.toLowerCase().includes(searchTerm)
           )
         );

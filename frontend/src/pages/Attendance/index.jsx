@@ -30,30 +30,30 @@ const Attendance = () => {
   // Mobile sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Load attendance data on component mount
+  // Load attendance data on component mount - optimized to avoid redundant calls
   useEffect(() => {
-    loadTodaysAttendance();
-    loadAttendanceLogs();
+    loadTodaysAttendanceAndLogs();
   }, []);
 
-  const loadTodaysAttendance = async () => {
+  // Optimized function to load both attendance data and logs with a single API call
+  const loadTodaysAttendanceAndLogs = async () => {
     try {
       setLoading(true);
       const response = await attendanceService.getTodaysAttendance();
-      
+
       setTodaysStats({
         totalToday: response.summary.total_checkins,
         indoorToday: response.summary.indoor.total,
         outdoorToday: response.summary.outdoor.total,
         activeNow: response.summary.currently_active
       });
-      
-      // Convert active members to attendance logs format
+
+      // Convert active members to attendance logs format with member_type
       const activeLogs = response.active_members.map(member => ({
         id: `active_${member.id}`,
         memberId: member.id,
         memberName: member.name,
-        membershipType: 'active', // Since they're currently active
+        membershipType: member.member_type || 'unknown', // Use actual member_type
         checkInTime: member.check_in_time,
         checkOutTime: null,
         duration: 'Active',
@@ -62,10 +62,56 @@ const Attendance = () => {
         notes: '',
         status: 'active'
       }));
-      
+
+      setAttendanceLogs(activeLogs);
+
+      // Get filtered logs using cached data to avoid redundant API call
+      const filters = {
+        searchTerm,
+        visitType: filterType,
+        dateFilter: filterDate
+      };
+      const logs = await attendanceService.getAttendanceLogs(filters, response);
+      setFilteredLogs(logs);
+
+    } catch (error) {
+      console.error('Failed to load attendance data:', error);
+      showToast('Failed to load attendance data', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadTodaysAttendance = async () => {
+    try {
+      setLoading(true);
+      const response = await attendanceService.getTodaysAttendance();
+
+      setTodaysStats({
+        totalToday: response.summary.total_checkins,
+        indoorToday: response.summary.indoor.total,
+        outdoorToday: response.summary.outdoor.total,
+        activeNow: response.summary.currently_active
+      });
+
+      // Convert active members to attendance logs format with member_type
+      const activeLogs = response.active_members.map(member => ({
+        id: `active_${member.id}`,
+        memberId: member.id,
+        memberName: member.name,
+        membershipType: member.member_type || 'unknown', // Use actual member_type
+        checkInTime: member.check_in_time,
+        checkOutTime: null,
+        duration: 'Active',
+        visitType: member.visit_type,
+        activities: member.activities || [],
+        notes: '',
+        status: 'active'
+      }));
+
       setAttendanceLogs(activeLogs);
       setFilteredLogs(activeLogs);
-      
+
     } catch (error) {
       console.error('Failed to load attendance data:', error);
       showToast('Failed to load attendance data', 'error');
@@ -81,7 +127,7 @@ const Attendance = () => {
         visitType: filterType,
         dateFilter: filterDate
       };
-      
+
       const logs = await attendanceService.getAttendanceLogs(filters);
       setAttendanceLogs(logs);
       setFilteredLogs(logs);
@@ -100,9 +146,8 @@ const Attendance = () => {
       filtered = filtered.filter(log =>
         log.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.memberId.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.activities.some(activity => 
-          activity.toLowerCase().includes(searchTerm.toLowerCase())
-        )
+        (log.activities && log.activities.length > 0 &&
+         log.activities[0].toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
@@ -120,7 +165,7 @@ const Attendance = () => {
       // For now, we only support 'today'. In the future, you can add more date filtering
       showToast('Only "today" filter is currently supported', 'info');
     }
-    loadTodaysAttendance();
+    loadTodaysAttendanceAndLogs();
   }, [filterDate]);
 
   const showToast = (message, type = 'success') => {
@@ -152,9 +197,9 @@ const Attendance = () => {
       });
 
       showToast(`${log.memberName} checked out successfully`, 'success');
-      
+
       // Reload attendance data
-      loadTodaysAttendance();
+      loadTodaysAttendanceAndLogs();
       
     } catch (error) {
       console.error('Check-out failed:', error);
@@ -164,7 +209,7 @@ const Attendance = () => {
 
   const handleCheckInSuccess = (response) => {
     showToast('Member checked in successfully!', 'success');
-    loadTodaysAttendance(); // Refresh data
+    loadTodaysAttendanceAndLogs(); // Refresh data with optimized call
     setShowCheckInModal(false);
   };
 
@@ -177,10 +222,24 @@ const Attendance = () => {
       indoor: 'bg-blue-100 text-blue-800',
       outdoor: 'bg-green-100 text-green-800'
     };
-    
+
     return (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${typeStyles[type] || 'bg-gray-100 text-gray-800'}`}>
         {type.charAt(0).toUpperCase() + type.slice(1)}
+      </span>
+    );
+  };
+
+  const getMemberTypeBadge = (type) => {
+    const typeStyles = {
+      indoor: 'bg-blue-100 text-blue-800',
+      outdoor: 'bg-green-100 text-green-800',
+      unknown: 'bg-gray-100 text-gray-800'
+    };
+
+    return (
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${typeStyles[type] || 'bg-gray-100 text-gray-800'}`}>
+        {type && type !== 'unknown' ? type.charAt(0).toUpperCase() + type.slice(1) : 'Unknown'}
       </span>
     );
   };
@@ -260,7 +319,7 @@ const Attendance = () => {
                 <div className="flex-1 max-w-md">
                   <input
                     type="text"
-                    placeholder="Search members or activities..."
+                    placeholder="Search members or locations..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -302,13 +361,13 @@ const Attendance = () => {
                         Check-in Time
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Visit Type
+                        Member Type
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Duration
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Activities
+                        Location
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
@@ -338,23 +397,14 @@ const Attendance = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {getVisitTypeBadge(log.visitType)}
+                          {getMemberTypeBadge(log.membershipType)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{log.duration}</div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex flex-wrap gap-1">
-                            {log.activities.slice(0, 2).map((activity, index) => (
-                              <span key={index} className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">
-                                {activity}
-                              </span>
-                            ))}
-                            {log.activities.length > 2 && (
-                              <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
-                                +{log.activities.length - 2}
-                              </span>
-                            )}
+                          <div className="text-sm text-gray-900 capitalize">
+                            {log.activities && log.activities.length > 0 ? log.activities[0] : 'Not specified'}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -421,7 +471,7 @@ const Attendance = () => {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Membership Type</label>
-                    <p className="text-sm text-gray-900">{selectedLog.membershipType}</p>
+                    <div className="mt-1">{getMemberTypeBadge(selectedLog.membershipType)}</div>
                   </div>
                 </div>
               </div>
@@ -456,13 +506,9 @@ const Attendance = () => {
             </div>
             
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Activities</h3>
-              <div className="flex flex-wrap gap-2">
-                {selectedLog.activities.map((activity, index) => (
-                  <span key={index} className="px-3 py-1 text-sm bg-purple-100 text-purple-800 rounded-full">
-                    {activity}
-                  </span>
-                ))}
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Location</h3>
+              <div className="text-sm text-gray-900 capitalize">
+                {selectedLog.activities && selectedLog.activities.length > 0 ? selectedLog.activities[0] : 'Not specified'}
               </div>
             </div>
             

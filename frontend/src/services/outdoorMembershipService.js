@@ -32,7 +32,8 @@ export const outdoorMembershipService = {
     const cacheKey = CACHE_KEYS.OUTDOOR_MEMBERS(
       params.page || 1,
       params.search,
-      params.status
+      params.status,
+      params.location
     );
 
     // Check cache first
