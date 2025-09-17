@@ -70,28 +70,43 @@ const OutdoorMemberships = () => {
       }
       setError(null);
 
-      const response = await outdoorMembershipService.getMembers({
+      const requestParams = {
         search: searchTerm,
         status: filterStatus !== 'all' ? filterStatus : undefined,
         location: filterLocation !== 'all' ? filterLocation : undefined,
         page: page,
         limit: 20
-      });
+      };
+
+      console.log('🟠 Loading outdoor members with params:', requestParams);
+
+      const response = await outdoorMembershipService.getMembers(requestParams);
 
       if (response.success) {
         const transformedMembers = response.members.data.map(transformMemberData);
         const totalCount = response.members.count || 0;
         const totalPages = Math.ceil(totalCount / 20);
 
+        console.log('🟠 API Response:', {
+          membersCount: transformedMembers.length,
+          totalCount,
+          isLoadMore,
+          currentMembersLength: members.length
+        });
+
         // Calculate if there are more pages based on current loaded members vs total
         let newMembersLength;
         if (isLoadMore) {
           // When loading more, check if combined length is less than total
           newMembersLength = members.length + transformedMembers.length;
-          setMembers(prevMembers => [...prevMembers, ...transformedMembers]);
+          setMembers(prevMembers => {
+            console.log('🟠 Adding to existing members:', { existing: prevMembers.length, new: transformedMembers.length });
+            return [...prevMembers, ...transformedMembers];
+          });
         } else {
           // When replacing, check if current page's data length is less than total
           newMembersLength = transformedMembers.length;
+          console.log('🟠 Replacing members with:', transformedMembers.length, 'members');
           setMembers(transformedMembers);
         }
 
@@ -133,7 +148,7 @@ const OutdoorMemberships = () => {
 
   // Load member data with proper cleanup and debouncing
   useEffect(() => {
-    console.log('🟠 OutdoorMemberships useEffect mounted');
+    console.log('🟠 OutdoorMemberships useEffect mounted', { searchTerm, filterStatus, filterLocation });
 
     const loadData = async () => {
       // Cancel previous request if still pending
@@ -149,7 +164,12 @@ const OutdoorMemberships = () => {
         setAllMembersLoaded(false);
 
         // Clear cache when search/filter changes
+        console.log('🗑️ Clearing cache before loading filtered data');
         clearCache();
+
+        // Force clear the members state before loading new data
+        setMembers([]);
+        setError(null);
 
         await loadOutdoorMembers(1, false);
       } catch (err) {
