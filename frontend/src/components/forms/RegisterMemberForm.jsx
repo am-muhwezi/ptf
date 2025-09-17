@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../ui/Button';
 import { useForm } from '../../hooks/useForm';
+import { validateKenyanPhone } from '../../utils/validation';
 
 const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoor' }) => {
   const initialValues = {
@@ -36,6 +37,11 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
     
     if (!values.phone?.trim()) {
       errors.phone = 'Phone number is required';
+    } else {
+      const phoneValidation = validateKenyanPhone(values.phone);
+      if (!phoneValidation.isValid) {
+        errors.phone = phoneValidation.message;
+      }
     }
     
     // Email validation only if provided (optional)
@@ -51,7 +57,15 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
     if (values.membershipType === 'outdoor' && !values.location) {
       errors.location = 'Location is required for outdoor membership';
     }
-    
+
+    // Emergency contact phone validation (optional, but if provided, must be valid)
+    if (values.emergency_contact_phone?.trim()) {
+      const emergencyPhoneValidation = validateKenyanPhone(values.emergency_contact_phone);
+      if (!emergencyPhoneValidation.isValid) {
+        errors.emergency_contact_phone = emergencyPhoneValidation.message;
+      }
+    }
+
     return errors;
   };
 
@@ -222,7 +236,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
               className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 errors.phone ? 'border-red-500' : 'border-gray-300'
               }`}
-              placeholder="Enter phone number"
+              placeholder="e.g., 0722 123 456 or +254 722 123 456"
             />
             {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
           </div>
@@ -435,7 +449,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
                 className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   errors.emergency_contact_phone ? 'border-red-500' : 'border-gray-300'
                 }`}
-                placeholder="Enter emergency contact phone"
+                placeholder="e.g., 0722 123 456 or +254 722 123 456"
               />
               {errors.emergency_contact_phone && <p className="text-red-500 text-xs mt-1">{errors.emergency_contact_phone}</p>}
             </div>
