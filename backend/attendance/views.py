@@ -280,6 +280,7 @@ class TodaysAttendanceView(APIView):
     def get(self, request):
         try:
             today = timezone.now().date()
+            mode = request.query_params.get('mode', 'full')  # 'full' or 'summary'
 
             # Optimize queries with prefetch_related for member's active memberships
             todays_checkins = AttendanceLog.objects.filter(
@@ -298,14 +299,8 @@ class TodaysAttendanceView(APIView):
             from django.db.models import Count, Q
             summary_data = todays_checkins.aggregate(
                 total_checkins=Count('id'),
-                indoor_total=Count('id', filter=Q(visit_type='indoor')),
                 outdoor_total=Count('id', filter=Q(visit_type='outdoor')),
                 currently_active=Count('id', filter=Q(
-                    status__in=['checked_in', 'active'],
-                    check_out_time__isnull=True
-                )),
-                indoor_active=Count('id', filter=Q(
-                    visit_type='indoor',
                     status__in=['checked_in', 'active'],
                     check_out_time__isnull=True
                 )),
@@ -316,35 +311,32 @@ class TodaysAttendanceView(APIView):
                 ))
             )
 
-            return Response(
-                {
-                    "date": today.isoformat(),
-                    "summary": {
-                        "total_checkins": summary_data['total_checkins'],
-                        "currently_active": summary_data['currently_active'],
-                        "indoor": {
-                            "total": summary_data['indoor_total'],
-                            "active": summary_data['indoor_active']
-                        },
-                        "outdoor": {
-                            "total": summary_data['outdoor_total'],
-                            "active": summary_data['outdoor_active']
-                        }
-                    },
-                    "active_members": [
-                        {
-                            "id": log.member.id,
-                            "name": log.member.full_name,
-                            "member_type": log.member.membership_type,
-                            "visit_type": log.visit_type,
-                            "check_in_time": log.check_in_time.isoformat(),
-                            "activities": log.activities[:2]  # Limit to first 2 activities
-                        }
-                        for log in currently_active
-                    ]
-                },
-                status=status.HTTP_200_OK
-            )
+            response_data = {
+                "date": today.isoformat(),
+                "summary": {
+                    "total_checkins": summary_data['total_checkins'],
+                    "currently_active": summary_data['currently_active'],
+                    "outdoor": {
+                        "total": summary_data['outdoor_total'],
+                        "active": summary_data['outdoor_active']
+                    }
+                }
+            }
+
+            # Only include active_members in full mode to reduce data transfer
+            if mode == 'full':
+                response_data["active_members"] = [
+                    {
+                        "id": log.member.id,
+                        "name": log.member.full_name,
+                        "member_type": log.member.membership_type,
+                        "check_in_time": log.check_in_time.isoformat(),
+                        "activities": log.activities[:1] if log.activities else []  # Only first activity
+                    }
+                    for log in currently_active
+                ]
+
+            return Response(response_data, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response(

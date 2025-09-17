@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
 import Card from '../../components/ui/Card';
@@ -21,7 +21,6 @@ const Attendance = () => {
   const [loading, setLoading] = useState(false);
   const [todaysStats, setTodaysStats] = useState({
     totalToday: 0,
-    indoorToday: 0,
     outdoorToday: 0,
     activeNow: 0
   });
@@ -36,14 +35,13 @@ const Attendance = () => {
   }, []);
 
   // Optimized function to load both attendance data and logs with a single API call
-  const loadTodaysAttendanceAndLogs = async () => {
+  const loadTodaysAttendanceAndLogs = useCallback(async () => {
     try {
       setLoading(true);
       const response = await attendanceService.getTodaysAttendance();
 
       setTodaysStats({
         totalToday: response.summary.total_checkins,
-        indoorToday: response.summary.indoor.total,
         outdoorToday: response.summary.outdoor.total,
         activeNow: response.summary.currently_active
       });
@@ -57,7 +55,6 @@ const Attendance = () => {
         checkInTime: member.check_in_time,
         checkOutTime: null,
         duration: 'Active',
-        visitType: member.visit_type,
         activities: member.activities || [],
         notes: '',
         status: 'active'
@@ -67,9 +64,8 @@ const Attendance = () => {
 
       // Get filtered logs using cached data to avoid redundant API call
       const filters = {
-        searchTerm,
-        visitType: filterType,
-        dateFilter: filterDate
+        searchTerm: '', // Use empty search initially, filtering will be handled by the search useEffect
+        dateFilter: 'today'
       };
       const logs = await attendanceService.getAttendanceLogs(filters, response);
       setFilteredLogs(logs);
@@ -80,51 +76,13 @@ const Attendance = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadTodaysAttendance = async () => {
-    try {
-      setLoading(true);
-      const response = await attendanceService.getTodaysAttendance();
-
-      setTodaysStats({
-        totalToday: response.summary.total_checkins,
-        indoorToday: response.summary.indoor.total,
-        outdoorToday: response.summary.outdoor.total,
-        activeNow: response.summary.currently_active
-      });
-
-      // Convert active members to attendance logs format with member_type
-      const activeLogs = response.active_members.map(member => ({
-        id: `active_${member.id}`,
-        memberId: member.id,
-        memberName: member.name,
-        membershipType: member.member_type || 'unknown', // Use actual member_type
-        checkInTime: member.check_in_time,
-        checkOutTime: null,
-        duration: 'Active',
-        visitType: member.visit_type,
-        activities: member.activities || [],
-        notes: '',
-        status: 'active'
-      }));
-
-      setAttendanceLogs(activeLogs);
-      setFilteredLogs(activeLogs);
-
-    } catch (error) {
-      console.error('Failed to load attendance data:', error);
-      showToast('Failed to load attendance data', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadAttendanceLogs = async () => {
     try {
       const filters = {
         searchTerm,
-        visitType: filterType,
         dateFilter: filterDate
       };
 
@@ -151,21 +109,18 @@ const Attendance = () => {
       );
     }
 
-    // Filter by visit type
-    if (filterType !== 'all') {
-      filtered = filtered.filter(log => log.visitType === filterType);
-    }
 
     setFilteredLogs(filtered);
-  }, [searchTerm, filterType, attendanceLogs]);
+  }, [searchTerm, attendanceLogs]);
 
-  // Reload data when date filter changes
+  // Handle date filter changes
   useEffect(() => {
     if (filterDate !== 'today') {
       // For now, we only support 'today'. In the future, you can add more date filtering
       showToast('Only "today" filter is currently supported', 'info');
     }
-    loadTodaysAttendanceAndLogs();
+    // Note: Only reload if we actually support the filter in the future
+    // For now, 'today' is the only supported option and data is already loaded
   }, [filterDate]);
 
   const showToast = (message, type = 'success') => {
@@ -289,16 +244,11 @@ const Attendance = () => {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card
                 title="Total Visits Today"
                 value={stats.totalToday}
                 subtitle="All check-ins"
-              />
-              <Card
-                title="Indoor Visits"
-                value={stats.indoorToday}
-                subtitle="Today's indoor sessions"
               />
               <Card
                 title="Outdoor Visits"
@@ -326,15 +276,6 @@ const Attendance = () => {
                   />
                 </div>
                 <div className="flex space-x-4">
-                  <select
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="all">All Types</option>
-                    <option value="indoor">Indoor</option>
-                    <option value="outdoor">Outdoor</option>
-                  </select>
                   <select
                     value={filterDate}
                     onChange={(e) => setFilterDate(e.target.value)}

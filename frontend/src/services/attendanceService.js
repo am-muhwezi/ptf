@@ -70,7 +70,6 @@ export const attendanceService = {
       memberEmail: log.member_email || log.member?.email,
       memberPhone: log.member_phone || log.member?.phone,
       membershipType: log.member_type || 'unknown', // Added membershipType
-      visitType: log.visit_type,
       checkInTime: log.check_in_time,
       checkOutTime: log.check_out_time,
       duration: log.formatted_duration || this.calculateDuration(log.check_in_time, log.check_out_time),
@@ -110,7 +109,6 @@ export const attendanceService = {
         member_id: member.id,
         member_name: member.name,
         member_type: member.member_type, // Added member_type
-        visit_type: member.visit_type,
         check_in_time: member.check_in_time,
         check_out_time: null, // Active members don't have checkout time
         status: 'active',
@@ -132,9 +130,6 @@ export const attendanceService = {
         );
       }
 
-      if (filters.visitType && filters.visitType !== 'all') {
-        filteredLogs = filteredLogs.filter(log => log.visit_type === filters.visitType);
-      }
 
       return filteredLogs.map(log => this.formatAttendanceLog(log));
     } catch (error) {
