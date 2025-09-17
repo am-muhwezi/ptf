@@ -425,7 +425,7 @@ const OutdoorMemberships = () => {
               />
               <Card
                 title="Monthly Revenue"
-                value={statsLoading ? '...' : formatCurrency(stats.total_revenue || 0)}
+                value={statsLoading ? '...' : formatCurrency(0)}
                 subtitle="From outdoor memberships"
               />
             </div>
