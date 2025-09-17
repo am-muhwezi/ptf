@@ -327,6 +327,33 @@ class OutdoorMembershipListSerializer(serializers.ModelSerializer):
         ]
 
 
+class OutdoorMembershipLightSerializer(serializers.ModelSerializer):
+    """Ultra-lightweight serializer for fast outdoor membership listing"""
+
+    member_name = serializers.SerializerMethodField()
+    sessions_remaining = serializers.SerializerMethodField()
+
+    def get_member_name(self, obj):
+        return f"{obj.member.first_name} {obj.member.last_name}"
+
+    def get_sessions_remaining(self, obj):
+        return obj.total_sessions_allowed - obj.sessions_used
+
+    class Meta:
+        model = Membership
+        fields = [
+            'id',
+            'member_name',
+            'member_email',
+            'member_phone',
+            'status',
+            'payment_status',
+            'location_name',
+            'sessions_remaining',
+            'weekly_fee'
+        ]
+
+
 class CreateMembershipSerializer(serializers.ModelSerializer):
     """Serializer for creating new memberships"""
     

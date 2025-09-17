@@ -15,6 +15,7 @@ const OutdoorMemberships = () => {
   const [members, setMembers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterLocation, setFilterLocation] = useState('all');
   const [selectedMember, setSelectedMember] = useState(null);
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
@@ -72,6 +73,7 @@ const OutdoorMemberships = () => {
       const response = await outdoorMembershipService.getMembers({
         search: searchTerm,
         status: filterStatus !== 'all' ? filterStatus : undefined,
+        location: filterLocation !== 'all' ? filterLocation : undefined,
         page: page,
         limit: 20
       });
@@ -159,7 +161,7 @@ const OutdoorMemberships = () => {
     };
 
     // Debounce search/filter changes
-    const timeoutId = setTimeout(loadData, searchTerm || filterStatus !== 'all' ? 300 : 0);
+    const timeoutId = setTimeout(loadData, searchTerm || filterStatus !== 'all' || filterLocation !== 'all' ? 300 : 0);
 
     return () => {
       clearTimeout(timeoutId);
@@ -167,7 +169,7 @@ const OutdoorMemberships = () => {
         abortControllerRef.current.abort();
       }
     };
-  }, [searchTerm, filterStatus]); // Removed currentPage from dependencies
+  }, [searchTerm, filterStatus, filterLocation]); // Removed currentPage from dependencies
 
   // Handle load more functionality for lazy loading
   const handleLoadMore = () => {
@@ -453,6 +455,23 @@ const OutdoorMemberships = () => {
                     <option value="expired">Expired</option>
                     <option value="suspended">Suspended</option>
                   </select>
+                  <select
+                    value={filterLocation}
+                    onChange={(e) => setFilterLocation(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All Locations</option>
+                    <option value="arboretum">Arboretum</option>
+                    <option value="boxwood">Boxwood</option>
+                    <option value="karura">Karura</option>
+                    <option value="sagret">Sagret</option>
+                    <option value="mushroom">Mushroom</option>
+                    <option value="pcea_loreto">PCEA Loreto</option>
+                    <option value="bethany">Bethany</option>
+                    <option value="5star">5Star</option>
+                    <option value="kijani">Kijani</option>
+                    <option value="rustique">Rustique</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -493,12 +512,12 @@ const OutdoorMemberships = () => {
                             </svg>
                             <h3 className="mt-4 text-lg font-medium text-gray-900">No outdoor members found</h3>
                             <p className="mt-1 text-sm text-gray-500">
-                              {searchTerm || filterStatus !== 'all' 
+                              {searchTerm || filterStatus !== 'all' || filterLocation !== 'all'
                                 ? 'Try adjusting your search or filter criteria.'
                                 : 'Get started by adding your first outdoor member.'
                               }
                             </p>
-                            {(!searchTerm && filterStatus === 'all') && (
+                            {(!searchTerm && filterStatus === 'all' && filterLocation === 'all') && (
                               <button 
                                 onClick={() => setShowAddMemberModal(true)}
                                 className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -559,13 +578,23 @@ const OutdoorMemberships = () => {
                           >
                             View
                           </button>
-                          {member.status === 'active' && member.sessionsRemaining > 0 && (
+                          {member.status === 'active' && member.sessionsRemaining > 0 && member.paymentStatus === 'paid' && (
                             <button
                               onClick={() => handleUseSession(member.membershipId, member.location)}
                               className="text-green-600 hover:text-green-900"
                             >
                               Check In
                             </button>
+                          )}
+                          {member.status === 'active' && member.paymentStatus === 'pending' && (
+                            <span className="text-orange-600 text-xs">
+                              Payment Pending
+                            </span>
+                          )}
+                          {member.status === 'active' && member.paymentStatus === 'overdue' && (
+                            <span className="text-red-600 text-xs">
+                              Payment Overdue
+                            </span>
                           )}
                           <button
                             onClick={() => handleRenewMembership(member.id)}

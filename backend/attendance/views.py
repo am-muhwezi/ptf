@@ -30,29 +30,32 @@ class CheckInView(APIView):
                 data = json.loads(request.body) if request.body else {}
                 
             member_id = data.get('member_id')
-            visit_type = data.get('visit_type')  # 'indoor' or 'outdoor'
             activities = data.get('activities', [])
             notes = data.get('notes', '')
-            
-            if not member_id or not visit_type:
+
+            if not member_id:
                 return Response(
-                    {"error": "member_id and visit_type are required"},
+                    {"error": "member_id is required"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            if visit_type not in ['indoor', 'outdoor']:
-                return Response(
-                    {"error": "visit_type must be 'indoor' or 'outdoor'"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
+
             try:
-                member = Member.objects.get(id=member_id)
+                member = Member.objects.select_related().prefetch_related('memberships__plan').get(id=member_id)
             except Member.DoesNotExist:
                 return Response(
                     {"error": "Member not found"},
                     status=status.HTTP_404_NOT_FOUND
                 )
+
+            # Automatically determine visit_type from member's active membership
+            active_membership = member.memberships.filter(status='active').first()
+            if not active_membership:
+                return Response(
+                    {"error": "Member has no active membership"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            visit_type = active_membership.plan.membership_type
             
             # Check if member is already checked in today
             today = timezone.now().date()
@@ -277,53 +280,63 @@ class TodaysAttendanceView(APIView):
     def get(self, request):
         try:
             today = timezone.now().date()
-            
-            # Get all today's check-ins
+            mode = request.query_params.get('mode', 'full')  # 'full' or 'summary'
+
+            # Optimize queries with prefetch_related for member's active memberships
             todays_checkins = AttendanceLog.objects.filter(
                 check_in_time__date=today
-            ).select_related('member')
-            
+            ).select_related('member').prefetch_related(
+                'member__memberships__plan'
+            )
+
             # Get currently active members
             currently_active = todays_checkins.filter(
                 status__in=['checked_in', 'active'],
                 check_out_time__isnull=True
             )
-            
-            # Breakdown by visit type
-            indoor_total = todays_checkins.filter(visit_type='indoor').count()
-            outdoor_total = todays_checkins.filter(visit_type='outdoor').count()
-            
-            indoor_active = currently_active.filter(visit_type='indoor').count()
-            outdoor_active = currently_active.filter(visit_type='outdoor').count()
-            
-            return Response(
-                {
-                    "date": today.isoformat(),
-                    "summary": {
-                        "total_checkins": todays_checkins.count(),
-                        "currently_active": currently_active.count(),
-                        "indoor": {
-                            "total": indoor_total,
-                            "active": indoor_active
-                        },
-                        "outdoor": {
-                            "total": outdoor_total,
-                            "active": outdoor_active
-                        }
-                    },
-                    "active_members": [
-                        {
-                            "id": log.member.id,
-                            "name": log.member.full_name,
-                            "visit_type": log.visit_type,
-                            "check_in_time": log.check_in_time.isoformat(),
-                            "activities": log.activities
-                        }
-                        for log in currently_active
-                    ]
-                },
-                status=status.HTTP_200_OK
+
+            # Use aggregate queries for better performance
+            from django.db.models import Count, Q
+            summary_data = todays_checkins.aggregate(
+                total_checkins=Count('id'),
+                outdoor_total=Count('id', filter=Q(visit_type='outdoor')),
+                currently_active=Count('id', filter=Q(
+                    status__in=['checked_in', 'active'],
+                    check_out_time__isnull=True
+                )),
+                outdoor_active=Count('id', filter=Q(
+                    visit_type='outdoor',
+                    status__in=['checked_in', 'active'],
+                    check_out_time__isnull=True
+                ))
             )
+
+            response_data = {
+                "date": today.isoformat(),
+                "summary": {
+                    "total_checkins": summary_data['total_checkins'],
+                    "currently_active": summary_data['currently_active'],
+                    "outdoor": {
+                        "total": summary_data['outdoor_total'],
+                        "active": summary_data['outdoor_active']
+                    }
+                }
+            }
+
+            # Only include active_members in full mode to reduce data transfer
+            if mode == 'full':
+                response_data["active_members"] = [
+                    {
+                        "id": log.member.id,
+                        "name": log.member.full_name,
+                        "member_type": log.member.membership_type,
+                        "check_in_time": log.check_in_time.isoformat(),
+                        "activities": log.activities[:1] if log.activities else []  # Only first activity
+                    }
+                    for log in currently_active
+                ]
+
+            return Response(response_data, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response(

@@ -9,10 +9,44 @@ from attendance.models import AttendanceLog
 def checkin(request, member_id):
     """Simple check-in with member ID in URL"""
     try:
-        # Get visit type from query params or default to indoor
-        visit_type = request.query_params.get("visit_type", "indoor")
+        member = Member.objects.select_related().prefetch_related('memberships__plan').get(id=member_id, status="active")
 
-        member = Member.objects.get(id=member_id, status="active")
+        # Automatically determine visit type from member's active membership
+        active_membership = member.memberships.filter(status='active').first()
+        if not active_membership:
+            return Response(
+                {"error": f"{member.first_name} {member.last_name} has no active membership"},
+                status=400
+            )
+
+        visit_type = active_membership.plan.membership_type
+
+        # Check payment status
+        if active_membership.payment_status == 'pending':
+            return Response(
+                {"error": "Cannot check-in: Payment is still pending. Please complete payment first."},
+                status=400
+            )
+
+        if active_membership.payment_status == 'overdue':
+            return Response(
+                {"error": "Cannot check-in: Payment is overdue. Please update payment to continue."},
+                status=400
+            )
+
+        # Check if membership is expired
+        if active_membership.is_expired:
+            return Response(
+                {"error": "Membership has expired. Please renew to continue."},
+                status=400
+            )
+
+        # Check sessions remaining
+        if active_membership.sessions_used >= active_membership.total_sessions_allowed:
+            return Response(
+                {"error": "No sessions remaining on this membership."},
+                status=400
+            )
 
         # Check if already checked in today (allow one check-in per day)
         from django.utils import timezone
@@ -56,12 +90,9 @@ def checkin(request, member_id):
 
         return Response(
             {
-                "success": True,
                 "message": f"✅ {member.first_name} {member.last_name} checked in successfully",
-                "member_name": f"{member.first_name} {member.last_name}",
                 "visit_type": visit_type,
                 "sessions_remaining": sessions_remaining,
-                "check_in_time": attendance.check_in_time.isoformat(),
             }
         )
 

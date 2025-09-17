@@ -51,7 +51,11 @@ class MembershipViewSet(viewsets.ModelViewSet):
     pagination_class = MembershipPagination
     
     def get_queryset(self):
-        return Membership.objects.select_related('member', 'plan', 'location').prefetch_related('session_logs')
+        return Membership.objects.select_related(
+            'member',
+            'plan',
+            'location'
+        ).prefetch_related('session_logs').order_by('-created_at')
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -71,14 +75,16 @@ class MembershipViewSet(viewsets.ModelViewSet):
         # Use service layer for search filtering
         membership_type = self.request.query_params.get('membership_type')
         status_filter = self.request.query_params.get('status')
-        search = self.request.query_params.get('q')
-        
+        location_filter = self.request.query_params.get('location')
+        search = self.request.query_params.get('search') or self.request.query_params.get('q')
+
         filters = MembershipService.search_memberships(
             search_query=search,
             membership_type=membership_type,
-            status_filter=status_filter
+            status_filter=status_filter,
+            location_filter=location_filter
         )
-        
+
         return queryset.filter(filters).order_by('-created_at')
 
     @action(detail=False, methods=['get'])

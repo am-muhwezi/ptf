@@ -109,7 +109,7 @@ export const CACHE_KEYS = {
   OUTDOOR_STATS: 'outdoor_stats',
   INDOOR_STATS: 'indoor_stats',
   ALL_MEMBERS_STATS: 'all_members_stats',
-  OUTDOOR_MEMBERS: (page, search, status) => `outdoor_members_${page}_${search || 'all'}_${status || 'all'}`,
+  OUTDOOR_MEMBERS: (page, search, status, location) => `outdoor_members_${page}_${search || 'all'}_${status || 'all'}_${location || 'all'}`,
   INDOOR_MEMBERS: (page, search, status) => `indoor_members_${page}_${search || 'all'}_${status || 'all'}`,
   ALL_MEMBERS: (page, search, status, membershipType) => `all_members_${page}_${search || 'all'}_${status || 'all'}_${membershipType || 'all'}`
 };
