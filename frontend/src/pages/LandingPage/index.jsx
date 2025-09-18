@@ -319,8 +319,8 @@ const LandingPage = () => {
                   </h3>
                   <p className="text-emerald-200 text-sm">
                     {authMode === 'login' 
-                      ? 'Sign in to continue your fitness journey' 
-                      : 'Create your account and start transforming'
+                      ? 'Sign in to continue' 
+                      : 'Create your account'
                     }
                   </p>
                 </div>
@@ -545,7 +545,7 @@ const LandingPage = () => {
 
       {/* Floating Elements */}
       <div className={`absolute bottom-4 left-4 lg:bottom-8 lg:left-8 text-emerald-300 text-xs lg:text-sm opacity-70 ${showAuth ? 'hidden lg:block' : ''}`}>
-        © 2024 Paul's Tropical Fitness. All rights reserved.
+        © 2025 Tropical Fitness. All rights reserved.
       </div>
     </div>
   );
