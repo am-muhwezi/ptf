@@ -172,22 +172,32 @@ export const paymentService = {
     return cleaned;
   },
 
-  // Validate payment data
+  // Validate payment data for admin confirmation
   validatePaymentData: (paymentData) => {
     const errors = {};
-    
+
     if (!paymentData.amount || paymentData.amount <= 0) {
       errors.amount = 'Amount must be greater than 0';
     }
-    
+
     if (!paymentData.memberId) {
       errors.memberId = 'Member ID is required';
     }
-    
-    if (paymentData.paymentMethod === 'mpesa' && !paymentData.phoneNumber) {
-      errors.phoneNumber = 'Phone number is required for M-Pesa payments';
+
+    // Require transaction reference for M-Pesa and bank transfers (external payments)
+    if ((paymentData.paymentMethod === 'mpesa' || paymentData.paymentMethod === 'bank') && !paymentData.transactionReference) {
+      const methodName = paymentData.paymentMethod === 'mpesa' ? 'M-Pesa' : 'Bank';
+      errors.transactionReference = `Transaction reference is required for ${methodName} payments`;
     }
-    
+
+    if (!paymentData.paymentDate) {
+      errors.paymentDate = 'Payment date is required';
+    }
+
+    if (paymentData.paymentDate && new Date(paymentData.paymentDate) > new Date()) {
+      errors.paymentDate = 'Payment date cannot be in the future';
+    }
+
     return {
       isValid: Object.keys(errors).length === 0,
       errors

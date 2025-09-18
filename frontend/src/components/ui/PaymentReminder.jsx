@@ -8,7 +8,7 @@ import { formatCurrency, formatDate } from '../../utils/formatters';
 const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
   const [reminderData, setReminderData] = useState({
     method: 'sms',
-    message: `Dear ${member?.firstName}, your gym membership payment of ${formatCurrency(member?.amount || 0)} is due. Please make payment to continue enjoying our services. Thank you!`,
+    message: `Dear ${member?.first_name || member?.firstName}, your gym membership payment of ${formatCurrency(member?.amount || 0)} is due. Please make payment to M-Pesa paybill and notify admin with transaction code. Thank you!`,
     urgency: 'normal'
   });
 
@@ -37,9 +37,9 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
     try {
       const response = await paymentService.sendPaymentReminder(member.id, {
         ...reminderData,
-        memberName: `${member.firstName} ${member.lastName}`,
+        memberName: `${member.first_name || member.firstName} ${member.last_name || member.lastName}`,
         amount: member.amount,
-        dueDate: member.expiryDate
+        dueDate: member.expiry_date || member.expiryDate
       });
 
       showToast('Payment reminder sent successfully!', 'success');
@@ -77,7 +77,7 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-gray-600">Name:</span>
-                <span className="ml-2 font-medium">{member.firstName} {member.lastName}</span>
+                <span className="ml-2 font-medium">{member.first_name || member.firstName} {member.last_name || member.lastName}</span>
               </div>
               <div>
                 <span className="text-gray-600">Phone:</span>
@@ -89,7 +89,7 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
               </div>
               <div>
                 <span className="text-gray-600">Due Date:</span>
-                <span className="ml-2 font-medium">{formatDate(member.expiryDate)}</span>
+                <span className="ml-2 font-medium">{formatDate(member.expiry_date || member.expiryDate)}</span>
               </div>
             </div>
           </div>
@@ -138,10 +138,13 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
                 name="message"
                 value={reminderData.message}
                 onChange={(e) => setReminderData({...reminderData, [e.target.name]: e.target.value})}
-                rows={4}
+                rows={5}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter reminder message..."
               />
+              <div className="mt-1 text-xs text-gray-500">
+                <strong>Admin Note:</strong> Remind members to save transaction code from M-Pesa confirmation SMS for payment confirmation.
+              </div>
               <p className="text-xs text-gray-500 mt-1">
                 Character count: {reminderData.message.length}/160 (SMS limit)
               </p>

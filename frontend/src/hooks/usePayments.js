@@ -44,34 +44,18 @@ export const usePaymentsDue = (initialParams = {}) => {
 };
 
 /**
- * Hook for payment processing with status tracking
+ * Hook for admin payment confirmation processing
  */
 export const usePaymentProcessor = () => {
   const [paymentStatus, setPaymentStatus] = useState(null);
   const [transactionId, setTransactionId] = useState(null);
 
-  const processMpesaPayment = useApiMutation(
-    paymentService.initiateMpesaPayment,
+  const processManualPayment = useApiMutation(
+    paymentService.recordManualPayment,
     {
       onSuccess: (result) => {
-        setTransactionId(result.transactionId);
-        setPaymentStatus('pending');
-        
-        // Start polling for payment status
-        const pollInterval = setInterval(async () => {
-          try {
-            const status = await paymentService.checkPaymentStatus(result.transactionId);
-            setPaymentStatus(status.status);
-            
-            if (status.status === 'completed' || status.status === 'failed') {
-              clearInterval(pollInterval);
-            }
-          } catch (error) {
-            console.error('Error checking payment status:', error);
-            clearInterval(pollInterval);
-            setPaymentStatus('failed');
-          }
-        }, 3000);
+        setPaymentStatus('completed');
+        setTransactionId(result.payment_id);
       },
       onError: () => {
         setPaymentStatus('failed');
@@ -79,7 +63,8 @@ export const usePaymentProcessor = () => {
     }
   );
 
-  const processManualPayment = useApiMutation(
+  // Admin-specific payment confirmation for external payments
+  const confirmExternalPayment = useApiMutation(
     paymentService.recordManualPayment,
     {
       onSuccess: (result) => {
@@ -98,12 +83,12 @@ export const usePaymentProcessor = () => {
   }, []);
 
   return {
-    processMpesaPayment,
     processManualPayment,
+    confirmExternalPayment,
     paymentStatus,
     transactionId,
     resetPaymentStatus,
-    isProcessing: processMpesaPayment.loading || processManualPayment.loading
+    isProcessing: processManualPayment.loading || confirmExternalPayment.loading
   };
 };
 
@@ -193,14 +178,18 @@ export const usePaymentForm = (member, onSuccess) => {
   const [formData, setFormData] = useState({
     amount: member?.amount || 1500,
     phoneNumber: member?.phone || '',
-    paymentMethod: 'cash',
+    paymentMethod: 'mpesa',
+    transactionReference: '',
+    paymentDate: new Date().toISOString().split('T')[0],
+    paymentTime: new Date().toTimeString().split(' ')[0].slice(0, 5),
     description: `Membership payment for ${member?.first_name || ''} ${member?.last_name || ''}`,
-    membershipType: member?.membership_type || 'indoor'
+    membershipType: member?.membership_type || 'indoor',
+    notes: ''
   });
 
   const [errors, setErrors] = useState({});
 
-  const { processMpesaPayment, processManualPayment, paymentStatus, isProcessing, resetPaymentStatus } = usePaymentProcessor();
+  const { processManualPayment, confirmExternalPayment, paymentStatus, isProcessing, resetPaymentStatus } = usePaymentProcessor();
 
   const validateForm = useCallback(() => {
     const validation = paymentService.validatePaymentData({
@@ -228,40 +217,37 @@ export const usePaymentForm = (member, onSuccess) => {
     }
   }, [errors]);
 
-  const handleMpesaPayment = useCallback(async () => {
-    if (!validateForm()) return;
-
-    const formattedPhone = paymentService.formatPhoneNumber(formData.phoneNumber);
-    
-    try {
-      const result = await processMpesaPayment.mutate({
-        memberId: member.id,
-        amount: formData.amount,
-        phoneNumber: formattedPhone,
-        description: formData.description,
-        membershipType: formData.membershipType
-      });
-      
-      if (onSuccess) onSuccess(result);
-    } catch (error) {
-      console.error('M-Pesa payment failed:', error);
-    }
-  }, [formData, member, validateForm, processMpesaPayment, onSuccess]);
-
-  const handleManualPayment = useCallback(async () => {
+  const handlePaymentSubmission = useCallback(async () => {
     if (!validateForm()) return;
 
     try {
-      const result = await processManualPayment.mutate({
+      // Map frontend payment methods to backend expected values
+      const paymentMethodMap = {
+        'mpesa': 'mpesa',
+        'bank': 'bank_transfer',
+        'cash': 'cash'
+      };
+
+      const paymentData = {
         memberId: member.id,
         amount: formData.amount,
-        paymentMethod: formData.paymentMethod,
+        paymentMethod: paymentMethodMap[formData.paymentMethod] || 'cash',
         description: formData.description
-      });
-      
+      };
+
+      // Add transaction reference and datetime for external payments (mpesa, bank)
+      if (formData.paymentMethod === 'mpesa' || formData.paymentMethod === 'bank') {
+        paymentData.transactionReference = formData.transactionReference;
+        paymentData.paymentDateTime = `${formData.paymentDate}T${formData.paymentTime}:00`;
+        paymentData.notes = formData.notes;
+        paymentData.membershipType = formData.membershipType;
+      }
+
+      const result = await processManualPayment.mutate(paymentData);
+
       if (onSuccess) onSuccess(result);
     } catch (error) {
-      console.error('Manual payment failed:', error);
+      console.error('Payment submission failed:', error);
     }
   }, [formData, member, validateForm, processManualPayment, onSuccess]);
 
@@ -271,8 +257,7 @@ export const usePaymentForm = (member, onSuccess) => {
     paymentStatus,
     isProcessing,
     handleInputChange,
-    handleMpesaPayment,
-    handleManualPayment,
+    handlePaymentSubmission,
     resetPaymentStatus,
     validateForm
   };
