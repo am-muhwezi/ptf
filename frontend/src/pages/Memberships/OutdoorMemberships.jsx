@@ -6,8 +6,11 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
+import PaymentForm from '../../components/forms/PaymentForm';
+import Receipt from '../../components/ui/Receipt';
 import outdoorMembershipService from '../../services/outdoorMembershipService';
 import { membershipService } from '../../services/membershipService';
+import { paymentService } from '../../services/paymentService';
 
 const OutdoorMemberships = () => {
   const abortControllerRef = useRef(null);
@@ -17,8 +20,14 @@ const OutdoorMemberships = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterLocation, setFilterLocation] = useState('all');
   const [selectedMember, setSelectedMember] = useState(null);
+  const [memberPaymentHistory, setMemberPaymentHistory] = useState([]);
+  const [loadingPaymentHistory, setLoadingPaymentHistory] = useState(false);
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [showRenewalModal, setShowRenewalModal] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState(null);
+  const [renewalMember, setRenewalMember] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -260,14 +269,43 @@ const OutdoorMemberships = () => {
     }
   };
 
-  const handleViewMember = (member) => {
+  const handleViewMember = async (member) => {
     setSelectedMember(member);
     setShowMemberModal(true);
+
+    // Load payment history for the member
+    setLoadingPaymentHistory(true);
+    try {
+      const response = await paymentService.getPaymentHistory(member.membershipId);
+      if (response.success) {
+        setMemberPaymentHistory(response.data || []);
+      }
+    } catch (error) {
+      console.error('Failed to load payment history:', error);
+      setMemberPaymentHistory([]);
+    } finally {
+      setLoadingPaymentHistory(false);
+    }
   };
 
   const handleRenewMembership = (memberId) => {
-    // TODO: Implement renewal functionality when backend endpoint is ready
-    showToast(`Membership renewal initiated for member ${memberId}`, 'success');
+    const member = members.find(m => m.id === memberId || m.membershipId === memberId);
+    if (member) {
+      // Transform member data for payment form
+      const renewalData = {
+        id: member.membershipId,
+        member_id: member.id,
+        first_name: member.firstName,
+        last_name: member.lastName,
+        email: member.email,
+        phone: member.phone,
+        plan_type: member.planType,
+        membership_type: 'outdoor',
+        amount: member.amount
+      };
+      setRenewalMember(renewalData);
+      setShowRenewalModal(true);
+    }
   };
 
   const handleSuspendMember = async (memberId) => {
@@ -300,6 +338,46 @@ const OutdoorMemberships = () => {
     } catch (err) {
       showToast('Failed to add member: ' + err.message, 'error');
       throw err;
+    }
+  };
+
+  const handleRenewalSuccess = async (paymentData) => {
+    try {
+      // Renewal payment was recorded successfully
+      showToast('Membership renewal payment recorded successfully!', 'success');
+      setShowRenewalModal(false);
+
+      // Clear cache and refresh data
+      clearCache();
+      setRefreshTrigger(prev => prev + 1);
+
+      // Show receipt if payment data available
+      if (paymentData) {
+        setSelectedReceipt({ paymentData, member: renewalMember });
+        setShowReceiptModal(true);
+      }
+    } catch (err) {
+      showToast('Renewal successful but failed to show receipt', 'warning');
+    }
+  };
+
+  const handleViewReceipt = async (payment) => {
+    try {
+      // Generate receipt data from payment history
+      const receiptData = {
+        amount: payment.amount,
+        timestamp: payment.payment_date || payment.created_at,
+        payment_method: payment.payment_method,
+        transaction_reference: payment.transaction_reference,
+        mpesaReceiptNumber: payment.mpesa_receipt_number,
+        receiptNumber: payment.receipt_number,
+        payment_method_display: payment.payment_method_display
+      };
+
+      setSelectedReceipt({ paymentData: receiptData, member: selectedMember });
+      setShowReceiptModal(true);
+    } catch (err) {
+      showToast('Failed to load receipt', 'error');
     }
   };
 
@@ -697,7 +775,7 @@ const OutdoorMemberships = () => {
         size="large"
       >
         {selectedMember && (
-          <div className="space-y-6">
+          <div className="space-y-6 max-h-[80vh] overflow-y-auto">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Personal Information</h3>
@@ -798,7 +876,152 @@ const OutdoorMemberships = () => {
                 </div>
               )}
             </div>
+
+            {/* Payment History Section */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Payment History</h3>
+              {loadingPaymentHistory ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-500 border-t-transparent"></div>
+                  <span className="ml-2 text-sm text-gray-600">Loading payment history...</span>
+                </div>
+              ) : memberPaymentHistory.length > 0 ? (
+                <div className="space-y-4">
+                  {/* Last Payment Summary */}
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <h4 className="font-medium text-green-900 mb-2">Latest Payment</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-green-700">Amount:</span>
+                        <span className="ml-2 font-medium text-green-900">
+                          {formatCurrency(memberPaymentHistory[0]?.amount || 0)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-green-700">Date:</span>
+                        <span className="ml-2 font-medium text-green-900">
+                          {formatDate(memberPaymentHistory[0]?.payment_date || memberPaymentHistory[0]?.created_at)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-green-700">Method:</span>
+                        <span className="ml-2 font-medium text-green-900 capitalize">
+                          {memberPaymentHistory[0]?.payment_method === 'mpesa' ? 'M-Pesa' :
+                           memberPaymentHistory[0]?.payment_method || 'N/A'}
+                        </span>
+                      </div>
+                      {memberPaymentHistory[0]?.processed_by_name && (
+                        <div>
+                          <span className="text-green-700">Processed by:</span>
+                          <span className="ml-2 font-medium text-green-900">
+                            {memberPaymentHistory[0].processed_by_name}
+                          </span>
+                        </div>
+                      )}
+                      {memberPaymentHistory[0]?.transaction_reference && (
+                        <div>
+                          <span className="text-green-700">Reference:</span>
+                          <span className="ml-2 font-medium text-green-900">
+                            {memberPaymentHistory[0].transaction_reference}
+                          </span>
+                        </div>
+                      )}
+                      <div>
+                        <button
+                          onClick={() => handleViewReceipt(memberPaymentHistory[0])}
+                          className="text-green-600 hover:text-green-800 font-medium text-sm underline"
+                        >
+                          View Receipt
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payment History List */}
+                  {memberPaymentHistory.length > 1 && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-3">All Payments</h4>
+                      <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="px-4 py-2 text-left font-medium text-gray-700">Date</th>
+                              <th className="px-4 py-2 text-left font-medium text-gray-700">Amount</th>
+                              <th className="px-4 py-2 text-left font-medium text-gray-700">Method</th>
+                              <th className="px-4 py-2 text-left font-medium text-gray-700">Admin</th>
+                              <th className="px-4 py-2 text-left font-medium text-gray-700">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {memberPaymentHistory.map((payment, index) => (
+                              <tr key={payment.id || index} className="hover:bg-gray-50">
+                                <td className="px-4 py-2 text-gray-900">
+                                  {formatDate(payment.payment_date || payment.created_at)}
+                                </td>
+                                <td className="px-4 py-2 text-gray-900 font-medium">
+                                  {formatCurrency(payment.amount)}
+                                </td>
+                                <td className="px-4 py-2 text-gray-900 capitalize">
+                                  {payment.payment_method === 'mpesa' ? 'M-Pesa' : payment.payment_method || 'N/A'}
+                                </td>
+                                <td className="px-4 py-2 text-gray-600">
+                                  {payment.processed_by_name || 'N/A'}
+                                </td>
+                                <td className="px-4 py-2">
+                                  <button
+                                    onClick={() => handleViewReceipt(payment)}
+                                    className="text-blue-600 hover:text-blue-800 font-medium underline"
+                                  >
+                                    Receipt
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">No payment history</h3>
+                  <p className="mt-1 text-sm text-gray-500">No payments found for this member.</p>
+                </div>
+              )}
+            </div>
           </div>
+        )}
+      </Modal>
+
+      {/* Renewal Payment Modal */}
+      <PaymentForm
+        member={renewalMember}
+        isOpen={showRenewalModal}
+        onClose={() => setShowRenewalModal(false)}
+        onPaymentSuccess={handleRenewalSuccess}
+      />
+
+      {/* Receipt Modal */}
+      <Modal
+        isOpen={showReceiptModal}
+        onClose={() => setShowReceiptModal(false)}
+        title="Payment Receipt"
+        size="medium"
+      >
+        {selectedReceipt && (
+          <Receipt
+            paymentData={selectedReceipt.paymentData}
+            member={selectedReceipt.member}
+            onClose={() => setShowReceiptModal(false)}
+            onPrint={() => {
+              window.print();
+              setShowReceiptModal(false);
+            }}
+          />
         )}
       </Modal>
 
