@@ -30,7 +30,38 @@ export const memberService = {
     }
   },
 
-  // Get stats only from hybrid endpoint
+  // Get member stats from dedicated endpoint
+  getMemberStats: async () => {
+    console.count('📊 MemberService.getMemberStats() called');
+
+    // Check cache first
+    const cached = statsCache.get(CACHE_KEYS.ALL_MEMBERS_STATS);
+    if (cached) {
+      console.log('📊 Using cached member stats');
+      return cached;
+    }
+
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.members.stats);
+      const result = {
+        total_members: response.data.total_members || 0,
+        active_members: response.data.active_members || 0,
+        inactive_members: response.data.inactive_members || 0,
+        indoor_members: response.data.indoor_members || 0,
+        outdoor_members: response.data.outdoor_members || 0
+      };
+
+      // Cache the stats
+      statsCache.set(CACHE_KEYS.ALL_MEMBERS_STATS, result, CACHE_TTL.STATS);
+      console.log('📊 Member stats cached');
+
+      return result;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch member stats');
+    }
+  },
+
+  // Get stats only from hybrid endpoint (deprecated - use getMemberStats instead)
   getStatsOnly: async () => {
     try {
       const response = await apiClient.get(API_ENDPOINTS.members.list, {

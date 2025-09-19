@@ -17,15 +17,16 @@ export const API_ENDPOINTS = {
   
   // Members
   members: {
-    list: '/all/',                          // Consider migrating to search endpoint
+    list: '/all/',
     create: '/member/register/',
-    detail: (id) => `members/${id}/`,       // Now matches backend endpoint
-    update: (id) => `members/${id}/`,
-    delete: (id) => `members/${id}/`,
-    search: '/search/',                     // Optimized search endpoint
+    detail: (id) => `/members/${id}/`,      // Fixed: Added leading slash
+    update: (id) => `/members/${id}/`,      // Fixed: Added leading slash
+    delete: (id) => `/members/${id}/`,      // Fixed: Added leading slash
+    search: '/search/',                     // Correct - root level endpoint
+    stats: '/stats/',                       // New: Member stats endpoint
     indoor: '/indoor/',
     outdoor: '/outdoor/',
-    checkin: (id) => `checkin/${id}/`,      // Direct check-in endpoint
+    checkin: (id) => `/checkin/${id}/`,     // Fixed: Added leading slash
   },
   
   // Memberships
