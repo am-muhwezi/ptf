@@ -28,9 +28,11 @@ class PaginationHelper:
         Returns:
             dict: Contains paginated data and metadata
         """
-        # Get pagination parameters from request
+        # Get pagination parameters from request (support multiple parameter names)
         page = request.GET.get('page', 1)
-        limit = request.GET.get('limit', default_page_size or PaginationHelper.DEFAULT_PAGE_SIZE)
+        limit = request.GET.get('limit',
+                               request.GET.get('page_size',
+                                             default_page_size or PaginationHelper.DEFAULT_PAGE_SIZE))
         
         # Convert to integers and validate
         try:
@@ -103,12 +105,18 @@ class PaginationHelper:
                 print(f"Error serializing object {obj.id if hasattr(obj, 'id') else 'unknown'}: {e}")
                 continue
         
-        # Create response data
+        # Create response data with both new and legacy formats
         response_data = {
             'success': True,
             'data': serialized_data,
+            'results': serialized_data,  # Alternative field name for compatibility
+            'count': paginated_data['total_count'],  # Total count for pagination display
+            'total': paginated_data['total_count'],  # Alternative field name
+            'next': f"page={paginated_data['next_page']}" if paginated_data['has_next'] else None,
+            'previous': f"page={paginated_data['previous_page']}" if paginated_data['has_previous'] else None,
             'pagination': {
                 'page': paginated_data['page'],
+                'page_size': paginated_data['per_page'],
                 'per_page': paginated_data['per_page'],
                 'total_pages': paginated_data['total_pages'],
                 'total_count': paginated_data['total_count'],
@@ -117,7 +125,6 @@ class PaginationHelper:
                 'next_page': paginated_data['next_page'],
                 'previous_page': paginated_data['previous_page'],
             },
-            'count': len(serialized_data),
         }
         
         if success_message:

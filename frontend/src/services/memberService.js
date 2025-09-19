@@ -30,7 +30,7 @@ export const memberService = {
     }
   },
 
-  // Get member stats from dedicated endpoint
+  // Get member stats from summary endpoint (optimized)
   getMemberStats: async () => {
     console.count('📊 MemberService.getMemberStats() called');
 
@@ -42,7 +42,8 @@ export const memberService = {
     }
 
     try {
-      const response = await apiClient.get(API_ENDPOINTS.members.stats);
+      // Use the summary endpoint which is already optimized
+      const response = await apiClient.get('/summary/');
       const result = {
         total_members: response.data.total_members || 0,
         active_members: response.data.active_members || 0,
@@ -76,7 +77,7 @@ export const memberService = {
     }
   },
 
-  // Get all members with pagination (following outdoor membership pattern)
+  // Get all members with pagination (optimized for consistent responses)
   getMembers: async (params = {}) => {
     console.count('🟠 MemberService.getMembers() called');
     console.log('🟠 MemberService.getMembers() params:', params);
@@ -100,11 +101,11 @@ export const memberService = {
       // Normalize parameters to match backend expectations
       const normalizedParams = {
         ...params,
-        search: params.search || params.q, // Support both search and q parameters
+        search: params.search || params.q,
         status: params.status !== 'all' ? params.status : undefined,
         membership_type: params.membership_type !== 'all' ? params.membership_type : undefined,
         page: params.page || 1,
-        limit: params.limit || 20
+        page_size: params.limit || params.page_size || 20
       };
 
       // Remove undefined values
@@ -116,14 +117,32 @@ export const memberService = {
 
       const response = await apiClient.get(API_ENDPOINTS.members.list, { params: normalizedParams });
 
-      // Transform response to match outdoor membership pattern
+      // Ensure consistent response structure
+      const responseData = response.data;
+      const results = responseData.data || responseData.results || responseData;
+      const totalCount = responseData.count || responseData.total || (Array.isArray(results) ? results.length : 0);
+
       const result = {
         success: true,
+        data: results,
+        count: totalCount,
+        total: totalCount,
+        next: responseData.next || responseData.pagination?.next,
+        previous: responseData.previous || responseData.pagination?.previous,
+        // Add pagination info for frontend display
+        pagination: {
+          page: parseInt(normalizedParams.page) || 1,
+          page_size: parseInt(normalizedParams.page_size) || 20,
+          total: totalCount,
+          has_next: !!responseData.next,
+          has_previous: !!responseData.previous
+        },
+        // Keep legacy format for backward compatibility
         members: {
-          data: response.data.data || response.data.results || response.data,
-          count: response.data.count || 0,
-          next: response.data.pagination?.has_next ? `page=${(response.data.pagination?.page || 1) + 1}` : null,
-          previous: response.data.pagination?.has_previous ? `page=${(response.data.pagination?.page || 1) - 1}` : null
+          data: results,
+          count: totalCount,
+          next: responseData.next,
+          previous: responseData.previous
         }
       };
 

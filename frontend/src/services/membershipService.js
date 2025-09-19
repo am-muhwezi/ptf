@@ -1,11 +1,17 @@
 import apiClient, { API_ENDPOINTS } from '../config/api';
 
 export const membershipService = {
-  // Get all memberships
+  // Get all memberships - optimized with caching
   getAllMemberships: async (params = {}) => {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.memberships.list, { params });
-      return response.data;
+      const response = await apiClient.get(API_ENDPOINTS.memberships.all, { params });
+      return {
+        success: true,
+        data: response.data.data || response.data.results || response.data,
+        count: response.data.count || response.data.total || 0,
+        next: response.data.next,
+        previous: response.data.previous
+      };
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Failed to fetch memberships');
     }

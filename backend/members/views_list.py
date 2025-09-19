@@ -36,12 +36,18 @@ def serialize_member_data_optimized(member):
     Optimized serialize member data with membership info for consistent API responses.
     Uses prefetched data to avoid N+1 queries.
     """
-    # Use prefetched active memberships if available
+    # Use prefetched active memberships if available - more efficient
     active_membership = None
-    if hasattr(member, 'active_memberships_list'):
-        active_membership = member.active_memberships_list[0] if member.active_memberships_list else None
+    if hasattr(member, 'active_memberships_list') and member.active_memberships_list:
+        active_membership = member.active_memberships_list[0]
+    elif hasattr(member, '_prefetched_objects_cache') and 'memberships' in member._prefetched_objects_cache:
+        # Use prefetched memberships to avoid additional query
+        for membership in member._prefetched_objects_cache['memberships']:
+            if membership.status == "active":
+                active_membership = membership
+                break
     else:
-        # Fallback for non-optimized queries
+        # Only fallback to query if no prefetch available
         active_membership = member.memberships.filter(status="active").first()
 
     # Base member information - matching the model fields exactly
@@ -127,11 +133,11 @@ def serialize_member_data_optimized(member):
             }
         )
 
-    # Add physical profile for indoor members - using prefetched data
-    # Check if physical profile was prefetched
+    # Add physical profile for indoor members - using prefetched data efficiently
     try:
-        if hasattr(member, "physical_profile") and member.physical_profile:
-            profile = member.physical_profile
+        # Check for physical profile without triggering additional queries
+        profile = getattr(member, "physical_profile", None)
+        if profile:
             member_info["physical_profile"] = {
                 "height": profile.height,
                 "weight": profile.weight,
@@ -141,21 +147,36 @@ def serialize_member_data_optimized(member):
                 "long_term_goals": profile.long_term_goals,
             }
             # Add flat fields for backward compatibility
-            member_info.update(
-                {
-                    "height": profile.height,
-                    "weight": profile.weight,
-                    "bmi": profile.bmi,
-                    "fitness_level": profile.fitness_level,
-                    "short_term_goals": profile.short_term_goals,
-                    "long_term_goals": profile.long_term_goals,
-                }
-            )
+            member_info.update({
+                "height": profile.height,
+                "weight": profile.weight,
+                "bmi": profile.bmi,
+                "fitness_level": profile.fitness_level,
+                "short_term_goals": profile.short_term_goals,
+                "long_term_goals": profile.long_term_goals,
+            })
         else:
             member_info["physical_profile"] = None
-    except:
-        # If physical_profile access fails, set to None
+            # Add default values for backward compatibility
+            member_info.update({
+                "height": None,
+                "weight": None,
+                "bmi": None,
+                "fitness_level": None,
+                "short_term_goals": None,
+                "long_term_goals": None,
+            })
+    except Exception:
+        # If physical_profile access fails, set defaults
         member_info["physical_profile"] = None
+        member_info.update({
+            "height": None,
+            "weight": None,
+            "bmi": None,
+            "fitness_level": None,
+            "short_term_goals": None,
+            "long_term_goals": None,
+        })
 
     return member_info
 
@@ -296,16 +317,13 @@ def list_all_members(request):
         # Otherwise, return paginated member list (existing functionality)
         # Get queryset with highly optimized queries to prevent N+1 problems
         queryset = Member.objects.select_related('physical_profile').prefetch_related(
-            # Prefetch only active memberships with their plans and locations
+            # Prefetch only active memberships with their plans and locations - most efficient
             Prefetch(
                 'memberships',
                 queryset=Membership.objects.filter(status='active').select_related('plan', 'location'),
                 to_attr='active_memberships_list'
-            ),
-            # Also prefetch all memberships for backward compatibility
-            'memberships__plan',
-            'memberships__location'
-        )
+            )
+        ).distinct()
 
         # Define searchable fields - optimized for performance
         search_fields = ['first_name', 'other_names', 'last_name', 'email', 'phone']

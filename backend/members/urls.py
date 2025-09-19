@@ -15,7 +15,7 @@ urlpatterns = [
     # OPTIMIZED ENDPOINTS - Use these for better performance
     path("members/<int:member_id>/", get_member_detail, name="member-detail"),  # Fixes 404 error
     path("search/", search_members_optimized, name="members-search"),          # Fast search
-    path("checkin/<int:member_id>/", checkin, name="checkin-member"),          # Direct check-in
+    path("member/checkin/<int:member_id>/", checkin, name="checkin-member"),   # Match production endpoint
 
     # Existing list endpoints (hybrid functionality) - Consider deprecating /all/
     path("all/", list_all_members, name="list-all-members"),

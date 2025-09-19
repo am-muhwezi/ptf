@@ -22,11 +22,11 @@ export const API_ENDPOINTS = {
     detail: (id) => `/members/${id}/`,      // Fixed: Added leading slash
     update: (id) => `/members/${id}/`,      // Fixed: Added leading slash
     delete: (id) => `/members/${id}/`,      // Fixed: Added leading slash
-    search: '/search/',                     // Correct - root level endpoint
+    search: '/search/',                     // Keep dedicated search endpoint
     stats: '/stats/',                       // New: Member stats endpoint
     indoor: '/indoor/',
     outdoor: '/outdoor/',
-    checkin: (id) => `/checkin/${id}/`,     // Fixed: Added leading slash
+    checkin: (id) => `/member/checkin/${id}/`, // Updated: Correct production endpoint
   },
   
   // Memberships

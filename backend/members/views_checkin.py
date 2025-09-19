@@ -11,6 +11,7 @@ from attendance.models import AttendanceLog
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def checkin(request, member_id):
     """Optimized check-in endpoint with member ID in URL"""
     try:
