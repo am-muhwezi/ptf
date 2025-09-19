@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Button from '../../components/ui/Button';
-import authService from '../../services/authService';
+import { useAuthContext } from '../../contexts/AuthContext';
 
 const PasswordReset = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { resetPassword } = useAuthContext();
   const token = searchParams.get('token');
   const email = searchParams.get('email');
 
@@ -98,7 +99,7 @@ const PasswordReset = () => {
         confirm_password: formData.confirmPassword
       };
       
-      const result = await authService.resetPassword(resetData);
+      const result = await resetPassword(resetData);
       
       if (result.success) {
         setSuccess('🎉 Password reset successful! Redirecting to login...');

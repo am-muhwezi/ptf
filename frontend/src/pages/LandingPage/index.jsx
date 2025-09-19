@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../../components/ui/Button';
 import ForgotPasswordForm from '../../components/forms/ForgotPasswordForm';
-import authService from '../../services/authService';
+import authApi from '../../services/authApi';
 import { useAuthContext } from '../../contexts/AuthContext'; // ✅ CRITICAL FIX: Import useAuthContext
 
 const LandingPage = () => {
@@ -35,17 +35,13 @@ const LandingPage = () => {
   const returnUrl = searchParams.get('from') || location.state?.from || '/dashboard';
 
   // Redirect to dashboard if user is already logged in
+  const { isAuthenticated, isLoading: authLoading } = useAuthContext();
+
   useEffect(() => {
-    const checkAuth = async () => {
-      if (authService.isAuthenticated()) {
-        const isValid = await authService.validateSession();
-        if (isValid) {
-          navigate(returnUrl, { replace: true });
-        }
-      }
-    };
-    checkAuth();
-  }, [navigate, returnUrl]);
+    if (isAuthenticated && !authLoading) {
+      navigate(returnUrl, { replace: true });
+    }
+  }, [isAuthenticated, authLoading, navigate, returnUrl]);
 
   const slides = [
     {

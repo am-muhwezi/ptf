@@ -7,7 +7,7 @@ import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
 import UpdateMemberProfileForm from '../../components/forms/UpdateMemberProfileForm';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
-import authService from '../../services/authService';
+import { useAuthContext } from "../../contexts/AuthContext";
 import { memberService } from '../../services/memberService';
 import indoorMembershipService from '../../services/indoorMembershipService';
 

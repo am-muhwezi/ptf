@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import Button from '../ui/Button';
-import authService from '../../services/authService';
+import { useAuthContext } from "../../contexts/AuthContext";
 
 const ForgotPasswordForm = ({ onBack, onSuccess }) => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-
+  const { forgotPassword } = useAuthContext();
   const validateEmail = (email) => {
     if (!email) {
       return '📧 Email address is required.';
@@ -40,7 +40,7 @@ const ForgotPasswordForm = ({ onBack, onSuccess }) => {
     setLoading(true);
 
     try {
-      const result = await authService.forgotPassword(email);
+      const result = await forgotPassword(email);
       
       if (result.success) {
         setSuccess('🎉 Password reset instructions have been sent to your email!');

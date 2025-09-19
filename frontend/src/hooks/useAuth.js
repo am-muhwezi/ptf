@@ -1,6 +1,17 @@
-import { useState, useEffect } from 'react';
+/**
+ * Simplified Centralized Auth Hook
+ * Single source of truth for all auth state and operations
+ */
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import authService from '../services/authService';
+import authApi from '../services/authApi';
+
+// Storage keys
+const STORAGE_KEYS = {
+  ACCESS_TOKEN: 'access_token',
+  REFRESH_TOKEN: 'refresh_token',
+  USER_DATA: 'user_data',
+};
 
 export const useAuth = () => {
   const [user, setUser] = useState(null);
@@ -8,161 +19,217 @@ export const useAuth = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const navigate = useNavigate();
 
+  // Storage utilities
+  const storage = {
+    get: (key) => {
+      try {
+        const item = localStorage.getItem(key);
+        return key === STORAGE_KEYS.USER_DATA ? JSON.parse(item) : item;
+      } catch {
+        return null;
+      }
+    },
+    set: (key, value) => {
+      try {
+        const valueToStore = key === STORAGE_KEYS.USER_DATA ? JSON.stringify(value) : value;
+        localStorage.setItem(key, valueToStore);
+      } catch (error) {
+        console.error('Storage error:', error);
+      }
+    },
+    remove: (key) => localStorage.removeItem(key),
+    clear: () => {
+      Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+    }
+  };
+
+  // Auth state setters
+  const setAuthState = useCallback((userData, tokens = null) => {
+    if (userData && tokens) {
+      // Store tokens
+      storage.set(STORAGE_KEYS.ACCESS_TOKEN, tokens.access);
+      storage.set(STORAGE_KEYS.REFRESH_TOKEN, tokens.refresh);
+      storage.set(STORAGE_KEYS.USER_DATA, userData);
+    }
+
+    setUser(userData);
+    setIsAuthenticated(!!userData);
+  }, []);
+
+  const clearAuthState = useCallback(() => {
+    storage.clear();
+    setUser(null);
+    setIsAuthenticated(false);
+  }, []);
+
+  // Token management
+  const getValidToken = useCallback(async () => {
+    const accessToken = storage.get(STORAGE_KEYS.ACCESS_TOKEN);
+    const refreshToken = storage.get(STORAGE_KEYS.REFRESH_TOKEN);
+
+    if (!accessToken || !refreshToken) return null;
+
+    // Check if access token is valid
+    if (authApi.isTokenValid(accessToken)) {
+      return accessToken;
+    }
+
+    // Try to refresh
+    try {
+      const newAccessToken = await authApi.refreshToken(refreshToken);
+      storage.set(STORAGE_KEYS.ACCESS_TOKEN, newAccessToken);
+      return newAccessToken;
+    } catch (error) {
+      console.warn('Token refresh failed:', error);
+      clearAuthState();
+      return null;
+    }
+  }, [clearAuthState]);
+
+  // Initialize auth state
   useEffect(() => {
     const initializeAuth = async () => {
+      setIsLoading(true);
+
       try {
-        setIsLoading(true);
-        const isValidSession = await authService.validateSession();
-        
-        if (isValidSession) {
-          let userData = authService.getCurrentUser();
-          
-          if (userData && userData.firstName && userData.lastName) {
-            setUser(userData);
-            setIsAuthenticated(true);
-          } else if (authService.getAccessToken()) {
-            try {
-              const fetchedUserData = await authService.fetchUserData();
-              if (fetchedUserData) {
-                setUser(fetchedUserData);
-                setIsAuthenticated(true);
-              } else {
-                const existingData = authService.getCurrentUser();
-                if (existingData) {
-                  setUser(existingData);
-                  setIsAuthenticated(true);
-                } else {
-                  const minimalUser = {
-                    firstName: 'User',
-                    lastName: '',
-                    email: 'user@example.com'
-                  };
-                  setUser(minimalUser);
-                  setIsAuthenticated(true);
-                }
-              }
-            } catch (fetchError) {
-              const existingData = authService.getCurrentUser() || {
-                firstName: 'User',
-                lastName: '',
-                email: 'user@example.com'
-              };
-              setUser(existingData);
-              setIsAuthenticated(true);
-            }
-          } else {
-            setUser(null);
-            setIsAuthenticated(false);
-          }
-        } else {
-          setUser(null);
-          setIsAuthenticated(false);
+        const token = await getValidToken();
+        if (!token) {
+          setIsLoading(false);
+          return;
         }
+
+        // Check if we have user data
+        let userData = storage.get(STORAGE_KEYS.USER_DATA);
+
+        // If no user data, fetch from API
+        if (!userData) {
+          try {
+            userData = await authApi.getUserInfo();
+            storage.set(STORAGE_KEYS.USER_DATA, userData);
+          } catch (error) {
+            console.warn('Failed to fetch user info:', error);
+            clearAuthState();
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        setAuthState(userData);
       } catch (error) {
-        setUser(null);
-        setIsAuthenticated(false);
+        console.error('Auth initialization error:', error);
+        clearAuthState();
       } finally {
         setIsLoading(false);
       }
     };
 
     initializeAuth();
+  }, [getValidToken, setAuthState, clearAuthState]);
+
+  // Auth operations
+  const login = useCallback(async (credentials) => {
+    try {
+      setIsLoading(true);
+      const result = await authApi.login(credentials);
+
+      setAuthState(result.user, result.tokens);
+
+      // Navigate after a short delay for UX
+      setTimeout(() => navigate('/dashboard'), 500);
+
+      return result.user;
+    } catch (error) {
+      clearAuthState();
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setAuthState, clearAuthState, navigate]);
+
+  const register = useCallback(async (userData) => {
+    try {
+      setIsLoading(true);
+      const result = await authApi.register(userData);
+
+      if (result.autoLogin && result.user) {
+        setAuthState(result.user, result.tokens);
+        setTimeout(() => navigate('/dashboard'), 1000);
+      }
+
+      return result;
+    } catch (error) {
+      clearAuthState();
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setAuthState, clearAuthState, navigate]);
+
+  const logout = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      // Could add API logout call here if needed
+      clearAuthState();
+      navigate('/landing');
+    } catch (error) {
+      // Even if logout API fails, clear local state
+      clearAuthState();
+      navigate('/landing');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [clearAuthState, navigate]);
+
+  const updateUser = useCallback((updatedData) => {
+    if (!user) return;
+
+    const newUserData = { ...user, ...updatedData };
+    storage.set(STORAGE_KEYS.USER_DATA, newUserData);
+    setUser(newUserData);
+  }, [user]);
+
+  const refreshUserData = useCallback(async () => {
+    try {
+      const token = await getValidToken();
+      if (!token) return null;
+
+      const userData = await authApi.getUserInfo();
+      storage.set(STORAGE_KEYS.USER_DATA, userData);
+      setUser(userData);
+      return userData;
+    } catch (error) {
+      console.error('Failed to refresh user data:', error);
+      return null;
+    }
+  }, [getValidToken]);
+
+  // Password operations
+  const forgotPassword = useCallback(async (email) => {
+    return await authApi.forgotPassword(email);
   }, []);
 
-  const login = async (credentials) => {
-    try {
-      setIsLoading(true);
-      const userData = await authService.login(credentials);
-      
-      if (userData) {
-        setUser(userData);
-        setIsAuthenticated(true);
-        
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 500);
-        
-        return userData;
-      } else {
-        throw new Error('Login succeeded but no user data received.');
-      }
-    } catch (error) {
-      setUser(null);
-      setIsAuthenticated(false);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const logout = async () => {
-    try {
-      setIsLoading(true);
-      await authService.logout();
-      setUser(null);
-      setIsAuthenticated(false);
-      navigate('/landing');
-    } catch (error) {
-      setUser(null);
-      setIsAuthenticated(false);
-      navigate('/landing');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const register = async (userData) => {
-    try {
-      setIsLoading(true);
-      const response = await authService.register(userData);
-
-      if (response.autoLogin && response.userData) {
-        setUser(response.userData);
-        setIsAuthenticated(true);
-        
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 1000);
-      }
-
-      return response;
-    } catch (error) {
-      setUser(null);
-      setIsAuthenticated(false);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const refreshUserData = async () => {
-    try {
-      const userData = await authService.fetchUserData();
-      if (userData) {
-        setUser(userData);
-        return userData;
-      }
-    } catch (error) {
-    }
-    return null;
-  };
-
-  const updateUser = (updatedData) => {
-    setUser(prevUser => {
-      const newUser = { ...prevUser, ...updatedData };
-      localStorage.setItem('user_data', JSON.stringify(newUser));
-      return newUser;
-    });
-  };
+  const resetPassword = useCallback(async (resetData) => {
+    return await authApi.resetPassword(resetData);
+  }, []);
 
   return {
+    // State
     user,
-    setUser: updateUser,
     isLoading,
     isAuthenticated,
+
+    // Operations
     login,
-    logout,
     register,
+    logout,
+    setUser: updateUser,
     refreshUserData,
+
+    // Password operations
+    forgotPassword,
+    resetPassword,
+
+    // Utilities
+    getValidToken,
   };
 };

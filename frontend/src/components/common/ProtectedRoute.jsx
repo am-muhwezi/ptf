@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import authService from '../../services/authService';
+import { useAuthContext } from '../../contexts/AuthContext';
 
 /**
  * Loading spinner component for auth validation
@@ -36,46 +36,8 @@ const AuthLoadingSpinner = () => (
  * - Role-based access control (future enhancement)
  */
 const ProtectedRoute = ({ requiredRole = null, children }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { isAuthenticated, isLoading, user } = useAuthContext();
   const location = useLocation();
-
-  useEffect(() => {
-    const validateAuth = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Quick check first
-        if (!authService.isAuthenticated()) {
-          setIsAuthenticated(false);
-          setIsLoading(false);
-          return;
-        }
-
-        // Validate session and refresh token if needed
-        const isValid = await authService.validateSession();
-        
-        if (isValid) {
-          // Additional role check if required
-          if (requiredRole && !authService.hasRole(requiredRole)) {
-            console.warn(`User lacks required role: ${requiredRole}`);
-            setIsAuthenticated(false);
-          } else {
-            setIsAuthenticated(true);
-          }
-        } else {
-          setIsAuthenticated(false);
-        }
-      } catch (error) {
-        console.error('Auth validation error:', error);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    validateAuth();
-  }, [requiredRole]);
 
   // Show loading spinner while validating
   if (isLoading) {
@@ -88,6 +50,13 @@ const ProtectedRoute = ({ requiredRole = null, children }) => {
     const returnUrl = location.pathname + location.search;
     // Use window.location for more reliable navigation
     window.location.href = `/?from=${encodeURIComponent(returnUrl)}`;
+    return null;
+  }
+
+  // Additional role check if required (simplified - can be enhanced later)
+  if (requiredRole && user && !user.isStaff && !user.isSuperuser) {
+    console.warn(`User lacks required role: ${requiredRole}`);
+    window.location.href = `/?from=${encodeURIComponent(location.pathname + location.search)}`;
     return null;
   }
 
