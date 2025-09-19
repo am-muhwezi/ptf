@@ -15,25 +15,43 @@ export const useForm = (initialValues = {}, validationSchema = null, onSubmit = 
   const handleChange = useCallback((e) => {
     const { name, value, type, checked } = e.target;
     const newValue = type === 'checkbox' ? checked : value;
-    
+
     setValues(prev => ({
       ...prev,
       [name]: newValue
     }));
-    
-    // Clear field error when user starts typing
+
+    // Clear field error when user starts typing (for better UX)
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
         [name]: ''
       }));
     }
-    
+
     // Clear submit error when user makes changes
     if (submitError) {
       setSubmitError('');
     }
   }, [errors, submitError]);
+
+  // Handle blur validation for individual fields
+  const handleBlur = useCallback((e) => {
+    const { name } = e.target;
+
+    if (validationSchema && values[name] !== undefined) {
+      // Run validation only for this field
+      const allErrors = validationSchema(values);
+      const fieldError = allErrors[name];
+
+      if (fieldError) {
+        setErrors(prev => ({
+          ...prev,
+          [name]: fieldError
+        }));
+      }
+    }
+  }, [validationSchema, values]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -99,6 +117,7 @@ export const useForm = (initialValues = {}, validationSchema = null, onSubmit = 
     isSubmitting,
     submitError,
     handleChange,
+    handleBlur,
     handleSubmit,
     resetForm,
     setFieldValue,

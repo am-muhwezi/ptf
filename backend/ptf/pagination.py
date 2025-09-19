@@ -175,8 +175,8 @@ class SearchPaginationHelper(PaginationHelper):
         """
         from django.db.models import Q
         
-        # Get search query
-        search_query = request.GET.get('q', '').strip()
+        # Get search query - support both 'q' and 'search' parameters
+        search_query = request.GET.get('search', request.GET.get('q', '')).strip()
         
         # Apply search if query exists
         if search_query and search_fields:
