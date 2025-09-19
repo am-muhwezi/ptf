@@ -77,7 +77,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
     setMemberIdInput('');
   };
 
-  // Handle member ID input and lookup
+  // Handle member ID input and lookup - Enhanced with PTF prefix support
   const handleMemberIdLookup = async () => {
     if (!memberIdInput.trim()) {
       setError('Please enter a valid member ID');
@@ -86,7 +86,26 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
 
     try {
       setError('');
-      const member = await memberService.getMemberById(memberIdInput.trim());
+
+      // Extract numeric ID from input (handles both "12" and "PTF000012" formats)
+      let numericId = memberIdInput.trim();
+
+      // Remove PTF prefix if present (case insensitive)
+      if (numericId.toLowerCase().startsWith('ptf')) {
+        numericId = numericId.substring(3);
+      }
+
+      // Remove leading zeros
+      numericId = numericId.replace(/^0+/, '') || '0';
+
+      // Validate that we have a numeric ID
+      if (!/^\d+$/.test(numericId)) {
+        setError('Please enter a valid member ID (numbers only)');
+        return;
+      }
+
+
+      const member = await memberService.getMemberById(numericId);
       if (member) {
         setSelectedMember(member);
         setSearchQuery(`${member.first_name} ${member.last_name}`);
@@ -94,14 +113,27 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
         setMemberIdInput('');
       }
     } catch (error) {
-      setError(`Member ID ${memberIdInput} not found. Please check the ID and try again.`);
+      const errorMessage = error.message.includes('404') || error.message.includes('not found')
+        ? `Member ID ${memberIdInput} not found. Please check the ID and try again.`
+        : error.message || 'Failed to lookup member. Please try again.';
+      setError(errorMessage);
       setMemberIdInput('');
     }
   };
 
-  // Handle member ID input change
+  // Handle member ID input change - Allow PTF prefix and numbers
   const handleMemberIdChange = (e) => {
-    const value = e.target.value.replace(/\D/g, ''); // Only allow numbers
+    let value = e.target.value.toUpperCase(); // Convert to uppercase for consistency
+
+    // Allow PTF prefix + numbers, or just numbers
+    if (value.startsWith('PTF')) {
+      // Remove any non-digits after PTF
+      value = 'PTF' + value.substring(3).replace(/\D/g, '');
+    } else {
+      // For non-PTF input, only allow numbers
+      value = value.replace(/\D/g, '');
+    }
+
     setMemberIdInput(value);
     setError('');
     setSuccessMessage('');
@@ -283,7 +315,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
                 onChange={handleMemberIdChange}
                 onKeyPress={handleMemberIdKeyPress}
                 className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter member ID (numbers only)"
+                placeholder="Enter member ID (e.g., 12 or PTF0012)"
                 disabled={isSubmitting}
                 autoFocus
               />
@@ -297,7 +329,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
               </button>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Fast lookup for experienced users. Press Enter or click Lookup.
+              Fast lookup for experienced users. Supports both numeric (12) and PTF format (PTF0012). Press Enter or click Lookup.
             </p>
           </div>
         ) : (
@@ -332,7 +364,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
                         {member.first_name} {member.last_name}
                       </p>
                       <p className="text-sm text-gray-600">{member.email}</p>
-                      <p className="text-xs text-gray-500">ID: {member.id}</p>
+                      <p className="text-xs text-gray-500">ID: PTF{String(member.id).padStart(4, '0')}</p>
                     </div>
                     <div className="text-right">
                       <span className={`inline-block px-2 py-1 text-xs rounded-full ${
@@ -390,7 +422,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Member ID:</span>
-                <span className="text-sm font-medium text-gray-900">{selectedMember.id}</span>
+                <span className="text-sm font-medium text-gray-900">PTF{String(selectedMember.id).padStart(4, '0')}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Email:</span>
