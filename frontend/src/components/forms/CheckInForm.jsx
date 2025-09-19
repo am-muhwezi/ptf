@@ -12,6 +12,8 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [memberIdInput, setMemberIdInput] = useState('');
+  const [showAdvancedMode, setShowAdvancedMode] = useState(false);
 
   // Use separate mutations for search only (check-in moved to attendance service)
   const { mutate: searchMembers, loading: isSearching } = useApiMutation(memberService.searchMembers);
@@ -42,7 +44,7 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
     };
   }, []);
 
-  const debouncedSearchQuery = useDebounce(searchQuery, 500); // Increased debounce for better performance
+  const debouncedSearchQuery = useDebounce(searchQuery, 200); // Optimized debounce for faster user experience
 
   // Handle search input changes
   const handleSearchChange = (e) => {
@@ -72,6 +74,45 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
     setSearchResults([]);
     setError('');
     setSuccessMessage('');
+    setMemberIdInput('');
+  };
+
+  // Handle member ID input and lookup
+  const handleMemberIdLookup = async () => {
+    if (!memberIdInput.trim()) {
+      setError('Please enter a valid member ID');
+      return;
+    }
+
+    try {
+      setError('');
+      const member = await memberService.getMemberById(memberIdInput.trim());
+      if (member) {
+        setSelectedMember(member);
+        setSearchQuery(`${member.first_name} ${member.last_name}`);
+        setSearchResults([]);
+        setMemberIdInput('');
+      }
+    } catch (error) {
+      setError(`Member ID ${memberIdInput} not found. Please check the ID and try again.`);
+      setMemberIdInput('');
+    }
+  };
+
+  // Handle member ID input change
+  const handleMemberIdChange = (e) => {
+    const value = e.target.value.replace(/\D/g, ''); // Only allow numbers
+    setMemberIdInput(value);
+    setError('');
+    setSuccessMessage('');
+  };
+
+  // Handle Enter key press in member ID input
+  const handleMemberIdKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleMemberIdLookup();
+    }
   };
 
   // Optimized search function with better error handling and loading states
@@ -213,25 +254,72 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
           </div>
         )}
 
-        {/* Search Input */}
-        <div className="relative">
-          <label htmlFor="memberSearch" className="block text-sm font-medium text-gray-700 mb-2">
-            Search Member
-          </label>
-          <input
-            type="text"
-            id="memberSearch"
-            value={searchQuery}
-            onChange={handleSearchChange}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder={isSearching ? "Searching..." : "Search by name, email, or phone (min 2 chars)"}
-            disabled={isSubmitting}
-            autoFocus
-          />
-          
-          {/* Search Results Dropdown */}
-          {searchResults.length > 0 && !selectedMember && (
-            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        {/* Search Mode Toggle */}
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium text-gray-900">Find Member</h3>
+          <button
+            type="button"
+            onClick={() => {
+              setShowAdvancedMode(!showAdvancedMode);
+              clearSelection();
+            }}
+            className="text-sm text-blue-600 hover:text-blue-800 underline"
+          >
+            {showAdvancedMode ? 'Use Name Search' : 'Use Member ID'}
+          </button>
+        </div>
+
+        {/* Member ID Input (Advanced Mode) */}
+        {showAdvancedMode ? (
+          <div className="relative">
+            <label htmlFor="memberIdInput" className="block text-sm font-medium text-gray-700 mb-2">
+              Member ID (Power User Mode)
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                id="memberIdInput"
+                value={memberIdInput}
+                onChange={handleMemberIdChange}
+                onKeyPress={handleMemberIdKeyPress}
+                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter member ID (numbers only)"
+                disabled={isSubmitting}
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={handleMemberIdLookup}
+                disabled={isSubmitting || !memberIdInput.trim()}
+                className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                Lookup
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Fast lookup for experienced users. Press Enter or click Lookup.
+            </p>
+          </div>
+        ) : (
+          /* Search Input (Default Mode) */
+          <div className="relative">
+            <label htmlFor="memberSearch" className="block text-sm font-medium text-gray-700 mb-2">
+              Search Member
+            </label>
+            <input
+              type="text"
+              id="memberSearch"
+              value={searchQuery}
+              onChange={handleSearchChange}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder={isSearching ? "Searching..." : "Search by name, email, or phone (min 2 chars)"}
+              disabled={isSubmitting}
+              autoFocus
+            />
+
+            {/* Search Results Dropdown */}
+            {searchResults.length > 0 && !selectedMember && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
               {searchResults.map((member) => (
                 <div
                   key={member.id}
@@ -265,16 +353,17 @@ const CheckInForm = ({ onSubmit, onCancel }) => {
                   </div>
                 </div>
               ))}
-            </div>
-          )}
+              </div>
+            )}
 
-          {/* Loading indicator */}
-          {(isSearching || isSubmitting) && (
-            <div className="absolute right-3 top-11 transform -translate-y-1/2" title={isSearching ? "Searching members..." : "Processing check-in..."}>
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-            </div>
-          )}
-        </div>
+            {/* Loading indicator */}
+            {(isSearching || isSubmitting) && (
+              <div className="absolute right-3 top-11 transform -translate-y-1/2" title={isSearching ? "Searching members..." : "Processing check-in..."}>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Selected Member Details */}
         {selectedMember && (

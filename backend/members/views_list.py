@@ -308,7 +308,7 @@ def list_all_members(request):
         )
 
         # Define searchable fields - optimized for performance
-        search_fields = ['email', 'phone']
+        search_fields = ['first_name', 'other_names', 'last_name', 'email', 'phone']
 
         # Use pagination helper with search functionality
         response = SearchPaginationHelper.search_and_paginate(

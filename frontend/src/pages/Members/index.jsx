@@ -15,9 +15,8 @@ import { memberService } from '../../services/memberService';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 
 const Members = () => {
-  // State management
+  // State management (simplified, following outdoor membership pattern)
   const [members, setMembers] = useState([]);
-  const [filteredMembers, setFilteredMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -33,6 +32,9 @@ const Members = () => {
   // Cleanup ref for AbortController
   const abortControllerRef = useRef(null);
 
+  // Debounce timeout ref
+  const searchTimeoutRef = useRef(null);
+
   // Mobile sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -44,7 +46,6 @@ const Members = () => {
   const [hasNextPage, setHasNextPage] = useState(true);
 
   // Lazy loading state
-  const [isLazyLoading, setIsLazyLoading] = useState(true);
   const [allMembersLoaded, setAllMembersLoaded] = useState(false);
 
   // Filter and search states
@@ -70,217 +71,189 @@ const Members = () => {
   // Helper function to safely get member names
   const getMemberDisplayName = (member) => {
     if (!member) return '';
-    return member.full_name || `${member.first_name || ''} ${member.last_name || ''}`.trim();
+    // Support both naming conventions for compatibility
+    const firstName = member.firstName || member.first_name || '';
+    const lastName = member.lastName || member.last_name || '';
+    return member.full_name || `${firstName} ${lastName}`.trim();
   };
 
   // Helper function to safely get member initials
   const getMemberInitials = (member) => {
     if (!member) return '';
-    const firstInitial = member.first_name?.charAt(0) || '';
-    const lastInitial = member.last_name?.charAt(0) || '';
+    // Support both naming conventions for compatibility
+    const firstInitial = (member.firstName || member.first_name)?.charAt(0)?.toUpperCase() || '';
+    const lastInitial = (member.lastName || member.last_name)?.charAt(0)?.toUpperCase() || '';
     return `${firstInitial}${lastInitial}`;
   };
 
-  // ✅ Optimized useEffect pattern - Separate stats and member data loading
-  useEffect(() => {
-    const loadStats = async () => {
-      try {
-        setStatsLoading(true);
-        setError(null);
-
-        // Load lightweight stats first (dashboard pattern)
-        const summaryResponse = await memberService.getSummary();
-
-        if (summaryResponse.success && summaryResponse.stats) {
-          const statsData = summaryResponse.stats;
-
-          // Extract stats in the format expected by UI
-          const totalFromSummary = statsData.members?.total || 0;
-          setStats({
-            total_members: totalFromSummary,
-            active_members: statsData.members?.active || 0,
-            inactive_members: statsData.members?.inactive || 0,
-            indoor_members: statsData.membership_types?.indoor || 0,
-            outdoor_members: statsData.membership_types?.outdoor || 0
-          });
-
-          // Set pagination totals from summary ONLY (dashboard pattern)
-          setTotalCount(totalFromSummary);
-          setTotalPages(Math.ceil(totalFromSummary / pageSize));
-        }
-
-      } catch (error) {
-        console.error('Error loading stats:', error);
-        setError(error.message);
-      } finally {
-        setStatsLoading(false);
-      }
-    };
-
-    loadStats();
-  }, [refreshTrigger]);
-
-  // Load initial members data and support lazy loading
-  const loadMemberData = useCallback(async (isLoadMore = false) => {
-    // Cancel any existing request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    // Create new abort controller for this request
-    abortControllerRef.current = new AbortController();
-
+  // 🚀 Load stats separately and immediately for faster UI
+  const loadStats = async () => {
     try {
+      setStatsLoading(true);
+      const summaryResponse = await memberService.getSummary();
+
+      if (summaryResponse.success && summaryResponse.stats) {
+        const statsData = summaryResponse.stats;
+        const totalFromSummary = statsData.members?.total || 0;
+
+        setStats({
+          total_members: totalFromSummary,
+          active_members: statsData.members?.active || 0,
+          inactive_members: statsData.members?.inactive || 0,
+          indoor_members: statsData.membership_types?.indoor || 0,
+          outdoor_members: statsData.membership_types?.outdoor || 0
+        });
+
+        setTotalCount(totalFromSummary);
+        setTotalPages(Math.ceil(totalFromSummary / pageSize));
+      }
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  // 🚀 Load members data using outdoor membership pattern
+  const loadMembersData = async (page = 1, isLoadMore = false) => {
+    try {
+      // Set loading states
       if (isLoadMore) {
         setLoadingMore(true);
       } else {
         setLoading(true);
       }
+      setError(null);
 
-      const memberParams = {
-        page: isLoadMore ? currentPage + 1 : currentPage,
-        limit: pageSize
-      };
+      const response = await memberService.getMembers({
+        search: searchTerm,
+        status: filterStatus !== 'all' ? filterStatus : undefined,
+        membership_type: filterMembershipType !== 'all' ? filterMembershipType : undefined,
+        page: page,
+        limit: 20
+      });
 
-      if (searchTerm && searchTerm.trim() !== '') memberParams.q = searchTerm;
-      if (filterStatus !== 'all') memberParams.status = filterStatus;
+      if (response.success) {
+        const membersData = response.members.data || [];
+        const totalCount = response.members.count || 0;
+        const totalPages = Math.ceil(totalCount / 20);
 
-      const response = await memberService.getMembers(memberParams);
-
-      // Only update state if request wasn't aborted
-      if (!abortControllerRef.current?.signal.aborted) {
-        // Handle response for display
-        let membersData = [];
-
-        if (response.data) {
-          membersData = response.data;
-        } else if (response.results) {
-          membersData = response.results;
-        } else if (Array.isArray(response)) {
-          membersData = response;
-        }
-
-        // Process the members data
-        const processedMembers = membersData.map(member => ({
+        // Transform member data to ensure compatibility
+        const transformedMembers = membersData.map(member => ({
           ...member,
+          // Ensure we have the expected fields for display
+          firstName: member.first_name || member.full_name?.split(' ')[0] || '',
+          lastName: member.last_name || member.full_name?.split(' ').slice(1).join(' ') || '',
+          member_id: member.member_id || `PTF${String(member.id).padStart(4, '0')}`,
           membership_type: member.membership_type || 'unknown'
         }));
 
-        // Apply membership type filtering if needed
-        let filtered = processedMembers;
-        if (filterMembershipType !== 'all') {
-          filtered = processedMembers.filter(member =>
-            member.membership_type === filterMembershipType
-          );
-        }
-
+        // Calculate pagination state
+        let newMembersLength;
         if (isLoadMore) {
-          // Append new members to existing list
-          setMembers(prevMembers => [...prevMembers, ...processedMembers]);
-          setFilteredMembers(prevFiltered => [...prevFiltered, ...filtered]);
-          setCurrentPage(prev => prev + 1);
+          newMembersLength = members.length + transformedMembers.length;
+          setMembers(prevMembers => [...prevMembers, ...transformedMembers]);
         } else {
-          // Replace existing members
-          setMembers(processedMembers);
-          setFilteredMembers(filtered);
+          newMembersLength = transformedMembers.length;
+          setMembers(transformedMembers);
         }
 
-        // Check if there are more pages - improved logic
-        let hasMore = false;
-        if (response.pagination) {
-          hasMore = response.pagination.has_next || false;
-        } else if (response.count) {
-          // Calculate if there are more pages based on total count vs loaded members
-          const totalLoadedAfterThis = isLoadMore ?
-            (members.length + processedMembers.length) :
-            processedMembers.length;
-          hasMore = totalLoadedAfterThis < response.count;
-        }
+        const hasNext = newMembersLength < totalCount;
+        const hasPrevious = page > 1;
 
-        setHasNextPage(hasMore);
-        setAllMembersLoaded(!hasMore);
-
-        if (response.pagination) {
-          setTotalPages(response.pagination.total_pages);
-        }
+        // Update pagination state
+        setCurrentPage(page);
+        setHasNextPage(hasNext);
+        setTotalCount(totalCount);
+        setTotalPages(totalPages);
+        setAllMembersLoaded(!hasNext);
+      } else {
+        throw new Error('Failed to load all members');
       }
-    } catch (error) {
-      // Only handle error if request wasn't aborted
-      if (!abortControllerRef.current?.signal.aborted) {
-        console.error('Error loading member data:', error);
-        setError(error.message);
-      }
+    } catch (err) {
+      setError(err.message);
+      console.error('Error loading members:', err);
     } finally {
-      // Only update loading state if request wasn't aborted
-      if (!abortControllerRef.current?.signal.aborted) {
-        if (isLoadMore) {
-          setLoadingMore(false);
-        } else {
-          setLoading(false);
-        }
+      if (isLoadMore) {
+        setLoadingMore(false);
+      } else {
+        setLoading(false);
       }
     }
-  }, [currentPage, pageSize, searchTerm, filterStatus, filterMembershipType]);
+  };
 
-  // Initial load and when filters change
+  // Load stats immediately on mount or refresh
   useEffect(() => {
-    // Reset state when filters change
-    setCurrentPage(1);
-    setMembers([]);
-    setFilteredMembers([]);
-    setAllMembersLoaded(false);
-    setHasNextPage(true);
+    loadStats();
+  }, [refreshTrigger]);
 
-    // Clear cache when search/filter changes
-    if (searchTerm || filterStatus !== 'all' || filterMembershipType !== 'all') {
-      memberService.clearCache();
+
+  // Load more members function for infinite scroll
+  const loadMoreMembers = () => {
+    if (!loadingMore && hasNextPage && !allMembersLoaded) {
+      const nextPage = currentPage + 1;
+      console.log(`🟠 Loading more members - page ${nextPage}`);
+      loadMembersData(nextPage, true); // true = append to existing members
+    }
+  };
+
+  // Filter effect with debouncing (following outdoor membership pattern)
+  useEffect(() => {
+    // Cancel previous request if still pending
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
 
-    loadMemberData(false);
+    abortControllerRef.current = new AbortController();
 
-    // Cleanup function
+    const loadData = async () => {
+      try {
+        // Reset pagination state when filters change
+        setCurrentPage(1);
+        setAllMembersLoaded(false);
+
+        // Clear cache when search/filter changes
+        memberService.clearCache();
+
+        await loadMembersData(1, false);
+      } catch (err) {
+        if (!abortControllerRef.current?.signal?.aborted) {
+          setError(err.message);
+          console.error('Error loading members:', err);
+        }
+      }
+    };
+
+    // Debounce search/filter changes (300ms like outdoor memberships)
+    const timeoutId = setTimeout(loadData, searchTerm || filterStatus !== 'all' || filterMembershipType !== 'all' ? 300 : 0);
+
     return () => {
+      clearTimeout(timeoutId);
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
     };
   }, [searchTerm, filterStatus, filterMembershipType, refreshTrigger]);
 
-  // Load more data function for lazy loading
-  const loadMoreMembers = useCallback(() => {
-    if (!loadingMore && hasNextPage && !allMembersLoaded) {
-      loadMemberData(true);
-    }
-  }, [loadingMore, hasNextPage, allMembersLoaded, loadMemberData]);
+  // Note: loadMoreMembers is now defined above after loadAllData
 
-  // Scroll detection for infinite scroll
+  // Handle infinite scroll (following outdoor membership pattern)
   useEffect(() => {
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
 
       // Trigger load more when user scrolls to 80% of the page
-      if (scrollTop + clientHeight >= scrollHeight * 0.8 && !loadingMore && hasNextPage && !allMembersLoaded) {
+      if (scrollTop + clientHeight >= scrollHeight * 0.8 &&
+          !loadingMore && hasNextPage && !allMembersLoaded) {
         loadMoreMembers();
       }
     };
 
-    if (isLazyLoading) {
-      window.addEventListener('scroll', handleScroll, { passive: true });
-
-      return () => {
-        window.removeEventListener('scroll', handleScroll);
-      };
-    }
-  }, [loadMoreMembers, loadingMore, hasNextPage, allMembersLoaded, isLazyLoading]);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [loadingMore, hasNextPage, allMembersLoaded, currentPage]);
 
 
-  // Handle filter changes - reset to page 1 when filters change
-  const handleFilterChange = (filters) => {
-    // Reset to page 1 when filters change - this will trigger the unified useEffect
-    if (currentPage !== 1) {
-      setCurrentPage(1);
-    }
-  };
 
   // Toast helper functions
   const showToast = (message, type = 'success') => {
@@ -291,10 +264,14 @@ const Members = () => {
     setToast({ show: false, message: '', type: 'success' });
   };
   
-  const refreshData = () => {
-    // Clear cache when data is modified
+  // Clear cache when data is modified
+  const clearCache = () => {
     memberService.clearCache();
-    // Trigger refresh by updating the refreshTrigger
+  };
+
+  const refreshData = () => {
+    // Clear cache and trigger refresh
+    clearCache();
     setRefreshTrigger(prev => prev + 1);
   };
 
@@ -461,8 +438,8 @@ const Members = () => {
     return { label: 'Obese', style: 'bg-red-100 text-red-800' };
   };
 
-  // Loading state
-  if (loading) {
+  // Unified loading state - show when both stats and members are loading
+  if (loading && members.length === 0) {
     return (
       <div className="flex h-screen bg-gray-50">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -471,13 +448,34 @@ const Members = () => {
           <main className="flex-1 overflow-y-auto p-6">
             <div className="max-w-7xl mx-auto">
               <div className="animate-pulse space-y-6">
-                <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+                <div className="flex justify-between items-center">
+                  <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-10 bg-gray-200 rounded w-32"></div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                   {[...Array(5)].map((_, i) => (
-                    <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                    <div key={i} className="h-24 bg-gray-200 rounded">
+                      <div className="p-4 space-y-2">
+                        <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+                        <div className="h-6 bg-gray-300 rounded w-1/2"></div>
+                        <div className="h-3 bg-gray-300 rounded w-full"></div>
+                      </div>
+                    </div>
                   ))}
                 </div>
-                <div className="h-96 bg-gray-200 rounded"></div>
+                <div className="bg-white rounded-xl shadow-sm p-6">
+                  <div className="h-12 bg-gray-200 rounded mb-4"></div>
+                  <div className="space-y-4">
+                    {[...Array(8)].map((_, i) => (
+                      <div key={i} className="h-16 bg-gray-200 rounded"></div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="text-center mt-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto"></div>
+                <h3 className="mt-4 text-lg font-medium text-gray-900">Loading members and statistics...</h3>
+                <p className="mt-1 text-sm text-gray-500">Please wait while we fetch all the member data.</p>
               </div>
             </div>
           </main>
@@ -588,10 +586,7 @@ const Members = () => {
                       type="text"
                       placeholder="Search members..."
                       value={searchTerm}
-                      onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        handleFilterChange({ q: e.target.value || undefined });
-                      }}
+                      onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -599,10 +594,7 @@ const Members = () => {
                 <div className="flex space-x-4">
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => {
-                        setFilterStatus('all');
-                        handleFilterChange({ status: undefined });
-                      }}
+                      onClick={() => setFilterStatus('all')}
                       className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                         filterStatus === 'all'
                           ? 'bg-blue-100 text-blue-800 border border-blue-200'
@@ -612,10 +604,7 @@ const Members = () => {
                       All
                     </button>
                     <button
-                      onClick={() => {
-                        setFilterStatus('active');
-                        handleFilterChange({ status: 'active' });
-                      }}
+                      onClick={() => setFilterStatus('active')}
                       className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                         filterStatus === 'active'
                           ? 'bg-green-100 text-green-800 border border-green-200'
@@ -625,10 +614,7 @@ const Members = () => {
                       Active
                     </button>
                     <button
-                      onClick={() => {
-                        setFilterStatus('inactive');
-                        handleFilterChange({ status: 'inactive' });
-                      }}
+                      onClick={() => setFilterStatus('inactive')}
                       className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                         filterStatus === 'inactive'
                           ? 'bg-red-100 text-red-800 border border-red-200'
@@ -640,10 +626,7 @@ const Members = () => {
                   </div>
                   <select
                     value={filterMembershipType}
-                    onChange={(e) => {
-                      setFilterMembershipType(e.target.value);
-                      handleFilterChange({ membership_type: e.target.value === 'all' ? undefined : e.target.value });
-                    }}
+                    onChange={(e) => setFilterMembershipType(e.target.value)}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="all">All Types</option>
@@ -723,7 +706,7 @@ const Members = () => {
                               <div className="ml-4">
                                 <div className="text-sm font-medium text-gray-900">{getMemberDisplayName(member)}</div>
                                 <div className="text-sm text-gray-500">{member.email}</div>
-                                <div className="text-xs text-gray-400">{member.member_id}</div>
+                                <div className="text-xs text-gray-400">{member.member_id || `PTF${String(member.id).padStart(4, '0')}`}</div>
                               </div>
                             </div>
                           </td>
@@ -763,7 +746,7 @@ const Members = () => {
                 <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
                   <div className="flex items-center justify-center text-sm text-gray-600 mb-3">
                     <span>
-                      Showing {members.length} {totalCount > 0 && `of ${totalCount}`} members
+                      Showing {members.length} {totalCount > 0 ? `of ${totalCount}` : ''} members
                     </span>
                   </div>
 

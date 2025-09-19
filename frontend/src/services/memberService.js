@@ -45,7 +45,7 @@ export const memberService = {
     }
   },
 
-  // Get all members with pagination
+  // Get all members with pagination (following outdoor membership pattern)
   getMembers: async (params = {}) => {
     console.count('🟠 MemberService.getMembers() called');
     console.log('🟠 MemberService.getMembers() params:', params);
@@ -53,7 +53,7 @@ export const memberService = {
     // Generate cache key
     const cacheKey = CACHE_KEYS.ALL_MEMBERS(
       params.page || 1,
-      params.q,
+      params.search,
       params.status,
       params.membership_type
     );
@@ -66,16 +66,45 @@ export const memberService = {
     }
 
     try {
-      const response = await apiClient.get(API_ENDPOINTS.members.list, { params });
+      // Normalize parameters to match backend expectations
+      const normalizedParams = {
+        ...params,
+        search: params.search || params.q, // Support both search and q parameters
+        status: params.status !== 'all' ? params.status : undefined,
+        membership_type: params.membership_type !== 'all' ? params.membership_type : undefined,
+        page: params.page || 1,
+        limit: params.limit || 20
+      };
+
+      // Remove undefined values
+      Object.keys(normalizedParams).forEach(key => {
+        if (normalizedParams[key] === undefined) {
+          delete normalizedParams[key];
+        }
+      });
+
+      const response = await apiClient.get(API_ENDPOINTS.members.list, { params: normalizedParams });
+
+      // Transform response to match outdoor membership pattern
+      const result = {
+        success: true,
+        members: {
+          data: response.data.data || response.data.results || response.data,
+          count: response.data.count || 0,
+          next: response.data.pagination?.has_next ? `page=${(response.data.pagination?.page || 1) + 1}` : null,
+          previous: response.data.pagination?.has_previous ? `page=${(response.data.pagination?.page || 1) - 1}` : null
+        }
+      };
 
       // Cache the result
-      const ttl = params.q ? CACHE_TTL.SEARCH : CACHE_TTL.MEMBERS;
-      memberCache.set(cacheKey, response.data, ttl);
+      const ttl = params.search ? CACHE_TTL.SEARCH : CACHE_TTL.MEMBERS;
+      memberCache.set(cacheKey, result, ttl);
       console.log('📄 All members data cached');
 
-      return response.data;
+      return result;
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch members');
+      console.error('🟠 MemberService.getMembers() error:', error);
+      throw new Error(error.response?.data?.message || 'Failed to fetch all members');
     }
   },
 
@@ -167,30 +196,30 @@ export const memberService = {
     }
   },
 
-  // Search members - FIXED: Proper endpoint and error handling
-  searchMembers: async (query, page = 1, limit = 10) => {
+  // Search members - Using optimized search endpoint
+  searchMembers: async (query, page = 1, limit = 20) => {
     try {
-      // Ensure we're calling the correct endpoint
-      const response = await apiClient.get(`${API_ENDPOINTS.members.list}`, {
-        params: { 
+      console.log('🔍 Using optimized search endpoint for:', query);
+
+      // Use the new optimized search endpoint
+      const response = await apiClient.get(API_ENDPOINTS.members.search, {
+        params: {
           q: query,
-          page: page,
           limit: limit
         }
       });
-      
-      // Handle the response structure from your Django backend
-      const data = response.data;
-      
-      // Your Django backend returns { data: [], count: number, success: true }
+
+      console.log('🔍 Search response:', response.data);
+
+      // The new endpoint returns results directly
       return {
-        results: data.data || [],
-        count: data.count || 0,
-        query: data.query || query,
-        hasMore: false // Since you limit to 10, implement pagination if needed
+        results: response.data.results || [],
+        count: response.data.count || 0,
+        query: query,
+        hasMore: false // Our optimized endpoint returns limited results
       };
     } catch (error) {
-      console.error('Search API Error:', error);
+      console.error('🔍 Search API Error:', error);
       throw new Error(error.response?.data?.message || 'Failed to search members');
     }
   },

@@ -169,7 +169,7 @@ const OutdoorMemberships = () => {
         abortControllerRef.current.abort();
       }
     };
-  }, [searchTerm, filterStatus, filterLocation]); // Removed currentPage from dependencies
+  }, [searchTerm, filterStatus, filterLocation, refreshTrigger]); // Include refreshTrigger for proper data sync
 
   // Handle load more functionality for lazy loading
   const handleLoadMore = () => {

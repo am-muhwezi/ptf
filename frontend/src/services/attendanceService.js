@@ -11,7 +11,8 @@ export const attendanceService = {
   // Check-in a member - simplified to only require member ID
   async checkIn(data) {
     try {
-      const response = await api.post(`/member/checkin/${data.memberId}/`);
+      // Use the new optimized check-in endpoint
+      const response = await api.post(`/checkin/${data.memberId}/`);
       return response.data;
     } catch (error) {
       // Extract the specific error message from the backend
