@@ -112,21 +112,19 @@ BLOOD_GROUPS = ["A(-)", "A(+)", "B(+)", "B(-)", "AB(+)", "AB(-)", "O(+)", "O(-)"
 @api_view(["POST"])
 def register_member(request):
     """
-    Complete member registration with all required fields
+    Optimized member registration with bulk validation and single transaction
     """
     try:
-        with transaction.atomic():
-            # Validate required fields - simplified to only essential gym data
-            required_fields = [
-                "first_name",
-                "last_name", 
-                "phone",
-                "membership_type",
-            ]
+        # Validate all required fields in one pass
+        validation_errors = validate_registration_data(request.data)
+        if validation_errors:
+            return Response({"error": validation_errors}, status=400)
 
-            for field in required_fields:
-                if not request.data.get(field):
-                    return Response({"error": f"{field} is required"}, status=400)
+        with transaction.atomic():
+            # Pre-check for duplicates before creating anything
+            duplicate_check = check_for_duplicates(request.data)
+            if duplicate_check:
+                return Response({"error": duplicate_check}, status=400)
             
             # Auto-generate plan_code if not provided
             plan_code = request.data.get("plan_code")
@@ -199,78 +197,26 @@ def register_member(request):
                     status=400,
                 )
 
-            # Check for duplicate phone numbers
-            phone = request.data["phone"]
-            if Member.objects.filter(phone=phone).exists():
-                return Response(
-                    {"error": "Phone number already registered"}, status=400
-                )
 
-            # Check for duplicate ID/Passport if provided
-            id_passport = request.data.get("id_passport_no")
-            if (
-                id_passport
-                and Member.objects.filter(id_passport=id_passport).exists()
-            ):
-                return Response(
-                    {"error": "ID/Passport number already registered"}, status=400
-                )
+            # Prepare normalized member data
+            member_data = prepare_member_data(request.data, blood_group)
 
-            # 1. CREATE MEMBER with all collected information
-            # Handle empty date_of_birth (convert empty string to None)
-            date_of_birth = request.data.get("date_of_birth")
-            if date_of_birth == "":
-                date_of_birth = None
-            
-            # Handle empty email (convert empty string to None for unique constraint)
-            email = request.data.get("email")
-            if email == "":
-                email = None
-            
-            member_data = {
-                "first_name": request.data["first_name"],
-                "other_names": request.data.get("other_names"),
-                "last_name": request.data["last_name"],
-                "phone": phone,
-                "email": email,
-                "id_passport": id_passport,
-                "blood_group": blood_group,
-                "date_of_birth": date_of_birth,
-                "address": request.data.get("physical_address"),
-                "emergency_contact": request.data.get("emergency_contact_name"),
-                "emergency_phone": request.data.get("emergency_contact_phone"),
-                "medical_conditions": request.data.get("medical_conditions"),
-                "status": "active",
-            }
-
+            # Create member with optimized field selection
             member = Member.objects.create(**member_data)
 
-            # 2. CREATE MEMBERSHIP
+            # Create membership and related objects efficiently
             plan_obj = get_or_create_plan(plan_code, plan_data)
+            location_obj = None
 
-            membership_data = {
-                "member": member,
-                "plan": plan_obj,
-                "start_date": timezone.now().date(),
-                "end_date": timezone.now().date() + timedelta(days=plan_data["days"]),
-                "total_sessions_allowed": plan_data["sessions"],
-                "sessions_used": 0,
-                "amount_paid": plan_data["price"],
-                "payment_status": "pending",
-                "status": "active",
-            }
-
-            # Add location for outdoor members
             if membership_type == "outdoor":
                 from members.models import Location
                 location_name = request.data["dance_location"]
-                location, _ = Location.objects.get_or_create(
+                location_obj, _ = Location.objects.get_or_create(
                     code=location_name,
                     defaults={"name": location_name.replace("_", " ").title()}
                 )
-                membership_data["location"] = location
 
-            membership = Membership.objects.create(**membership_data)
+            membership = create_membership_efficiently(member, plan_obj, plan_data, location_obj)
 
             # 3. CREATE PHYSICAL PROFILE (Indoor members only)
             if membership_type == "indoor":
@@ -365,22 +311,128 @@ def get_or_create_plan(plan_code, plan_data):
     return plan_obj
 
 
+def validate_registration_data(data):
+    """Centralized validation for all registration fields"""
+    errors = []
+
+    # Required fields validation
+    required_fields = ["first_name", "last_name", "phone", "membership_type"]
+    for field in required_fields:
+        if not data.get(field):
+            errors.append(f"{field.replace('_', ' ').title()} is required")
+
+    # Membership type validation
+    membership_type = data.get("membership_type", "").lower()
+    if membership_type not in ["indoor", "outdoor"]:
+        errors.append("Membership type must be 'indoor' or 'outdoor'")
+
+    # Plan validation
+    plan_code = data.get("plan_code")
+    if not plan_code:
+        plan_type = data.get("plan_type", "").lower()
+        if not plan_type:
+            errors.append("Plan type is required when plan_code is not provided")
+        else:
+            # Generate plan_code
+            if membership_type == "indoor":
+                plan_code = f"indoor_{plan_type}"
+            else:
+                plan_code = plan_type
+            data["plan_code"] = plan_code
+
+    if plan_code and plan_code not in MEMBERSHIP_PLANS:
+        errors.append(f"Invalid plan: {plan_code}")
+
+    # Location validation for outdoor
+    if membership_type == "outdoor":
+        location = data.get("dance_location", "").lower()
+        if not location or location not in DANCE_LOCATIONS:
+            errors.append("Dance class location is required for outdoor membership")
+
+    # Blood group validation
+    blood_group = data.get("blood_group")
+    if blood_group and blood_group not in BLOOD_GROUPS + ["nil", ""]:
+        errors.append("Invalid blood group")
+
+    return "; ".join(errors) if errors else None
+
+
+def check_for_duplicates(data):
+    """Check for duplicate entries before creation"""
+    phone = data["phone"]
+    if Member.objects.filter(phone=phone).exists():
+        return "Phone number already registered"
+
+    id_passport = data.get("id_passport_no")
+    if id_passport and Member.objects.filter(id_passport=id_passport).exists():
+        return "ID/Passport number already registered"
+
+    email = data.get("email")
+    if email and email != "" and Member.objects.filter(email=email).exists():
+        return "Email address already registered"
+
+    return None
+
+
+def prepare_member_data(data, blood_group):
+    """Prepare and normalize member data for creation"""
+    # Handle empty values
+    date_of_birth = data.get("date_of_birth") or None
+    email = data.get("email") or None
+    id_passport = data.get("id_passport_no") or None
+
+    return {
+        "first_name": data["first_name"].strip(),
+        "other_names": data.get("other_names", "").strip() or None,
+        "last_name": data["last_name"].strip(),
+        "phone": data["phone"].strip(),
+        "email": email,
+        "id_passport": id_passport,
+        "blood_group": blood_group or "nil",
+        "date_of_birth": date_of_birth,
+        "address": data.get("physical_address", "").strip() or None,
+        "emergency_contact": data.get("emergency_contact_name", "").strip() or None,
+        "emergency_phone": data.get("emergency_contact_phone", "").strip() or None,
+        "medical_conditions": data.get("medical_conditions", "").strip() or None,
+        "status": "active",
+    }
+
+
+def create_membership_efficiently(member, plan_obj, plan_data, location_obj=None):
+    """Create membership with optimized data"""
+    membership_data = {
+        "member": member,
+        "plan": plan_obj,
+        "start_date": timezone.now().date(),
+        "end_date": timezone.now().date() + timedelta(days=plan_data["days"]),
+        "total_sessions_allowed": plan_data["sessions"],
+        "sessions_used": 0,
+        "amount_paid": plan_data["price"],
+        "payment_status": "pending",
+        "status": "active",
+    }
+
+    if location_obj:
+        membership_data["location"] = location_obj
+
+    return Membership.objects.create(**membership_data)
+
+
 def calculate_sessions_per_week(plan_code, plan_data):
     """Calculate sessions per week based on plan code"""
-    if "1_session_week" in plan_code:
-        return 1
-    elif "2_sessions_week" in plan_code:
-        return 2
-    elif "3_sessions_week" in plan_code:
-        return 3
-    elif "4_sessions_week" in plan_code:
-        return 4
-    elif "5_sessions_week" in plan_code:
-        return 5
-    elif "daily" in plan_code:
-        return 1
-    else:
-        return 1
+    session_map = {
+        "1_session_week": 1,
+        "2_sessions_week": 2,
+        "3_sessions_week": 3,
+        "4_sessions_week": 4,
+        "5_sessions_week": 5,
+    }
+
+    for key, value in session_map.items():
+        if key in plan_code:
+            return value
+
+    return 1 if "daily" in plan_code else 1
 
 
 @api_view(["GET"])

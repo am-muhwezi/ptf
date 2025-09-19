@@ -25,40 +25,42 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
 
   const validateMemberForm = (values) => {
     const errors = {};
-    
-    // Only validate essential fields: name, phone, and location (for outdoor)
-    if (!values.first_name?.trim()) {
-      errors.first_name = 'First name is required';
-    }
-    
-    if (!values.last_name?.trim()) {
-      errors.last_name = 'Last name is required';
-    }
-    
-    if (!values.phone?.trim()) {
-      errors.phone = 'Phone number is required';
-    } else {
+
+    // Optimized validation with early returns
+    const requiredFields = {
+      first_name: 'First name is required',
+      last_name: 'Last name is required',
+      phone: 'Phone number is required'
+    };
+
+    // Check required fields efficiently
+    Object.entries(requiredFields).forEach(([field, message]) => {
+      if (!values[field]?.trim()) {
+        errors[field] = message;
+      }
+    });
+
+    // Phone validation with single call
+    if (values.phone?.trim()) {
       const phoneValidation = validateKenyanPhone(values.phone);
       if (!phoneValidation.isValid) {
         errors.phone = phoneValidation.message;
       }
     }
-    
-    // Email validation only if provided (optional)
-    if (values.email?.trim() && !/\S+@\S+\.\S+/.test(values.email)) {
+
+    // Email validation (optimized regex)
+    if (values.email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
       errors.email = 'Email is invalid';
     }
-    
-    // Plan type validation (still needed for system to work)
+
+    // Conditional validations based on membership type
     if (values.membershipType === 'indoor' && !values.planType) {
       errors.planType = 'Plan type is required for indoor membership';
-    }
-    
-    if (values.membershipType === 'outdoor' && !values.location) {
+    } else if (values.membershipType === 'outdoor' && !values.location) {
       errors.location = 'Location is required for outdoor membership';
     }
 
-    // Emergency contact phone validation (optional, but if provided, must be valid)
+    // Emergency phone validation (only if provided)
     if (values.emergency_contact_phone?.trim()) {
       const emergencyPhoneValidation = validateKenyanPhone(values.emergency_contact_phone);
       if (!emergencyPhoneValidation.isValid) {
@@ -70,27 +72,40 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
   };
 
   const handleFormSubmit = async (values) => {
+    // Optimized data preparation with conditional fields
     const memberData = {
-      first_name: values.first_name,
-      other_names: values.other_names,
-      last_name: values.last_name,
-      email: values.email,
-      phone: values.phone,
-      id_passport_no: values.idPassport,
-      blood_group: values.bloodGroup,
+      first_name: values.first_name.trim(),
+      last_name: values.last_name.trim(),
+      phone: values.phone.trim(),
       membership_type: values.membershipType,
       plan_type: values.planType,
+      status: 'active',
+      payment_status: values.paymentStatus || 'pending'
+    };
+
+    // Add optional fields only if they have values (reduces payload)
+    const optionalFields = {
+      other_names: values.other_names,
+      email: values.email,
+      id_passport_no: values.idPassport,
+      blood_group: values.bloodGroup,
       dance_location: values.location,
       emergency_contact_name: values.emergency_contact_name,
       emergency_contact_phone: values.emergency_contact_phone,
       medical_conditions: values.medicalConditions,
       date_of_birth: values.dateOfBirth,
-      physical_address: values.address,
-      registrationDate: new Date().toISOString(),
-      status: 'active',
-      payment_status: values.paymentStatus
+      physical_address: values.address
     };
-    
+
+    // Only add non-empty optional fields
+    Object.entries(optionalFields).forEach(([key, value]) => {
+      if (value && value.trim && value.trim() !== '') {
+        memberData[key] = value.trim();
+      } else if (value && !value.trim) {
+        memberData[key] = value;
+      }
+    });
+
     await onSubmit(memberData);
   };
 
@@ -108,19 +123,24 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
   const [outdoorRateCards, setOutdoorRateCards] = useState([]);
   const [loadingRateCards, setLoadingRateCards] = useState(false);
 
-  // Set hardcoded outdoor rate cards when membership type changes to outdoor
+  // Memoized rate cards to prevent unnecessary re-renders
+  const outdoorRateCardsData = React.useMemo(() => [
+    { id: 'outdoor_daily', plan_code: 'outdoor_daily', display_name: 'Daily Drop-in - KES 1,000', weekly_fee: 1000, sessions_per_week: 1 },
+    { id: '1_week', plan_code: '1_session_week', display_name: '1x/Week - KES 3,000', weekly_fee: 3000, sessions_per_week: 1 },
+    { id: '2_week', plan_code: '2_sessions_week', display_name: '2x/Week - KES 4,000', weekly_fee: 4000, sessions_per_week: 2 },
+    { id: '3_week', plan_code: '3_sessions_week', display_name: '3x/Week - KES 5,000', weekly_fee: 5000, sessions_per_week: 3 },
+    { id: '4_week', plan_code: '4_sessions_week', display_name: '4x/Week - KES 6,000', weekly_fee: 6000, sessions_per_week: 4 },
+    { id: '5_week', plan_code: '5_sessions_week', display_name: '5x/Week - KES 7,000', weekly_fee: 7000, sessions_per_week: 5 }
+  ], []);
+
+  // Set rate cards only when membership type changes
   useEffect(() => {
     if (formData.membershipType === 'outdoor') {
-      setOutdoorRateCards([
-        { id: 'outdoor_daily', plan_code: 'outdoor_daily', display_name: 'Daily Drop-in - KES 1,000', weekly_fee: 1000, sessions_per_week: 1 },
-        { id: '1_week', plan_code: '1_session_week', display_name: '1x/Week - KES 3,000', weekly_fee: 3000, sessions_per_week: 1 },
-        { id: '2_week', plan_code: '2_sessions_week', display_name: '2x/Week - KES 4,000', weekly_fee: 4000, sessions_per_week: 2 },
-        { id: '3_week', plan_code: '3_sessions_week', display_name: '3x/Week - KES 5,000', weekly_fee: 5000, sessions_per_week: 3 },
-        { id: '4_week', plan_code: '4_sessions_week', display_name: '4x/Week - KES 6,000', weekly_fee: 6000, sessions_per_week: 4 },
-        { id: '5_week', plan_code: '5_sessions_week', display_name: '5x/Week - KES 7,000', weekly_fee: 7000, sessions_per_week: 5 }
-      ]);
+      setOutdoorRateCards(outdoorRateCardsData);
+    } else {
+      setOutdoorRateCards([]);
     }
-  }, [formData.membershipType]);
+  }, [formData.membershipType, outdoorRateCardsData]);
 
 
 
@@ -390,7 +410,7 @@ const RegisterMemberForm = ({ onSubmit, onCancel, initialMembershipType = 'indoo
               >
                 <option value="">{loadingRateCards ? 'Loading plans...' : 'Select a plan'}</option>
                 {outdoorRateCards.map((card) => (
-                  <option key={card.id || card.plan_code} value={card.plan_code}>
+                  <option key={card.plan_code} value={card.plan_code}>
                     {card.display_name}
                   </option>
                 ))}
