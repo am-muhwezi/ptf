@@ -326,17 +326,14 @@ const Members = () => {
     setShowPaymentModal(true);
   };
 
-  const handlePaymentSuccess = async (paymentFormData) => {
-    try {
-      const response = await memberService.processPayment(selectedMember.id, paymentFormData);
-      setPaymentData(response.payment);
-      setShowPaymentModal(false);
-      setShowReceiptModal(true);
-      showToast(response.message || 'Payment processed successfully', 'success');
-      refreshData();
-    } catch (error) {
-      showToast(error.message, 'error');
-    }
+  const handlePaymentSuccess = (paymentResult) => {
+    // PaymentForm already handles the payment processing
+    // This callback just handles the UI updates
+    setPaymentData(paymentResult);
+    setShowPaymentModal(false);
+    setShowReceiptModal(true);
+    showToast(paymentResult.message || 'Payment recorded successfully', 'success');
+    refreshData();
   };
 
   const handleSendReminder = (member) => {

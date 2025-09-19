@@ -319,8 +319,8 @@ const LandingPage = () => {
                   </h3>
                   <p className="text-emerald-200 text-sm">
                     {authMode === 'login' 
-                      ? 'Sign in to continue your fitness journey' 
-                      : 'Create your account and start transforming'
+                      ? 'Sign in to continue' 
+                      : 'Create your account'
                     }
                   </p>
                 </div>
@@ -486,7 +486,7 @@ const LandingPage = () => {
               {(searchParams.get('from') || location.state?.from) && (
                 <div className="mb-4 lg:mb-6 p-3 lg:p-4 bg-emerald-600/30 backdrop-blur-sm rounded-lg border border-emerald-500/30 mx-4 sm:mx-0">
                   <p className="text-emerald-100 text-xs sm:text-sm">
-                    Please sign in to continue to your destination
+                    Please sign in to continue
                   </p>
                 </div>
               )}
@@ -510,7 +510,7 @@ const LandingPage = () => {
                   }}
                   className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-6 py-3 lg:px-8 lg:py-4 text-base lg:text-lg font-semibold rounded-full shadow-2xl transform hover:scale-105 transition-all duration-300"
                 >
-                  Start Your Journey 🌴
+                  Start Here 🌴
                 </Button>
                 <Button
                   onClick={() => {
@@ -520,7 +520,7 @@ const LandingPage = () => {
                   variant="outline"
                   className="border-2 border-emerald-300 text-emerald-300 hover:bg-emerald-300 hover:text-emerald-900 px-6 py-3 lg:px-8 lg:py-4 text-base lg:text-lg font-semibold rounded-full transition-all duration-300"
                 >
-                  Member Login
+                  Login Captain
                 </Button>
               </div>
 
@@ -545,7 +545,7 @@ const LandingPage = () => {
 
       {/* Floating Elements */}
       <div className={`absolute bottom-4 left-4 lg:bottom-8 lg:left-8 text-emerald-300 text-xs lg:text-sm opacity-70 ${showAuth ? 'hidden lg:block' : ''}`}>
-        © 2024 Paul's Tropical Fitness. All rights reserved.
+        © 2025 Tropical Fitness. All rights reserved.
       </div>
     </div>
   );

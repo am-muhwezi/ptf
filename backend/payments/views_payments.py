@@ -152,7 +152,7 @@ def record_manual_payment(request):
             return Response({"error": "memberId and amount are required"}, status=400)
 
         # Validate payment method
-        valid_methods = ["cash", "bank_transfer", "cheque"]
+        valid_methods = ["cash", "bank_transfer", "cheque", "mpesa"]
         if payment_method not in valid_methods:
             return Response({"error": f"Invalid payment method. Must be one of: {', '.join(valid_methods)}"}, status=400)
 
@@ -200,7 +200,10 @@ def record_manual_payment(request):
                     "payment_id": str(payment.payment_id),
                     "amount": str(payment.amount),
                     "status": "completed",
-                    "payment_method": method_name,
+                    "payment_method": payment_method,  # Send original payment method
+                    "payment_method_display": method_name,  # Send formatted name
+                    "transaction_reference": request.data.get("transactionReference"),
+                    "timestamp": payment.created_at.isoformat(),
                 }
             )
 
