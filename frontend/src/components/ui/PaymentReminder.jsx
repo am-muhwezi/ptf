@@ -1,16 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Button from './Button';
 import Modal from './Modal';
 import Toast from './Toast';
 import { paymentService } from '../../services/paymentService';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 
-const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
+const PaymentReminder = ({
+  member,
+  isOpen,
+  onClose,
+  onReminderSent,
+  mode = 'reminder' // 'reminder' or 'invoice'
+}) => {
+  // Default message template
+  const defaultMessage = useMemo(() => {
+    if (!member) return '';
+    const name = member.first_name || member.firstName || 'Member';
+    const amount = member.amount || member.total_outstanding || 0;
+
+    if (mode === 'invoice') {
+      return `Dear ${name}, please find your membership invoice for ${formatCurrency(amount)}. Payment is due by ${formatDate(member.due_date || member.dueDate)}. Thank you!`;
+    }
+
+    return `Dear ${name}, your gym membership payment of ${formatCurrency(amount)} is due. Please make payment to M-Pesa paybill and notify admin with transaction code. Thank you!`;
+  }, [member, mode]);
+
   const [reminderData, setReminderData] = useState({
-    method: 'sms',
-    message: `Dear ${member?.first_name || member?.firstName}, your gym membership payment of ${formatCurrency(member?.amount || 0)} is due. Please make payment to M-Pesa paybill and notify admin with transaction code. Thank you!`,
-    urgency: 'normal'
+    method: mode === 'invoice' ? 'email' : 'sms',
+    message: '',
+    urgency: 'normal',
+    send_email: mode === 'invoice' ? true : false,
+    generate_invoice: mode === 'invoice'
   });
+
+  // Update message when member changes
+  useEffect(() => {
+    if (member && isOpen) {
+      setReminderData(prev => ({
+        ...prev,
+        message: defaultMessage
+      }));
+    }
+  }, [member, isOpen, defaultMessage]);
 
   const [isSending, setIsSending] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -23,42 +54,100 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
     setToast({ show: false, message: '', type: 'success' });
   };
 
-  const handleInputChange = (e) => {
+  const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
     setReminderData(prev => ({
       ...prev,
       [name]: value
     }));
-  };
+  }, []);
 
-  const handleSendReminder = async () => {
+  const handleSendReminder = useCallback(async () => {
+    if (!member || !reminderData.message.trim()) return;
+
     setIsSending(true);
 
     try {
-      const response = await paymentService.sendPaymentReminder(member.id, {
-        ...reminderData,
-        memberName: `${member.first_name || member.firstName} ${member.last_name || member.lastName}`,
-        amount: member.amount,
-        dueDate: member.expiry_date || member.expiryDate
-      });
+      const memberId = member.member_id || member.id;
+      let response;
 
-      showToast('Payment reminder sent successfully!', 'success');
-      
+      if (mode === 'invoice') {
+        // Send invoice
+        response = await paymentService.sendInvoice(memberId, {
+          send_email: reminderData.send_email,
+          message: reminderData.message,
+          urgency: reminderData.urgency
+        });
+        showToast('Invoice sent successfully!', 'success');
+      } else {
+        // Send reminder
+        response = await paymentService.sendPaymentReminder(memberId, {
+          ...reminderData,
+          memberName: `${member.first_name || member.firstName} ${member.last_name || member.lastName}`,
+          amount: member.amount || member.total_outstanding,
+          dueDate: member.due_date || member.expiry_date || member.expiryDate
+        });
+        showToast('Payment reminder sent successfully!', 'success');
+      }
+
       if (onReminderSent) {
         onReminderSent(response);
       }
 
-      // Close modal after 2 seconds
+      // Reset form and close modal
+      setReminderData({
+        method: mode === 'invoice' ? 'email' : 'sms',
+        message: defaultMessage,
+        urgency: 'normal',
+        send_email: mode === 'invoice' ? true : false,
+        generate_invoice: mode === 'invoice'
+      });
+
+      // Close modal after a short delay for user feedback
       setTimeout(() => {
         onClose();
-      }, 2000);
+      }, 1500);
 
     } catch (error) {
-      showToast(error.message, 'error');
+      showToast(error.message || 'Failed to send reminder', 'error');
     } finally {
       setIsSending(false);
     }
-  };
+  }, [member, reminderData, onReminderSent, onClose, showToast, defaultMessage, mode]);
+
+  const handlePreview = useCallback(async () => {
+    if (!member || mode !== 'invoice') return;
+
+    try {
+      setIsSending(true);
+      const memberId = member.member_id || member.id;
+      const result = await paymentService.previewInvoice(memberId);
+
+      if (result.success) {
+        showToast('Invoice preview generated', 'success');
+        // Here you could open a preview modal or window
+      }
+    } catch (error) {
+      showToast(error.message || 'Failed to preview invoice', 'error');
+    } finally {
+      setIsSending(false);
+    }
+  }, [member, mode, showToast]);
+
+  const handleDownload = useCallback(async () => {
+    if (!member || mode !== 'invoice') return;
+
+    try {
+      setIsSending(true);
+      const memberId = member.member_id || member.id;
+      await paymentService.downloadInvoice(memberId);
+      showToast('Invoice downloaded successfully', 'success');
+    } catch (error) {
+      showToast(error.message || 'Failed to download invoice', 'error');
+    } finally {
+      setIsSending(false);
+    }
+  }, [member, mode, showToast]);
 
   if (!member) return null;
 
@@ -67,7 +156,7 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title="Send Payment Reminder"
+        title={mode === 'invoice' ? 'Send Invoice' : 'Send Payment Reminder'}
         size="medium"
       >
         <div className="space-y-6">
@@ -85,34 +174,91 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
               </div>
               <div>
                 <span className="text-gray-600">Amount Due:</span>
-                <span className="ml-2 font-medium text-red-600">{formatCurrency(member.amount)}</span>
+                <span className="ml-2 font-medium text-red-600">
+                  {formatCurrency(member.amount || member.total_outstanding || 0)}
+                </span>
               </div>
               <div>
                 <span className="text-gray-600">Due Date:</span>
-                <span className="ml-2 font-medium">{formatDate(member.expiry_date || member.expiryDate)}</span>
+                <span className="ml-2 font-medium">
+                  {formatDate(member.due_date || member.expiry_date || member.expiryDate)}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Reminder Options */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reminder Method
-              </label>
-              <select
-                name="method"
-                value={reminderData.method}
-                onChange={(e) => setReminderData({...reminderData, method: e.target.value})}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  'border-gray-300'
-                }`}
+          {/* Message Templates */}
+          <div className="bg-gray-50 rounded-lg p-4 mb-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Quick Templates</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setReminderData(prev => ({ ...prev, message: defaultMessage }))}
+                className="text-xs px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 text-left"
               >
-                <option value="sms">SMS</option>
-                <option value="email">Email</option>
-                <option value="both">SMS & Email</option>
-              </select>
+                Default Payment
+              </button>
+              <button
+                type="button"
+                onClick={() => setReminderData(prev => ({
+                  ...prev,
+                  message: `Urgent: Your membership expires soon. Please renew to avoid service interruption.`
+                }))}
+                className="text-xs px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 text-left"
+              >
+                Urgent Renewal
+              </button>
+              <button
+                type="button"
+                onClick={() => setReminderData(prev => ({
+                  ...prev,
+                  message: `Final Notice: Your membership payment is overdue. Please settle immediately to avoid suspension.`
+                }))}
+                className="text-xs px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 text-left"
+              >
+                Final Notice
+              </button>
             </div>
+          </div>
+
+          {/* Method Options */}
+          <div className="space-y-4">
+            {mode === 'invoice' ? (
+              <div>
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={reminderData.send_email}
+                    onChange={(e) => setReminderData(prev => ({ ...prev, send_email: e.target.checked }))}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    Send invoice via email
+                  </span>
+                  {member.email ? (
+                    <span className="text-xs text-gray-500">({member.email})</span>
+                  ) : (
+                    <span className="text-xs text-red-500">(No email address)</span>
+                  )}
+                </label>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Reminder Method
+                </label>
+                <select
+                  name="method"
+                  value={reminderData.method}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="sms">SMS</option>
+                  <option value="email">Email</option>
+                  <option value="both">SMS & Email</option>
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -121,7 +267,7 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
               <select
                 name="urgency"
                 value={reminderData.urgency}
-                onChange={(e) => setReminderData({...reminderData, [e.target.name]: e.target.value})}
+                onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="normal">Normal</option>
@@ -137,7 +283,7 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
               <textarea
                 name="message"
                 value={reminderData.message}
-                onChange={(e) => setReminderData({...reminderData, [e.target.name]: e.target.value})}
+                onChange={handleInputChange}
                 rows={5}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter reminder message..."
@@ -145,9 +291,16 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
               <div className="mt-1 text-xs text-gray-500">
                 <strong>Admin Note:</strong> Remind members to save transaction code from M-Pesa confirmation SMS for payment confirmation.
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Character count: {reminderData.message.length}/160 (SMS limit)
-              </p>
+              <div className="flex justify-between mt-1">
+                <p className="text-xs text-gray-500">
+                  Character count: {reminderData.message.length}
+                </p>
+                {reminderData.method === 'sms' && reminderData.message.length > 160 && (
+                  <p className="text-xs text-red-500">
+                    Message exceeds SMS limit (160 chars)
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -160,21 +313,47 @@ const PaymentReminder = ({ member, isOpen, onClose, onReminderSent }) => {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-end space-x-4 pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={onClose}
-              disabled={isSending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleSendReminder}
-              disabled={isSending || !reminderData.message.trim()}
-            >
-              {isSending ? 'Sending...' : 'Send Reminder'}
-            </Button>
+          <div className="flex justify-between pt-4 border-t">
+            {mode === 'invoice' && (
+              <div className="flex space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={handlePreview}
+                  disabled={isSending}
+                >
+                  Preview
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleDownload}
+                  disabled={isSending}
+                >
+                  Download
+                </Button>
+              </div>
+            )}
+
+            <div className={`flex space-x-4 ${mode !== 'invoice' ? 'w-full justify-end' : ''}`}>
+              <Button
+                variant="outline"
+                onClick={onClose}
+                disabled={isSending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleSendReminder}
+                disabled={
+                  isSending ||
+                  !reminderData.message.trim() ||
+                  (mode !== 'invoice' && reminderData.method === 'sms' && reminderData.message.length > 160) ||
+                  (mode === 'invoice' && !reminderData.send_email && !member.email)
+                }
+              >
+                {isSending ? 'Sending...' : (mode === 'invoice' ? 'Send Invoice' : 'Send Reminder')}
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>

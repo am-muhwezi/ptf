@@ -11,6 +11,7 @@ import Receipt from '../../components/ui/Receipt';
 import PaymentReminder from '../../components/ui/PaymentReminder';
 import RegisterMemberForm from '../../components/forms/RegisterMemberForm';
 import UpdateMemberProfileForm from '../../components/forms/UpdateMemberProfileForm';
+import Avatar from '../../components/ui/Avatar';
 import { memberService } from '../../services/memberService';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 

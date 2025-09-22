@@ -643,6 +643,7 @@ const OutdoorMemberships = () => {
                                 {member.firstName} {member.lastName}
                               </div>
                               <div className="text-sm text-gray-500">{member.email}</div>
+                              <div className="text-xs text-gray-400">{member.id}</div>
                             </div>
                           </div>
                         </td>

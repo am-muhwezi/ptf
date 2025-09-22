@@ -48,9 +48,101 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        """Create new user"""
+        """Create new admin user and send verification email"""
         validated_data.pop("confirm_password")
-        return User.objects.create_user(**validated_data)
+
+        # Create user as inactive initially
+        user = User.objects.create_user(**validated_data)
+        user.is_active = False  # User must verify email first
+        user.save()
+
+        # Send verification email
+        self._send_verification_email(user)
+
+        return user
+
+    def _send_verification_email(self, user):
+        """Send verification email to new admin user"""
+        verification_url = f"{settings.FRONTEND_URL}/verify-email?token={user.email_verification_token}"
+
+        subject = 'Verify Your Admin Access - Paul\'s Tropical Fitness'
+
+        html_message = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #065f46, #0f766e, #0891b2); color: white; padding: 30px; text-align: center;">
+                <h1 style="margin: 0; font-size: 28px;">🏝️ Paul's Tropical Fitness</h1>
+                <p style="margin: 10px 0 0 0; opacity: 0.9;">Admin Access Verification</p>
+            </div>
+
+            <div style="padding: 30px; background: #f8fafc;">
+                <h2 style="color: #065f46; margin-top: 0;">Verify Your Admin Access</h2>
+
+                <p>Hi {user.first_name},</p>
+
+                <p>You've been granted admin access to the Paul's Tropical Fitness management system. Please verify your email address to activate your admin account.</p>
+
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{verification_url}"
+                       style="background: linear-gradient(135deg, #10b981, #14b8a6);
+                              color: white;
+                              padding: 15px 30px;
+                              text-decoration: none;
+                              border-radius: 8px;
+                              font-weight: bold;
+                              display: inline-block;">
+                        Verify Admin Access
+                    </a>
+                </div>
+
+                <p style="color: #6b7280; font-size: 14px;">
+                    If you didn't request admin access, please contact the system administrator immediately.
+                </p>
+
+                <p style="color: #6b7280; font-size: 14px;">
+                    This verification link will remain valid until you verify your email.
+                </p>
+
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+
+                <p style="color: #6b7280; font-size: 12px; text-align: center;">
+                    © 2025 Paul's Tropical Fitness. All rights reserved.
+                </p>
+            </div>
+        </div>
+        """
+
+        plain_message = f"""
+        Paul's Tropical Fitness - Admin Access Verification
+
+        Hi {user.first_name},
+
+        You've been granted admin access to the Paul's Tropical Fitness management system. Please verify your email address to activate your admin account.
+
+        Please click the link below to verify your admin access:
+        {verification_url}
+
+        If you didn't request admin access, please contact the system administrator immediately.
+
+        © 2025 Paul's Tropical Fitness. All rights reserved.
+        """
+
+        try:
+            print(f"📧 Attempting to send verification email to: {user.email}")
+            result = send_mail(
+                subject=subject,
+                message=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                html_message=html_message,
+                fail_silently=False,
+            )
+            print(f"📧 Email send result: {result}")
+            print(f"✅ Verification email sent successfully to {user.email}")
+        except Exception as e:
+            print(f"❌ Error sending verification email: {e}")
+            print(f"❌ Error type: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
 
 
 class UserLoginSerializer(serializers.Serializer):
@@ -346,8 +438,138 @@ class PasswordResetSerializer(serializers.Serializer):
         """Reset user password"""
         user = self.validated_data['user']
         password = self.validated_data['password']
-        
+
         user.set_password(password)
         user.save()
-        
+
         return user
+
+
+class EmailVerificationSerializer(serializers.Serializer):
+    """Serializer for admin email verification"""
+
+    token = serializers.UUIDField(required=True)
+
+    def validate_token(self, value):
+        """Validate verification token"""
+        try:
+            user = User.objects.get(email_verification_token=value, is_active=False)
+            return value
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Invalid or expired verification token")
+
+    def save(self):
+        """Verify admin email and activate account"""
+        token = self.validated_data['token']
+        user = User.objects.get(email_verification_token=token, is_active=False)
+
+        user.email_verified = True
+        user.is_active = True
+        user.generate_verification_token()  # Generate new token for security
+        user.save()
+
+        return user
+
+
+class ResendVerificationSerializer(serializers.Serializer):
+    """Serializer for resending admin verification email"""
+
+    email = serializers.EmailField(required=True)
+
+    def validate_email(self, value):
+        """Check if admin user exists and is not verified"""
+        try:
+            user = User.objects.get(email=value)
+            if user.email_verified and user.is_active:
+                raise serializers.ValidationError("Email is already verified")
+            return value
+        except User.DoesNotExist:
+            raise serializers.ValidationError("No account found with this email")
+
+    def save(self):
+        """Resend admin verification email"""
+        email = self.validated_data['email']
+        user = User.objects.get(email=email)
+
+        # Generate new verification token
+        user.generate_verification_token()
+
+        # Create verification URL
+        verification_url = f"{settings.FRONTEND_URL}/verify-email?token={user.email_verification_token}"
+
+        # Email content
+        subject = 'Verify Your Admin Access - Paul\'s Tropical Fitness'
+
+        html_message = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #065f46, #0f766e, #0891b2); color: white; padding: 30px; text-align: center;">
+                <h1 style="margin: 0; font-size: 28px;">🏝️ Paul's Tropical Fitness</h1>
+                <p style="margin: 10px 0 0 0; opacity: 0.9;">Admin Access Verification</p>
+            </div>
+
+            <div style="padding: 30px; background: #f8fafc;">
+                <h2 style="color: #065f46; margin-top: 0;">Verify Your Admin Access</h2>
+
+                <p>Hi {user.first_name},</p>
+
+                <p>You've been granted admin access to the Paul's Tropical Fitness management system. Please verify your email address to activate your admin account.</p>
+
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{verification_url}"
+                       style="background: linear-gradient(135deg, #10b981, #14b8a6);
+                              color: white;
+                              padding: 15px 30px;
+                              text-decoration: none;
+                              border-radius: 8px;
+                              font-weight: bold;
+                              display: inline-block;">
+                        Verify Admin Access
+                    </a>
+                </div>
+
+                <p style="color: #6b7280; font-size: 14px;">
+                    If you didn't request admin access, please contact the system administrator immediately.
+                </p>
+
+                <p style="color: #6b7280; font-size: 14px;">
+                    This verification link will remain valid until you verify your email.
+                </p>
+
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+
+                <p style="color: #6b7280; font-size: 12px; text-align: center;">
+                    © 2025 Paul's Tropical Fitness. All rights reserved.
+                </p>
+            </div>
+        </div>
+        """
+
+        plain_message = f"""
+        Paul's Tropical Fitness - Admin Access Verification
+
+        Hi {user.first_name},
+
+        You've been granted admin access to the Paul's Tropical Fitness management system. Please verify your email address to activate your admin account.
+
+        Please click the link below to verify your admin access:
+        {verification_url}
+
+        If you didn't request admin access, please contact the system administrator immediately.
+
+        © 2025 Paul's Tropical Fitness. All rights reserved.
+        """
+
+        # Send email
+        try:
+            send_mail(
+                subject=subject,
+                message=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                html_message=html_message,
+                fail_silently=False,
+            )
+            return True
+        except Exception as e:
+            print(f"Error sending verification email: {e}")
+            return False

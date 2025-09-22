@@ -19,13 +19,13 @@ const PermissionRoute = ({
     return null;
   }
 
-  // Check superuser permission
-  if (requireSuperuser && (!user || !user.is_superuser)) {
+  // Check superuser permission (handle both camelCase and snake_case)
+  if (requireSuperuser && (!user || (!user.is_superuser && !user.isSuperuser))) {
     return <Navigate to={fallbackPath} replace />;
   }
 
-  // Check staff permission
-  if (requireStaff && (!user || !user.is_staff)) {
+  // Check staff permission (handle both camelCase and snake_case)
+  if (requireStaff && (!user || (!user.is_staff && !user.isStaff))) {
     return <Navigate to={fallbackPath} replace />;
   }
 
@@ -55,7 +55,7 @@ export const AdminRoute = ({ children, fallbackPath = '/unauthorized' }) => {
     return null;
   }
 
-  if (!user || (!user.is_staff && !user.is_superuser)) {
+  if (!user || ((!user.is_staff && !user.isStaff) && (!user.is_superuser && !user.isSuperuser))) {
     return <Navigate to={fallbackPath} replace />;
   }
 

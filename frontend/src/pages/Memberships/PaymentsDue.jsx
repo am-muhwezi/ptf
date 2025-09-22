@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
 import Card from '../../components/ui/Card';
@@ -7,166 +7,137 @@ import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
 import PaymentForm from '../../components/forms/PaymentForm';
 import Receipt from '../../components/ui/Receipt';
-import { usePaymentsDue } from '../../hooks/usePayments';
+import PaymentReminder from '../../components/ui/PaymentReminder';
+import Avatar from '../../components/ui/Avatar';
+import { usePaymentsDue, usePaymentProcessor, usePaymentReminders } from '../../hooks/useFinancials';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import paymentService from '../../services/paymentService';
 
 const PaymentsDue = () => {
-  const [payments, setPayments] = useState([]);
-  const [filteredPayments, setFilteredPayments] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPaymentFormModal, setShowPaymentFormModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   // Mobile sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Mock data - replace with API call
-  const mockPayments = [
-    {
-      id: 'PTF001234',
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john.doe@email.com',
-      phone: '+256 700 123 456',
-      membershipType: 'indoor',
-      planType: 'Monthly Premium',
-      amount: 150000,
-      dueDate: '2024-01-25',
-      daysOverdue: 5,
-      status: 'overdue',
-      lastPayment: '2023-12-25',
-      paymentMethod: 'Mobile Money',
-      invoiceNumber: 'INV-2024-001',
-      totalOutstanding: 150000
-    },
-    {
-      id: 'PTF001235',
-      firstName: 'Jane',
-      lastName: 'Smith',
-      email: 'jane.smith@email.com',
-      phone: '+256 700 123 457',
-      membershipType: 'outdoor',
-      planType: 'Quarterly Basic',
-      amount: 280000,
-      dueDate: '2024-02-01',
-      daysOverdue: 0,
-      status: 'due_today',
-      lastPayment: '2023-11-01',
-      paymentMethod: 'Bank Transfer',
-      invoiceNumber: 'INV-2024-002',
-      totalOutstanding: 280000
-    },
-    {
-      id: 'PTF001236',
-      firstName: 'Mike',
-      lastName: 'Johnson',
-      email: 'mike.johnson@email.com',
-      phone: '+256 700 123 458',
-      membershipType: 'both',
-      planType: 'Annual Premium',
-      amount: 1800000,
-      dueDate: '2024-02-05',
-      daysOverdue: 0,
-      status: 'due_soon',
-      lastPayment: '2023-02-05',
-      paymentMethod: 'Credit Card',
-      invoiceNumber: 'INV-2024-003',
-      totalOutstanding: 1800000
-    },
-    {
-      id: 'PTF001237',
-      firstName: 'Sarah',
-      lastName: 'Wilson',
-      email: 'sarah.wilson@email.com',
-      phone: '+256 700 123 459',
-      membershipType: 'indoor',
-      planType: 'Monthly Basic',
-      amount: 120000,
-      dueDate: '2024-01-20',
-      daysOverdue: 10,
-      status: 'overdue',
-      lastPayment: '2023-12-20',
-      paymentMethod: 'Cash',
-      invoiceNumber: 'INV-2024-004',
-      totalOutstanding: 240000 // 2 months overdue
-    }
-  ];
+  // OPTIMIZED: Single hook handles everything
+  const {
+    data: payments,
+    stats,
+    loading,
+    error,
+    searchTerm,
+    filterStatus,
+    updateSearchTerm,
+    updateFilterStatus,
+    handleProcessPayment,
+    handleSendReminder,
+    handleBulkReminders,
+    isProcessing,
+    isLoading: reminderLoading,
+    refetch
+  } = usePaymentsDue();
 
-  useEffect(() => {
-    setPayments(mockPayments);
-    setFilteredPayments(mockPayments);
+  // Data is already filtered by the optimized hook
+  const filteredPayments = payments || [];
+
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ show: true, message, type });
   }, []);
 
-  useEffect(() => {
-    let filtered = payments;
-
-    // Filter by search term
-    if (searchTerm) {
-      filtered = filtered.filter(payment =>
-        payment.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        payment.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        payment.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        payment.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        payment.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Filter by status
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(payment => payment.status === filterStatus);
-    }
-
-    setFilteredPayments(filtered);
-  }, [searchTerm, filterStatus, payments]);
-
-  const showToast = (message, type = 'success') => {
-    setToast({ show: true, message, type });
-  };
-
-  const hideToast = () => {
+  const hideToast = useCallback(() => {
     setToast({ show: false, message: '', type: 'success' });
-  };
+  }, []);
 
-  const handleViewPayment = (payment) => {
+  const handleViewPayment = useCallback((payment) => {
     setSelectedPayment(payment);
     setShowPaymentModal(true);
-  };
+  }, []);
 
-  const handleRecordPayment = (paymentId) => {
-    const payment = payments.find(p => p.id === paymentId);
-    if (payment) {
-      setSelectedPayment(payment);
-      setShowPaymentFormModal(true);
-    }
-  };
+  const handleRecordPayment = useCallback((payment) => {
+    setSelectedPayment(payment);
+    setShowPaymentFormModal(true);
+  }, []);
 
-  const handlePaymentSuccess = (paymentResponse) => {
+  const handlePaymentSuccess = useCallback((paymentResponse) => {
     setPaymentData(paymentResponse);
     setShowPaymentFormModal(false);
     setShowReceiptModal(true);
-    
-    // Update payment status
-    const updatedPayments = payments.map(payment =>
-      payment.id === selectedPayment.id 
-        ? { ...payment, status: 'paid', paymentStatus: 'paid' }
-        : payment
-    );
-    setPayments(updatedPayments);
-    setFilteredPayments(updatedPayments);
-  };
+    showToast('Payment recorded successfully!', 'success');
+    refetch(); // OPTIMIZED: Use refetch from hook
+  }, [refetch, showToast]);
 
-  const handleSendInvoice = (paymentId) => {
-    showToast(`Invoice sent to member ${paymentId}`, 'info');
-  };
+  const handleSendInvoice = useCallback((payment) => {
+    setSelectedPayment(payment);
+    setShowInvoiceModal(true);
+  }, []);
 
-  const handleSuspendMember = (paymentId) => {
-    showToast(`Member ${paymentId} has been suspended due to non-payment`, 'warning');
-  };
+  const handleSuspendMember = useCallback(async (payment) => {
+    try {
+      showToast(`Member ${payment.member_id} has been suspended due to non-payment`, 'warning');
+      refetch();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  }, [showToast, refetch]);
+
+  const handleBulkInvoices = useCallback(async () => {
+    try {
+      const memberIds = filteredPayments.map(p => p.member_id || p.id);
+
+      if (memberIds.length === 0) {
+        showToast('No members found to send invoices to', 'warning');
+        return;
+      }
+
+      const result = await paymentService.sendBulkInvoices(memberIds, {
+        send_email: true,
+        message: 'Payment reminder for your membership dues.',
+        urgency: 'normal'
+      });
+
+      showToast(
+        `Bulk invoices sent: ${result.summary.successful} successful, ${result.summary.failed} failed`,
+        result.summary.failed > 0 ? 'warning' : 'success'
+      );
+
+      refetch();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  }, [filteredPayments, showToast, refetch]);
+
+  const handleDownloadInvoice = useCallback(async (payment) => {
+    try {
+      const memberId = payment.member_id || payment.id;
+      await paymentService.downloadInvoice(memberId);
+      showToast('Invoice downloaded successfully', 'success');
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  }, [showToast]);
+
+  const handleReminderSent = useCallback((response) => {
+    setShowReminderModal(false);
+    showToast('Reminder sent successfully!', 'success');
+    refetch();
+  }, [showToast, refetch]);
+
+  const handleInvoiceSent = useCallback((response) => {
+    setShowInvoiceModal(false);
+    if (response?.success) {
+      showToast('Invoice sent successfully!', 'success');
+    } else {
+      showToast(response?.error || 'Failed to send invoice', 'error');
+    }
+    refetch();
+  }, [showToast, refetch]);
 
   const getStatusBadge = (status) => {
     const statusStyles = {
@@ -204,28 +175,13 @@ const PaymentsDue = () => {
     );
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-UG', {
-      style: 'currency',
-      currency: 'UGX',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-GB');
-  };
-
-  const getPaymentStats = () => {
-    return {
-      total: payments.length,
-      overdue: payments.filter(p => p.status === 'overdue').length,
-      dueToday: payments.filter(p => p.status === 'due_today').length,
-      totalOutstanding: payments.reduce((sum, p) => sum + p.totalOutstanding, 0)
-    };
-  };
-
-  const paymentStats = getPaymentStats();
+  // Use stats from API response
+  const paymentStats = useMemo(() => stats || {
+    total: filteredPayments.length,
+    overdue: filteredPayments.filter(p => p.status === 'overdue').length,
+    dueToday: filteredPayments.filter(p => p.status === 'due_today').length,
+    totalOutstanding: filteredPayments.reduce((sum, p) => sum + (p.total_outstanding || p.amount || 0), 0)
+  }, [stats, filteredPayments]);
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -243,7 +199,13 @@ const PaymentsDue = () => {
                 <p className="text-gray-600 mt-1">Track and manage outstanding membership payments</p>
               </div>
               <div className="flex space-x-3">
-                <Button variant="outline">Send Bulk Invoices</Button>
+                <Button
+                  variant="outline"
+                  onClick={handleBulkInvoices}
+                  disabled={reminderLoading || filteredPayments.length === 0}
+                >
+                  {reminderLoading ? 'Sending...' : 'Send Bulk Invoices'}
+                </Button>
                 <Button variant="primary">Payment Report</Button>
               </div>
             </div>
@@ -283,17 +245,14 @@ const PaymentsDue = () => {
                     type="text"
                     placeholder="Search members or invoice numbers..."
                     value={searchTerm}
-                    onChange={(e) => {
-                      setSearchTerm(e.target.value);
-                      // Add debounced search logic here
-                    }}
+                    onChange={(e) => updateSearchTerm(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div className="flex space-x-4">
                   <select
                     value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
+                    onChange={(e) => updateFilterStatus(e.target.value)}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="all">All Status</option>
@@ -335,26 +294,53 @@ const PaymentsDue = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredPayments.map((payment) => (
-                      <tr key={payment.id} className="hover:bg-gray-50">
+                    {loading ? (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                          <div className="flex items-center justify-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                            <span className="ml-2">Loading payments...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredPayments.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                          No payments found matching your criteria.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredPayments.map((payment) => (
+                        <tr key={payment.id || payment.member_id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {payment.firstName} {payment.lastName}
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 mr-4">
+                              <Avatar
+                                firstName={payment.first_name || payment.firstName}
+                                lastName={payment.last_name || payment.lastName}
+                                email={payment.email}
+                                memberId={payment.member_id || `PTF${String(payment.id).padStart(4, '0')}`}
+                                size="md"
+                              />
                             </div>
-                            <div className="text-sm text-gray-500">{payment.email}</div>
-                            <div className="text-xs text-gray-400">{payment.id}</div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {payment.first_name || payment.firstName} {payment.last_name || payment.lastName}
+                              </div>
+                              <div className="text-sm text-gray-500">{payment.email}</div>
+                              <div className="text-xs text-gray-400">{payment.member_id || `PTF${String(payment.id).padStart(4, '0')}`}</div>
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{payment.planType}</div>
-                          <div className="mt-1">{getMembershipTypeBadge(payment.membershipType)}</div>
+                          <div className="text-sm text-gray-900">{payment.plan_type || payment.planType}</div>
+                          <div className="mt-1">{getMembershipTypeBadge(payment.membership_type || payment.membershipType)}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{formatDate(payment.dueDate)}</div>
-                          {payment.daysOverdue > 0 && (
+                          <div className="text-sm text-gray-900">{formatDate(payment.due_date || payment.dueDate)}</div>
+                          {(payment.days_overdue || payment.daysOverdue) > 0 && (
                             <div className="text-xs text-red-600 font-medium">
-                              {payment.daysOverdue} days overdue
+                              {payment.days_overdue || payment.daysOverdue} days overdue
                             </div>
                           )}
                         </td>
@@ -363,15 +349,15 @@ const PaymentsDue = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            {formatCurrency(payment.totalOutstanding)}
+                            {formatCurrency(payment.total_outstanding || payment.totalOutstanding || payment.amount)}
                           </div>
                           <div className="text-xs text-gray-500">
                             Plan: {formatCurrency(payment.amount)}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{payment.invoiceNumber}</div>
-                          <div className="text-xs text-gray-500">{payment.paymentMethod}</div>
+                          <div className="text-sm text-gray-900">{payment.invoice_number || payment.invoiceNumber}</div>
+                          <div className="text-xs text-gray-500">{payment.payment_method || payment.paymentMethod}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                           <button
@@ -381,28 +367,30 @@ const PaymentsDue = () => {
                             View
                           </button>
                           <button
-                            onClick={() => handleRecordPayment(payment.id)}
+                            onClick={() => handleRecordPayment(payment)}
                             className="text-green-600 hover:text-green-900"
                           >
                             Pay Now
                           </button>
                           <button
-                            onClick={() => handleSendInvoice(payment.id)}
+                            onClick={() => handleSendInvoice(payment)}
                             className="text-orange-600 hover:text-orange-900"
+                            disabled={reminderLoading}
                           >
-                            Invoice
+                            {reminderLoading ? 'Sending...' : 'Invoice'}
                           </button>
                           {payment.status === 'overdue' && (
                             <button
-                              onClick={() => handleSuspendMember(payment.id)}
+                              onClick={() => handleSuspendMember(payment)}
                               className="text-red-600 hover:text-red-900"
                             >
                               Suspend
                             </button>
                           )}
                         </td>
-                      </tr>
-                    ))}
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -505,7 +493,18 @@ const PaymentsDue = () => {
             <div className="flex justify-end space-x-4 pt-4 border-t">
               <Button
                 variant="outline"
-                onClick={() => handleSendInvoice(selectedPayment.id)}
+                onClick={() => handleDownloadInvoice(selectedPayment)}
+                disabled={reminderLoading}
+              >
+                Download Invoice
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setShowInvoiceModal(true);
+                }}
+                disabled={reminderLoading}
               >
                 Send Invoice
               </Button>
@@ -542,6 +541,24 @@ const PaymentsDue = () => {
           onPrint={() => showToast('Receipt printed successfully', 'success')}
         />
       </Modal>
+
+      {/* Payment Reminder Modal */}
+      <PaymentReminder
+        member={selectedPayment}
+        isOpen={showReminderModal}
+        onClose={() => setShowReminderModal(false)}
+        onReminderSent={handleReminderSent}
+        mode="reminder"
+      />
+
+      {/* Invoice Modal */}
+      <PaymentReminder
+        member={selectedPayment}
+        isOpen={showInvoiceModal}
+        onClose={() => setShowInvoiceModal(false)}
+        onReminderSent={handleInvoiceSent}
+        mode="invoice"
+      />
 
       {/* Toast Notifications */}
       <Toast
