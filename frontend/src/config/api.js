@@ -84,6 +84,15 @@ export const API_ENDPOINTS = {
     update: (id) => `inventory/${id}/`,
     lowStock: 'inventory/low-stock/',
   },
+
+  // Analytics (using existing backend endpoints)
+  analytics: {
+    dashboard: 'dashboard/stats/',
+    outdoor_stats: 'memberships/outdoor_stats/',
+    indoor_stats: 'memberships/indoor_stats/',
+    outdoor_members: 'memberships/outdoor/',
+    indoor_members: 'memberships/indoor/',
+  },
 };
 
 // Create axios instance with default config

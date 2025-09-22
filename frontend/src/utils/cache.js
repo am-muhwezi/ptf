@@ -84,6 +84,22 @@ class SimpleCache {
   }
 
   /**
+   * Delete all keys matching a pattern
+   * @param {string} pattern - Pattern to match (partial key match)
+   */
+  deletePattern(pattern) {
+    const keysToDelete = [];
+
+    for (const key of this.cache.keys()) {
+      if (key.includes(pattern)) {
+        keysToDelete.push(key);
+      }
+    }
+
+    keysToDelete.forEach(key => this.delete(key));
+  }
+
+  /**
    * Get cache size
    * @returns {number}
    */
@@ -111,14 +127,22 @@ export const CACHE_KEYS = {
   ALL_MEMBERS_STATS: 'all_members_stats',
   OUTDOOR_MEMBERS: (page, search, status, location) => `outdoor_members_${page}_${search || 'all'}_${status || 'all'}_${location || 'all'}`,
   INDOOR_MEMBERS: (page, search, status) => `indoor_members_${page}_${search || 'all'}_${status || 'all'}`,
-  ALL_MEMBERS: (page, search, status, membershipType) => `all_members_${page}_${search || 'all'}_${status || 'all'}_${membershipType || 'all'}`
+  ALL_MEMBERS: (page, search, status, membershipType) => `all_members_${page}_${search || 'all'}_${status || 'all'}_${membershipType || 'all'}`,
+  // Analytics cache keys
+  COMPREHENSIVE_ANALYTICS: (timeframe) => `comprehensive_analytics_${timeframe}`,
+  OUTDOOR_ANALYTICS: (timeframe) => `outdoor_analytics_${timeframe}`,
+  MEMBERSHIP_BREAKDOWN: (timeframe) => `membership_breakdown_${timeframe}`,
+  REVENUE_ANALYTICS: (timeframe) => `revenue_analytics_${timeframe}`,
+  ATTENDANCE_ANALYTICS: (timeframe) => `attendance_analytics_${timeframe}`,
+  KPI_SUMMARY: (timeframe) => `kpi_summary_${timeframe}`
 };
 
 // Cache TTL constants (in milliseconds)
 export const CACHE_TTL = {
   STATS: 5 * 60 * 1000,     // 5 minutes for stats
   MEMBERS: 2 * 60 * 1000,   // 2 minutes for member data
-  SEARCH: 1 * 60 * 1000     // 1 minute for search results
+  SEARCH: 1 * 60 * 1000,    // 1 minute for search results
+  ANALYTICS: 10 * 60 * 1000 // 10 minutes for analytics data
 };
 
 export default SimpleCache;
