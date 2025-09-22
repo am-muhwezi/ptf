@@ -62,33 +62,24 @@ export const authApi = {
   register: async (userData) => {
     const response = await apiClient.post(API_ENDPOINTS.auth.register, userData);
 
-    // Handle both auto-login and manual login cases
-    if (response.data?.access && response.data?.refresh) {
-      const user = response.data.user || {};
-      return {
-        success: true,
-        autoLogin: true,
-        tokens: {
-          access: response.data.access,
-          refresh: response.data.refresh,
-        },
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName || user.first_name,
-          lastName: user.lastName || user.last_name,
-          username: user.username,
-          isStaff: user.is_staff || false,
-          isSuperuser: user.is_superuser || false,
-          isActive: user.is_active !== false,
-        }
-      };
-    }
-
+    // New flow: Email verification required
+    const user = response.data.user || {};
     return {
       success: true,
-      autoLogin: false,
-      message: response.data?.message || 'Registration successful'
+      emailSent: response.data?.email_sent || false,
+      requiresVerification: true,
+      message: response.data?.message || 'Admin account created. Please check your email to verify your account.',
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName || user.first_name,
+        lastName: user.lastName || user.last_name,
+        username: user.username,
+        isStaff: user.is_staff || false,
+        isSuperuser: user.is_superuser || false,
+        isActive: user.is_active !== false,
+        emailVerified: user.email_verified || false,
+      }
     };
   },
 
@@ -140,6 +131,34 @@ export const authApi = {
       success: true,
       message: response.data?.message,
       user: response.data?.user
+    };
+  },
+
+  // Verify email
+  verifyEmail: async (token) => {
+    const response = await apiClient.post('auth/email/verify/', { token });
+    const user = response.data?.user || {};
+    return {
+      success: true,
+      message: response.data?.message,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName || user.first_name,
+        lastName: user.lastName || user.last_name,
+        isActive: user.is_active !== false,
+        emailVerified: user.email_verified !== false,
+      }
+    };
+  },
+
+  // Resend verification email
+  resendVerification: async (email) => {
+    const response = await apiClient.post('auth/email/resend/', { email });
+    return {
+      success: true,
+      message: response.data?.message,
+      emailSent: response.data?.email_sent || false
     };
   },
 

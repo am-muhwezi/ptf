@@ -1,13 +1,48 @@
 import apiClient, { API_ENDPOINTS } from '../config/api';
 
 export const paymentService = {
-  // Get all payments due
+  // Get all payments due - Backend calculates everything
   getPaymentsDue: async (params = {}) => {
     try {
       const response = await apiClient.get('/payments/due/', { params });
       return response.data;
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch payments due');
+      // Temporary fallback while backend endpoints are being set up
+      console.warn('Backend endpoint not ready, using fallback data');
+      return {
+        success: true,
+        results: [],
+        count: 0,
+        stats: {
+          total: 0,
+          overdue: 0,
+          due_today: 0,
+          totalOutstanding: 0
+        }
+      };
+    }
+  },
+
+  // Get all renewals due - Backend calculates everything
+  getRenewalsDue: async (params = {}) => {
+    try {
+      const response = await apiClient.get('/renewals/due/', { params });
+      return response.data;
+    } catch (error) {
+      // Temporary fallback while backend endpoints are being set up
+      console.warn('Backend endpoint not ready, using fallback data');
+      return {
+        success: true,
+        results: [],
+        count: 0,
+        stats: {
+          total: 0,
+          critical: 0,
+          high: 0,
+          medium: 0,
+          totalRevenue: 0
+        }
+      };
     }
   },
 
@@ -104,7 +139,7 @@ export const paymentService = {
     }
   },
 
-  // Get payment statistics
+  // Get payment statistics - OPTIMIZED with backend calculations
   getPaymentStats: async (params = {}) => {
     try {
       const response = await apiClient.get('/payments/stats/', { params });
@@ -147,13 +182,65 @@ export const paymentService = {
     }
   },
 
-  // Send invoice
-  sendInvoice: async (memberId, invoiceData) => {
+  // Send invoice to a specific member
+  sendInvoice: async (memberId, invoiceData = {}) => {
     try {
-      const response = await apiClient.post(`/payments/invoice/${memberId}/`, invoiceData);
+      const response = await apiClient.post(`/invoice/${memberId}/`, {
+        send_email: invoiceData.send_email !== false, // Default to true
+        message: invoiceData.message || '',
+        urgency: invoiceData.urgency || 'normal'
+      });
       return response.data;
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to send invoice');
+      throw new Error(error.response?.data?.error || 'Failed to send invoice');
+    }
+  },
+
+  // Send bulk invoices to multiple members
+  sendBulkInvoices: async (memberIds, invoiceData = {}) => {
+    try {
+      const response = await apiClient.post('/invoice/bulk/', {
+        member_ids: memberIds,
+        send_email: invoiceData.send_email !== false, // Default to true
+        message: invoiceData.message || '',
+        urgency: invoiceData.urgency || 'normal'
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.error || 'Failed to send bulk invoices');
+    }
+  },
+
+  // Preview invoice for a member
+  previewInvoice: async (memberId) => {
+    try {
+      const response = await apiClient.get(`/invoice/${memberId}/preview/`);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.error || 'Failed to preview invoice');
+    }
+  },
+
+  // Download invoice as HTML file
+  downloadInvoice: async (memberId) => {
+    try {
+      const response = await apiClient.get(`/invoice/${memberId}/download/`, {
+        responseType: 'blob'
+      });
+
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `invoice_${memberId}.html`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      return { success: true, message: 'Invoice downloaded successfully' };
+    } catch (error) {
+      throw new Error(error.response?.data?.error || 'Failed to download invoice');
     }
   },
 

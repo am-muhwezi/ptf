@@ -61,8 +61,13 @@ export const membershipService = {
   // Renewals Due
   getRenewalsDue: async (params = {}) => {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.memberships.renewals, { params });
-      return response.data;
+      const response = await apiClient.get('/renewals/due/', { params });
+      return {
+        success: true,
+        data: response.data.results || response.data,
+        count: response.data.count || 0,
+        stats: response.data.stats || {}
+      };
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Failed to fetch renewals due');
     }
@@ -71,8 +76,13 @@ export const membershipService = {
   // Payments Due
   getPaymentsDue: async (params = {}) => {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.memberships.payments, { params });
-      return response.data;
+      const response = await apiClient.get('/payments/due/', { params });
+      return {
+        success: true,
+        data: response.data.results || response.data,
+        count: response.data.count || 0,
+        stats: response.data.stats || {}
+      };
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Failed to fetch payments due');
     }
@@ -196,6 +206,110 @@ export const membershipService = {
       throw new Error(error.response?.data?.message || 'Failed to use session');
     }
   },
+
+  // Get renewal statistics
+  getRenewalStats: async (params = {}) => {
+    try {
+      const response = await apiClient.get('/renewals/stats/', { params });
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch renewal statistics');
+    }
+  },
+
+  // Batch API operations for optimization
+  batchOperations: {
+    // Get dashboard data in one call
+    getDashboardData: async () => {
+      try {
+        const [memberStats, paymentsDue, renewalsDue] = await Promise.all([
+          membershipService.getIndoorMembershipStats(),
+          membershipService.getPaymentsDue({ limit: 5 }),
+          membershipService.getRenewalsDue({ limit: 5 })
+        ]);
+
+        return {
+          success: true,
+          data: {
+            memberStats: memberStats.data,
+            paymentsDue: paymentsDue.data,
+            renewalsDue: renewalsDue.data
+          }
+        };
+      } catch (error) {
+        throw new Error('Failed to fetch dashboard data');
+      }
+    },
+
+    // Get payments and renewals overview
+    getPaymentsRenewalsOverview: async (params = {}) => {
+      try {
+        const [payments, renewals] = await Promise.all([
+          membershipService.getPaymentsDue(params),
+          membershipService.getRenewalsDue(params)
+        ]);
+
+        return {
+          success: true,
+          data: {
+            payments: payments.data,
+            renewals: renewals.data,
+            combinedStats: {
+              totalOutstanding: payments.stats?.totalOutstanding || 0,
+              totalRenewalsValue: renewals.stats?.totalRevenue || 0,
+              urgentItems: (payments.stats?.overdue || 0) + (renewals.stats?.critical || 0)
+            }
+          }
+        };
+      } catch (error) {
+        throw new Error('Failed to fetch payments and renewals overview');
+      }
+    }
+  },
+
+  // Cache management
+  cache: {
+    clear: () => {
+      // Clear specific caches if needed
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const keys = Object.keys(localStorage);
+        keys.forEach(key => {
+          if (key.startsWith('membership_cache_')) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+    },
+
+    set: (key, data, ttl = 300000) => {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const cacheData = {
+          data,
+          timestamp: Date.now(),
+          ttl
+        };
+        localStorage.setItem(`membership_cache_${key}`, JSON.stringify(cacheData));
+      }
+    },
+
+    get: (key) => {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const cached = localStorage.getItem(`membership_cache_${key}`);
+        if (cached) {
+          const cacheData = JSON.parse(cached);
+          if (Date.now() - cacheData.timestamp < cacheData.ttl) {
+            return cacheData.data;
+          } else {
+            localStorage.removeItem(`membership_cache_${key}`);
+          }
+        }
+      }
+      return null;
+    }
+  }
 };
 
 export default membershipService;

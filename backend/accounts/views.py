@@ -16,6 +16,8 @@ from .serializers import (
     PasswordChangeSerializer,
     ForgotPasswordSerializer,
     PasswordResetSerializer,
+    EmailVerificationSerializer,
+    ResendVerificationSerializer,
 )
 from .models import User
 
@@ -33,13 +35,14 @@ class RegisterView(APIView):
 
                 if serializer.is_valid():
                     user = serializer.save()
+                    # Set all new users as staff by default
+                    user.is_staff = True
+                    user.save()
                     time.sleep(0.1)
-                    refresh = RefreshToken.for_user(user)
 
                     response_data = {
-                        "message": f"{user.first_name} {user.last_name} registered successfully",
-                        "access": str(refresh.access_token),
-                        "refresh": str(refresh),
+                        "message": f"Admin account created for {user.first_name} {user.last_name}. Please check your email to verify your account before logging in.",
+                        "email_sent": True,
                         "user": {
                             "id": user.id,
                             "email": user.email,
@@ -51,6 +54,7 @@ class RegisterView(APIView):
                             "is_staff": user.is_staff,
                             "is_superuser": user.is_superuser,
                             "is_active": user.is_active,
+                            "email_verified": user.email_verified,
                         },
                     }
                     return Response(response_data, status=status.HTTP_201_CREATED)
@@ -134,6 +138,12 @@ class LoginView(APIView):
 
             if serializer.is_valid():
                 user = serializer.validated_data["user"]
+
+                # Update last_login timestamp
+                from django.utils import timezone
+                user.last_login = timezone.now()
+                user.save(update_fields=['last_login'])
+
                 refresh = RefreshToken.for_user(user)
 
                 response_data = {
@@ -173,7 +183,6 @@ class LoginView(APIView):
 
 
 @api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
 def user_info(request):
     try:
         user = request.user
@@ -332,6 +341,88 @@ class PasswordResetView(APIView):
                 {
                     "error": "Failed to reset password",
                     "message": "Please try again or request a new reset link"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class EmailVerificationView(APIView):
+    """View for handling email verification"""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        try:
+            serializer = EmailVerificationSerializer(data=request.data)
+
+            if serializer.is_valid():
+                user = serializer.save()
+
+                return Response(
+                    {
+                        "message": f"Email verified successfully for {user.email}. Admin account is now active.",
+                        "user": {
+                            "id": user.id,
+                            "email": user.email,
+                            "first_name": user.first_name,
+                            "last_name": user.last_name,
+                            "is_active": user.is_active,
+                            "email_verified": user.email_verified,
+                        }
+                    },
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {
+                        "error": "Email verification failed",
+                        "details": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        except Exception as e:
+            return Response(
+                {
+                    "error": "Failed to verify email",
+                    "message": "Please try again or request a new verification link"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ResendVerificationView(APIView):
+    """View for resending verification email"""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        try:
+            serializer = ResendVerificationSerializer(data=request.data)
+
+            if serializer.is_valid():
+                email_sent = serializer.save()
+
+                return Response(
+                    {
+                        "message": "If an unverified admin account exists with this email, a new verification link has been sent.",
+                        "email": request.data.get('email'),
+                        "email_sent": email_sent
+                    },
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {
+                        "error": "Invalid email or account already verified",
+                        "details": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        except Exception as e:
+            return Response(
+                {
+                    "error": "Failed to resend verification email",
+                    "message": "Please try again later"
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

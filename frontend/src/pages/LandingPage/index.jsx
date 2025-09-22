@@ -168,9 +168,23 @@ const LandingPage = () => {
         };
         
         const result = await contextRegister(registrationData);
-        
+
         if (result.success) {
-          if (result.autoLogin && result.userData) {
+          if (result.requiresVerification) {
+            setSuccess(`🎉 Admin account created for ${formData.firstName}! 📧 Please check your email and click the verification link to activate your account before logging in.`);
+            // Switch to login mode and pre-fill email after delay
+            setTimeout(() => {
+              setAuthMode('login');
+              setFormData(prev => ({
+                ...prev,
+                password: '',
+                confirmPassword: '',
+                firstName: '',
+                lastName: '',
+                phone: ''
+              }));
+            }, 5000);
+          } else if (result.autoLogin && result.userData) {
             setSuccess(`Welcome to Paradise, ${result.userData.firstName}! 🏝️ Logging you in...`);
             // Navigation will be handled by useAuth hook
           } else {

@@ -151,11 +151,8 @@ export const useAuth = () => {
       setIsLoading(true);
       const result = await authApi.register(userData);
 
-      if (result.autoLogin && result.user) {
-        setAuthState(result.user, result.tokens);
-        setTimeout(() => navigate('/dashboard'), 1000);
-      }
-
+      // New flow: Email verification required, no auto-login
+      // User must verify email before logging in
       return result;
     } catch (error) {
       clearAuthState();
@@ -163,7 +160,7 @@ export const useAuth = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [setAuthState, clearAuthState, navigate]);
+  }, [clearAuthState]);
 
   const logout = useCallback(async () => {
     try {

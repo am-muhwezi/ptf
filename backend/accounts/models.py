@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
+import uuid
 
 
 class CustomUserManager(BaseUserManager):
@@ -34,10 +35,17 @@ class User(AbstractUser):
     email = models.CharField(max_length=80, unique=True)
     first_name = models.CharField(max_length=30, blank=False)
     last_name = models.CharField(max_length=30, blank=False)
+    email_verified = models.BooleanField(default=False)
+    email_verification_token = models.UUIDField(default=uuid.uuid4, editable=False)
 
     objects = CustomUserManager()
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]
+
+    def generate_verification_token(self):
+        """Generate a new verification token"""
+        self.email_verification_token = uuid.uuid4()
+        self.save()
 
     def __str__(self):
         return self.username

@@ -1,5 +1,6 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from accounts.permissions import IsAdminPermission
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
@@ -8,6 +9,7 @@ from memberships.models import Membership
 
 
 @api_view(["POST"])
+@permission_classes([IsAdminPermission])
 def confirm_payment(request):
     """Confirm pending payment"""
     try:
@@ -58,6 +60,7 @@ def confirm_payment(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAdminPermission])
 def list_pending_payments_detailed(request):
     """List pending payments - use existing fields only"""
     try:
@@ -102,6 +105,7 @@ def list_pending_payments_detailed(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAdminPermission])
 def list_completed_payments(request):
     """List completed payments - use existing fields only"""
     try:
@@ -154,19 +158,26 @@ def record_manual_payment(request):
         # Validate payment method
         valid_methods = ["cash", "bank_transfer", "cheque", "mpesa"]
         if payment_method not in valid_methods:
-            return Response({"error": f"Invalid payment method. Must be one of: {', '.join(valid_methods)}"}, status=400)
+            return Response(
+                {
+                    "error": f"Invalid payment method. Must be one of: {', '.join(valid_methods)}"
+                },
+                status=400,
+            )
 
         with transaction.atomic():
             # Find the member's latest unpaid membership
             from memberships.models import Membership
             from members.models import Member
-            
+
             # Get the member first
             try:
                 member = Member.objects.get(id=member_id)
             except Member.DoesNotExist:
-                return Response({"error": f"Member with ID {member_id} not found"}, status=404)
-            
+                return Response(
+                    {"error": f"Member with ID {member_id} not found"}, status=404
+                )
+
             # Find their unpaid membership (pending or overdue)
             membership = Membership.objects.filter(
                 member=member, payment_status__in=["pending", "overdue"]
@@ -179,9 +190,10 @@ def record_manual_payment(request):
 
             # Create payment record
             from .services import PaymentService
+
             payment = PaymentService._create_payment_record(membership, payment_method)
             payment.amount = float(amount)
-            payment.purpose = "membership_fee" 
+            payment.purpose = "membership_fee"
             payment.status = "completed"
             payment.save()
 
@@ -191,7 +203,7 @@ def record_manual_payment(request):
 
             # Get member name for response
             member = membership.member
-            method_name = payment_method.replace('_', ' ').title()
+            method_name = payment_method.replace("_", " ").title()
 
             return Response(
                 {
@@ -212,6 +224,7 @@ def record_manual_payment(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAdminPermission])
 def list_all_payments(request):
     """List all payments"""
     try:

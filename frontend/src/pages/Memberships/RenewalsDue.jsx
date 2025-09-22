@@ -1,141 +1,93 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import Header from '../../components/common/Header';
 import Sidebar from '../../components/common/Sidebar';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
+import PaymentReminder from '../../components/ui/PaymentReminder';
+import Avatar from '../../components/ui/Avatar';
+import { useRenewalsDue } from '../../hooks/useFinancials';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 
 const RenewalsDue = () => {
-  const [renewals, setRenewals] = useState([]);
-  const [filteredRenewals, setFilteredRenewals] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterUrgency, setFilterUrgency] = useState('all');
   const [selectedRenewal, setSelectedRenewal] = useState(null);
   const [showRenewalModal, setShowRenewalModal] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   // Mobile sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Mock data - replace with API call
-  const mockRenewals = [
-    {
-      id: 'PTF001234',
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john.doe@email.com',
-      phone: '+256 700 123 456',
-      membershipType: 'indoor',
-      currentPlan: 'Monthly Premium',
-      expiryDate: '2024-02-05',
-      daysUntilExpiry: 5,
-      amount: 150000,
-      urgency: 'critical',
-      lastRenewal: '2024-01-05',
-      totalRenewals: 3,
-      preferredContact: 'email'
-    },
-    {
-      id: 'PTF001235',
-      firstName: 'Jane',
-      lastName: 'Smith',
-      email: 'jane.smith@email.com',
-      phone: '+256 700 123 457',
-      membershipType: 'outdoor',
-      currentPlan: 'Quarterly Basic',
-      expiryDate: '2024-02-15',
-      daysUntilExpiry: 15,
-      amount: 280000,
-      urgency: 'high',
-      lastRenewal: '2023-11-15',
-      totalRenewals: 2,
-      preferredContact: 'phone'
-    },
-    {
-      id: 'PTF001236',
-      firstName: 'Mike',
-      lastName: 'Johnson',
-      email: 'mike.johnson@email.com',
-      phone: '+256 700 123 458',
-      membershipType: 'both',
-      currentPlan: 'Annual Premium',
-      expiryDate: '2024-02-28',
-      daysUntilExpiry: 28,
-      amount: 1800000,
-      urgency: 'medium',
-      lastRenewal: '2023-02-28',
-      totalRenewals: 1,
-      preferredContact: 'email'
-    },
-    {
-      id: 'PTF001237',
-      firstName: 'Sarah',
-      lastName: 'Wilson',
-      email: 'sarah.wilson@email.com',
-      phone: '+256 700 123 459',
-      membershipType: 'indoor',
-      currentPlan: 'Monthly Basic',
-      expiryDate: '2024-02-02',
-      daysUntilExpiry: 2,
-      amount: 120000,
-      urgency: 'critical',
-      lastRenewal: '2024-01-02',
-      totalRenewals: 5,
-      preferredContact: 'phone'
-    }
-  ];
+  // OPTIMIZED: Single hook handles everything
+  const {
+    data: renewals,
+    stats,
+    loading,
+    error,
+    searchTerm,
+    filterStatus: filterUrgency,
+    updateSearchTerm,
+    updateFilterStatus: updateFilterUrgency,
+    handleBulkReminders,
+    isLoading: reminderLoading,
+    refetch
+  } = useRenewalsDue();
 
-  useEffect(() => {
-    setRenewals(mockRenewals);
-    setFilteredRenewals(mockRenewals);
+  // Data is already filtered by the optimized hook
+  const filteredRenewals = renewals || [];
+
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ show: true, message, type });
   }, []);
 
-  useEffect(() => {
-    let filtered = renewals;
-
-    // Filter by search term
-    if (searchTerm) {
-      filtered = filtered.filter(renewal =>
-        renewal.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        renewal.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        renewal.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        renewal.id.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Filter by urgency
-    if (filterUrgency !== 'all') {
-      filtered = filtered.filter(renewal => renewal.urgency === filterUrgency);
-    }
-
-    setFilteredRenewals(filtered);
-  }, [searchTerm, filterUrgency, renewals]);
-
-  const showToast = (message, type = 'success') => {
-    setToast({ show: true, message, type });
-  };
-
-  const hideToast = () => {
+  const hideToast = useCallback(() => {
     setToast({ show: false, message: '', type: 'success' });
-  };
+  }, []);
 
-  const handleViewRenewal = (renewal) => {
+  const handleViewRenewal = useCallback((renewal) => {
     setSelectedRenewal(renewal);
     setShowRenewalModal(true);
-  };
+  }, []);
 
-  const handleProcessRenewal = (renewalId) => {
-    showToast(`Renewal process initiated for member ${renewalId}`, 'success');
-  };
+  const handleProcessRenewal = useCallback(async (renewal) => {
+    try {
+      // For now, just show success message - actual renewal processing would be implemented here
+      showToast(`Renewal processed for member ${renewal.member_id || renewal.id}`, 'success');
+      refetch(); // Use refetch from the hook
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  }, [showToast, refetch]);
 
-  const handleSendReminder = (renewalId, contactMethod) => {
-    showToast(`Reminder sent via ${contactMethod} to member ${renewalId}`, 'info');
-  };
+  const handleSendReminder = useCallback(async (renewal) => {
+    try {
+      setSelectedRenewal(renewal);
+      setShowReminderModal(true);
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  }, [showToast]);
 
-  const handleBulkReminders = () => {
-    showToast(`Bulk reminders sent to ${filteredRenewals.length} members`, 'success');
-  };
+  const handleBulkReminderClick = useCallback(async () => {
+    try {
+      const memberIds = filteredRenewals.map(r => r.member_id || r.id);
+      await handleBulkReminders(memberIds, {
+        method: 'sms',
+        message: 'Your membership is expiring soon. Please renew to continue enjoying our services.',
+        urgency: 'normal'
+      });
+      showToast(`Bulk reminders sent to ${memberIds.length} members`, 'success');
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  }, [filteredRenewals, handleBulkReminders, showToast]);
+
+  const handleReminderSent = useCallback((response) => {
+    setShowReminderModal(false);
+    showToast('Reminder sent successfully!', 'success');
+    refetch();
+  }, [showToast, refetch]);
 
   const getUrgencyBadge = (urgency) => {
     const urgencyStyles = {
@@ -166,28 +118,26 @@ const RenewalsDue = () => {
     );
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-UG', {
-      style: 'currency',
-      currency: 'UGX',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
+  // Use stats from API response
+  const urgencyStats = useMemo(() => stats || {
+    critical: filteredRenewals.filter(r => r.urgency === 'critical').length,
+    high: filteredRenewals.filter(r => r.urgency === 'high').length,
+    medium: filteredRenewals.filter(r => r.urgency === 'medium').length,
+    total: filteredRenewals.length
+  }, [stats, filteredRenewals]);
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-GB');
-  };
-
-  const getUrgencyStats = () => {
-    return {
-      critical: renewals.filter(r => r.urgency === 'critical').length,
-      high: renewals.filter(r => r.urgency === 'high').length,
-      medium: renewals.filter(r => r.urgency === 'medium').length,
-      total: renewals.length
-    };
-  };
-
-  const urgencyStats = getUrgencyStats();
+  // Handle loading and error states
+  if (error) {
+    return (
+      <div className="flex h-screen bg-gray-50 items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to load renewals</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <Button onClick={refetch}>Try Again</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -205,8 +155,12 @@ const RenewalsDue = () => {
                 <p className="text-gray-600 mt-1">Manage membership renewals and send reminders</p>
               </div>
               <div className="flex space-x-3">
-                <Button variant="outline" onClick={handleBulkReminders}>
-                  Send Bulk Reminders
+                <Button
+                  variant="outline"
+                  onClick={handleBulkReminderClick}
+                  disabled={filteredRenewals.length === 0 || reminderLoading}
+                >
+                  {reminderLoading ? 'Sending...' : 'Send Bulk Reminders'}
                 </Button>
                 <Button variant="primary">Export Report</Button>
               </div>
@@ -247,14 +201,14 @@ const RenewalsDue = () => {
                     type="text"
                     placeholder="Search members..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => updateSearchTerm(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div className="flex space-x-4">
                   <select
                     value={filterUrgency}
-                    onChange={(e) => setFilterUrgency(e.target.value)}
+                    onChange={(e) => updateFilterUrgency(e.target.value)}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="all">All Urgency</option>
@@ -297,24 +251,51 @@ const RenewalsDue = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredRenewals.map((renewal) => (
-                      <tr key={renewal.id} className="hover:bg-gray-50">
+                    {loading ? (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                          <div className="flex items-center justify-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                            <span className="ml-2">Loading renewals...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredRenewals.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                          No renewals found matching your criteria.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredRenewals.map((renewal) => (
+                        <tr key={renewal.id || renewal.member_id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {renewal.firstName} {renewal.lastName}
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 mr-4">
+                              <Avatar
+                                firstName={renewal.first_name || renewal.firstName}
+                                lastName={renewal.last_name || renewal.lastName}
+                                email={renewal.email}
+                                memberId={renewal.member_id || `PTF${String(renewal.id).padStart(4, '0')}`}
+                                size="md"
+                              />
                             </div>
-                            <div className="text-sm text-gray-500">{renewal.email}</div>
-                            <div className="text-xs text-gray-400">{renewal.id}</div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {renewal.first_name || renewal.firstName} {renewal.last_name || renewal.lastName}
+                              </div>
+                              <div className="text-sm text-gray-500">{renewal.email}</div>
+                              <div className="text-xs text-gray-400">{renewal.member_id || `PTF${String(renewal.id).padStart(4, '0')}`}</div>
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{renewal.currentPlan}</div>
-                          <div className="mt-1">{getMembershipTypeBadge(renewal.membershipType)}</div>
+                          <div className="text-sm text-gray-900">{renewal.current_plan || renewal.currentPlan}</div>
+                          <div className="mt-1">{getMembershipTypeBadge(renewal.membership_type || renewal.membershipType)}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{formatDate(renewal.expiryDate)}</div>
-                          <div className="text-xs text-gray-500">{renewal.daysUntilExpiry} days remaining</div>
+                          <div className="text-sm text-gray-900">{formatDate(renewal.expiry_date || renewal.expiryDate)}</div>
+                          <div className="text-xs text-gray-500">{renewal.days_until_expiry || renewal.daysUntilExpiry} days remaining</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           {getUrgencyBadge(renewal.urgency)}
@@ -324,7 +305,7 @@ const RenewalsDue = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{renewal.phone}</div>
-                          <div className="text-xs text-gray-500">Prefers: {renewal.preferredContact}</div>
+                          <div className="text-xs text-gray-500">Prefers: {renewal.preferred_contact || renewal.preferredContact}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                           <button
@@ -334,20 +315,21 @@ const RenewalsDue = () => {
                             View
                           </button>
                           <button
-                            onClick={() => handleProcessRenewal(renewal.id)}
+                            onClick={() => handleProcessRenewal(renewal)}
                             className="text-green-600 hover:text-green-900"
                           >
                             Renew
                           </button>
                           <button
-                            onClick={() => handleSendReminder(renewal.id, renewal.preferredContact)}
+                            onClick={() => handleSendReminder(renewal)}
                             className="text-orange-600 hover:text-orange-900"
                           >
                             Remind
                           </button>
                         </td>
-                      </tr>
-                    ))}
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -460,6 +442,14 @@ const RenewalsDue = () => {
           </div>
         )}
       </Modal>
+
+      {/* Payment Reminder Modal */}
+      <PaymentReminder
+        member={selectedRenewal}
+        isOpen={showReminderModal}
+        onClose={() => setShowReminderModal(false)}
+        onReminderSent={handleReminderSent}
+      />
 
       {/* Toast Notifications */}
       <Toast
