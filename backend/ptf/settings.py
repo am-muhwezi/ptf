@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "memberships",
     "attendance",
     "payments",
+    "analytics",
     # Third-party
     "rest_framework",
     "rest_framework_simplejwt",

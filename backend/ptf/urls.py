@@ -38,6 +38,7 @@ urlpatterns = [
     path("", include("memberships.urls")),
     path("", include("attendance.urls")),
     path("", include("payments.urls")),
+    path("", include("analytics.urls")),
     # Dashboard
     path("dashboard/stats/", DashboardStatsView.as_view(), name="dashboard-stats"),
     path(
