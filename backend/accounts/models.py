@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
 import uuid
 
 
@@ -37,6 +38,7 @@ class User(AbstractUser):
     last_name = models.CharField(max_length=30, blank=False)
     email_verified = models.BooleanField(default=False)
     email_verification_token = models.UUIDField(default=uuid.uuid4, editable=False)
+    last_activity = models.DateTimeField(null=True, blank=True)
 
     objects = CustomUserManager()
     USERNAME_FIELD = "email"

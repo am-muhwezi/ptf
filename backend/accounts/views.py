@@ -350,16 +350,35 @@ class EmailVerificationView(APIView):
     """View for handling email verification"""
     permission_classes = [permissions.AllowAny]
 
-    def post(self, request):
+    def get(self, request):
+        """Handle GET request from email link"""
         try:
-            serializer = EmailVerificationSerializer(data=request.data)
+            token = request.query_params.get('token')
+            if not token:
+                return Response(
+                    {
+                        "error": "Missing verification token",
+                        "message": "Invalid verification link"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Use the same serializer logic
+            serializer = EmailVerificationSerializer(data={'token': token})
 
             if serializer.is_valid():
                 user = serializer.save()
 
+                # Check if user was already verified
+                if user.email_verified and user.is_active:
+                    message = f"Email already verified for {user.email}. Admin account is active."
+                else:
+                    message = f"Email verified successfully for {user.email}. Admin account is now active."
+
                 return Response(
                     {
-                        "message": f"Email verified successfully for {user.email}. Admin account is now active.",
+                        "success": True,
+                        "message": message,
                         "user": {
                             "id": user.id,
                             "email": user.email,
@@ -374,6 +393,7 @@ class EmailVerificationView(APIView):
             else:
                 return Response(
                     {
+                        "success": False,
                         "error": "Email verification failed",
                         "details": serializer.errors
                     },
@@ -383,6 +403,56 @@ class EmailVerificationView(APIView):
         except Exception as e:
             return Response(
                 {
+                    "success": False,
+                    "error": "Failed to verify email",
+                    "message": "Please try again or request a new verification link"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request):
+        """Handle POST request for programmatic verification"""
+        try:
+            serializer = EmailVerificationSerializer(data=request.data)
+
+            if serializer.is_valid():
+                user = serializer.save()
+
+                # Check if user was already verified
+                if user.email_verified and user.is_active:
+                    message = f"Email already verified for {user.email}. Admin account is active."
+                else:
+                    message = f"Email verified successfully for {user.email}. Admin account is now active."
+
+                return Response(
+                    {
+                        "success": True,
+                        "message": message,
+                        "user": {
+                            "id": user.id,
+                            "email": user.email,
+                            "first_name": user.first_name,
+                            "last_name": user.last_name,
+                            "is_active": user.is_active,
+                            "email_verified": user.email_verified,
+                        }
+                    },
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {
+                        "success": False,
+                        "error": "Email verification failed",
+                        "details": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        except Exception as e:
+            return Response(
+                {
+                    "success": False,
                     "error": "Failed to verify email",
                     "message": "Please try again or request a new verification link"
                 },
