@@ -2,6 +2,7 @@ from django.db.models import Count, Sum, Q, Avg
 from django.utils import timezone
 from django.core.cache import cache
 from datetime import timedelta, date, datetime
+from decimal import Decimal
 from members.models import Member
 from memberships.models import Membership
 from attendance.models import AttendanceLog
@@ -99,14 +100,14 @@ class AnalyticsService:
 
         monthly_growth = 0
         if new_members_previous > 0:
-            monthly_growth = ((new_members_current - new_members_previous) / new_members_previous) * 100
+            monthly_growth = ((new_members_current - new_members_previous) / float(new_members_previous)) * 100
 
         # Calculate sessions per member
         total_sessions = Membership.objects.aggregate(
             total=Sum('sessions_used')
         )['total'] or 0
 
-        avg_sessions = total_sessions / total_members if total_members > 0 else 0
+        avg_sessions = float(total_sessions) / total_members if total_members > 0 else 0
 
         # Calculate retention rate (simplified)
         active_rate = (active_members / total_members * 100) if total_members > 0 else 0
@@ -136,7 +137,7 @@ class AnalyticsService:
 
         indoor_avg_fee = 0
         if indoor_stats['total'] > 0:
-            indoor_avg_fee = (indoor_stats['revenue'] or 0) / indoor_stats['total']
+            indoor_avg_fee = float(indoor_stats['revenue'] or 0) / indoor_stats['total']
 
         # Outdoor memberships
         outdoor_stats = Membership.objects.filter(
@@ -151,7 +152,7 @@ class AnalyticsService:
 
         outdoor_avg_fee = 0
         if outdoor_stats['total'] > 0:
-            outdoor_avg_fee = (outdoor_stats['revenue'] or 0) / outdoor_stats['total'] / 4  # Weekly estimate
+            outdoor_avg_fee = float(outdoor_stats['revenue'] or 0) / outdoor_stats['total'] / 4  # Weekly estimate
 
         return {
             'indoor': {
@@ -201,7 +202,7 @@ class AnalyticsService:
             total=Sum('amount_paid')
         )['total'] or 0
 
-        avg_payment = total_revenue / payment_stats['total_payments'] if payment_stats['total_payments'] > 0 else 0
+        avg_payment = float(total_revenue) / payment_stats['total_payments'] if payment_stats['total_payments'] > 0 else 0
 
         # Payment methods breakdown (simplified percentages)
         payment_methods = {
@@ -394,12 +395,12 @@ class AnalyticsService:
                 location_data[loc_id]['members'] += 1
                 if membership.status == 'active':
                     location_data[loc_id]['active'] += 1
-                location_data[loc_id]['revenue'] += membership.amount_paid or 0
+                location_data[loc_id]['revenue'] += float(membership.amount_paid or 0)
 
         # Calculate utilization and format locations
         for location in location_data.values():
             if location['members'] > 0:
-                location['utilization'] = round((location['active'] / location['members']) * 100, 1)
+                location['utilization'] = round((float(location['active']) / float(location['members'])) * 100, 1)
             locations.append(location)
 
         # Attendance metrics
@@ -408,7 +409,7 @@ class AnalyticsService:
             visit_type='outdoor'
         ).count()
 
-        daily_avg = outdoor_attendance / 30 if outdoor_attendance > 0 else 0
+        daily_avg = float(outdoor_attendance) / 30 if outdoor_attendance > 0 else 0
 
         return {
             'locations': locations,
@@ -418,9 +419,9 @@ class AnalyticsService:
                 'monthly_visits': outdoor_attendance
             },
             'revenue_trend': [
-                {'month': 'Jan', 'amount': location_data.get(1, {}).get('revenue', 0) * 0.7 if location_data else 0},
-                {'month': 'Feb', 'amount': location_data.get(1, {}).get('revenue', 0) * 0.8 if location_data else 0},
-                {'month': 'Mar', 'amount': location_data.get(1, {}).get('revenue', 0) * 0.9 if location_data else 0},
-                {'month': 'Apr', 'amount': sum(loc.get('revenue', 0) for loc in location_data.values())}
+                {'month': 'Jan', 'amount': float(location_data.get(1, {}).get('revenue', 0)) * 0.7 if location_data else 0},
+                {'month': 'Feb', 'amount': float(location_data.get(1, {}).get('revenue', 0)) * 0.8 if location_data else 0},
+                {'month': 'Mar', 'amount': float(location_data.get(1, {}).get('revenue', 0)) * 0.9 if location_data else 0},
+                {'month': 'Apr', 'amount': sum(float(loc.get('revenue', 0)) for loc in location_data.values())}
             ]
         }

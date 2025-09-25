@@ -47,6 +47,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "accounts.middleware.ActivityTrackingMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -230,3 +231,6 @@ DEFAULT_FROM_EMAIL = os.getenv(
 # For development - print emails to console instead of sending
 if DEBUG and not EMAIL_HOST_USER:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+# ACTIVITY TRACKING
+ACTIVITY_UPDATE_THRESHOLD = int(os.getenv("ACTIVITY_UPDATE_THRESHOLD", "3"))

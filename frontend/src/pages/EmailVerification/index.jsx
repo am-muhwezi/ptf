@@ -35,10 +35,31 @@ const EmailVerification = () => {
       }, 3000);
 
     } catch (error) {
+      console.error('Email verification error:', error);
       setStatus('error');
-      const errorMsg = error.response?.data?.details?.token?.[0] ||
-                      error.response?.data?.error ||
-                      'Failed to verify email. The link may be invalid or expired.';
+
+      // Handle specific error cases
+      const errorData = error.response?.data;
+      let errorMsg = 'Failed to verify email. The link may be invalid or expired.';
+
+      if (errorData?.details?.token?.[0]) {
+        errorMsg = errorData.details.token[0];
+      } else if (errorData?.error) {
+        errorMsg = errorData.error;
+      } else if (errorData?.message) {
+        errorMsg = errorData.message;
+      }
+
+      // Check if it's already verified error
+      if (errorMsg.includes('already verified') || errorMsg.includes('Email is already verified')) {
+        setStatus('success');
+        setMessage('Your email is already verified! Your admin account is active.');
+        setTimeout(() => {
+          navigate('/');
+        }, 3000);
+        return;
+      }
+
       setMessage(errorMsg);
     }
   };

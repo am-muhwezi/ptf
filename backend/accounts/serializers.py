@@ -165,7 +165,10 @@ class UserLoginSerializer(serializers.Serializer):
                 raise serializers.ValidationError("Invalid email or password")
 
             if not user.is_active:
-                raise serializers.ValidationError("User account is disabled")
+                raise serializers.ValidationError("User account is disabled. Please verify your email address first.")
+
+            if not user.email_verified:
+                raise serializers.ValidationError("Please verify your email address before logging in. Check your inbox for the verification link.")
 
             attrs["user"] = user
             return attrs
@@ -453,22 +456,41 @@ class EmailVerificationSerializer(serializers.Serializer):
     def validate_token(self, value):
         """Validate verification token"""
         try:
+            # First try to find unverified user
             user = User.objects.get(email_verification_token=value, is_active=False)
             return value
         except User.DoesNotExist:
-            raise serializers.ValidationError("Invalid or expired verification token")
+            # Check if user is already verified (allow graceful handling)
+            try:
+                user = User.objects.get(email_verification_token=value, is_active=True, email_verified=True)
+                # User is already verified, this is okay
+                return value
+            except User.DoesNotExist:
+                raise serializers.ValidationError("Invalid or expired verification token")
 
     def save(self):
         """Verify admin email and activate account"""
         token = self.validated_data['token']
-        user = User.objects.get(email_verification_token=token, is_active=False)
 
-        user.email_verified = True
-        user.is_active = True
-        user.generate_verification_token()  # Generate new token for security
-        user.save()
+        # Check if user is already verified
+        try:
+            user = User.objects.get(email_verification_token=token, is_active=True, email_verified=True)
+            # User is already verified, return user without changes
+            return user
+        except User.DoesNotExist:
+            pass
 
-        return user
+        # User is not yet verified, proceed with verification
+        try:
+            user = User.objects.get(email_verification_token=token, is_active=False)
+            user.email_verified = True
+            user.is_active = True
+            # Don't regenerate token immediately to allow multiple clicks
+            # user.generate_verification_token()  # Generate new token for security
+            user.save()
+            return user
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Invalid or expired verification token")
 
 
 class ResendVerificationSerializer(serializers.Serializer):

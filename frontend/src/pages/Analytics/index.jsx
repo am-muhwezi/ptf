@@ -58,14 +58,20 @@ const Analytics = () => {
       monthlyTotal: 0,
       indoorVisits: 0,
       outdoorVisits: 0,
-      averageSessionDuration: 0,
-      locationBreakdown: []
+      averageSessionDuration: 0
+    },
+    paymentAnalytics: {
+      totalPayments: 0,
+      completedPayments: 0,
+      pendingPayments: 0,
+      overduePayments: 0,
+      totalRevenue: 0,
+      monthlyRevenue: 0,
+      averagePaymentValue: 0,
+      paymentMethods: {}
     },
     revenueAnalytics: {
-      total: 0,
-      monthly: 0,
-      growth: 0,
-      trend: [],
+      monthlyTrend: [],
       planPerformance: []
     }
   });
@@ -726,18 +732,18 @@ const Analytics = () => {
               </div>
 
               {/* Location Breakdown */}
-              {analyticsData.attendanceAnalytics.locationBreakdown.length > 0 && (
+              {analyticsData.outdoorAnalytics.locations && analyticsData.outdoorAnalytics.locations.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-6">Location Activity Breakdown</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {analyticsData.attendanceAnalytics.locationBreakdown.map((location, index) => (
+                    {analyticsData.outdoorAnalytics.locations.map((location, index) => (
                       <div key={index} className="border border-gray-200 rounded-lg p-4">
                         <div className="flex justify-between items-center mb-2">
-                          <h4 className="font-medium text-gray-900">{location.location}</h4>
+                          <h4 className="font-medium text-gray-900">{location.name}</h4>
                           <span className="text-sm text-green-600 font-medium">{location.utilization}%</span>
                         </div>
-                        <div className="text-2xl font-bold text-gray-900 mb-1">{location.visits}</div>
-                        <div className="text-sm text-gray-600 mb-3">Monthly visits</div>
+                        <div className="text-2xl font-bold text-gray-900 mb-1">{location.active}</div>
+                        <div className="text-sm text-gray-600 mb-3">Active members</div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div
                             className="bg-green-500 h-2 rounded-full transition-all duration-500"

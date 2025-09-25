@@ -136,20 +136,42 @@ export const authApi = {
 
   // Verify email
   verifyEmail: async (token) => {
-    const response = await apiClient.post('auth/email/verify/', { token });
-    const user = response.data?.user || {};
-    return {
-      success: true,
-      message: response.data?.message,
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName || user.first_name,
-        lastName: user.lastName || user.last_name,
-        isActive: user.is_active !== false,
-        emailVerified: user.email_verified !== false,
+    // Try GET request first (for email links), fallback to POST
+    try {
+      const response = await apiClient.get(`auth/email/verify/?token=${token}`);
+      const user = response.data?.user || {};
+      return {
+        success: response.data?.success !== false,
+        message: response.data?.message,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName || user.first_name,
+          lastName: user.lastName || user.last_name,
+          isActive: user.is_active !== false,
+          emailVerified: user.email_verified !== false,
+        }
+      };
+    } catch (error) {
+      // If GET fails, try POST (for programmatic verification)
+      if (error.response?.status === 405) {
+        const response = await apiClient.post('auth/email/verify/', { token });
+        const user = response.data?.user || {};
+        return {
+          success: response.data?.success !== false,
+          message: response.data?.message,
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName || user.first_name,
+            lastName: user.lastName || user.last_name,
+            isActive: user.is_active !== false,
+            emailVerified: user.email_verified !== false,
+          }
+        };
       }
-    };
+      throw error;
+    }
   },
 
   // Resend verification email
